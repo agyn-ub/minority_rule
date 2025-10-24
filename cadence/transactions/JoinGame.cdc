@@ -8,7 +8,7 @@ transaction(gameId: UInt64) {
     let payment: @{FungibleToken.Vault}
     let player: Address
     
-    prepare(signer: auth(Storage) &Account) {
+    prepare(signer: auth(Storage, Capabilities) &Account) {
         // Borrow the game manager
         self.gameManager = MinorityRuleGame.getAccount()
             .storage.borrow<&MinorityRuleGame.GameManager>(from: MinorityRuleGame.GameStoragePath)
@@ -26,15 +26,12 @@ transaction(gameId: UInt64) {
         self.payment <- flowVault.withdraw(amount: game.entryFee)
         self.player = signer.address
         
-        // Join the game and get game ticket
-        let gameTicket <- game.joinGame(player: self.player, payment: <- self.payment)
-        
         // Store the game ticket in player's account
-        let ticketPath = /storage/MinorityRuleGameTicket_".concat(gameId.toString())
+        let ticketPath = StoragePath(identifier: "MinorityRuleGameTicket_".concat(gameId.toString()))!
         signer.storage.save(<- gameTicket, to: ticketPath)
         
         // Create public capability for game ticket
-        let publicPath = /public/MinorityRuleGameTicket_".concat(gameId.toString())
+        let publicPath = PublicPath(identifier: "MinorityRuleGameTicket_".concat(gameId.toString()))!
         signer.capabilities.publish(
             signer.capabilities.storage.issue<&MinorityRuleGame.GameTicket>(ticketPath),
             at: publicPath
