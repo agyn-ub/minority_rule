@@ -19,20 +19,11 @@ transaction(gameId: UInt64, vote: Bool) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Note: Without storing tickets, we can't prevent users from voting without joining
-        // In production, you'd need either:
-        // 1. Store tickets (costs storage)
-        // 2. Check events to verify player joined (requires indexer)
-        // 3. Use a one-time voting NFT per round
-        
-        log("Note: This simplified version doesn't verify player joined the game")
-        log("In production, implement proper verification")
-        
-        // For demo purposes, we'll comment out the vote submission
-        // game.submitVote(player: self.player, vote: vote, ticket: ???)
+        // Submit vote - contract verifies player is in remainingPlayers
+        game.submitVote(player: self.player, vote: vote)
         
         log("Player ".concat(self.player.toString())
-            .concat(" attempted to vote ")
+            .concat(" voted ")
             .concat(vote ? "YES" : "NO")
             .concat(" in game ")
             .concat(gameId.toString()))

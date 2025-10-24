@@ -5,7 +5,6 @@ import FlowToken from "FlowToken"
 transaction(gameId: UInt64) {
     
     let gameManager: &MinorityRuleGame.GameManager
-    let gameTicket: &MinorityRuleGame.GameTicket
     let winnerVault: &{FungibleToken.Receiver}
     let winner: Address
     
@@ -17,11 +16,6 @@ transaction(gameId: UInt64) {
             .storage.borrow<&MinorityRuleGame.GameManager>(from: MinorityRuleGame.GameStoragePath)
             ?? panic("Could not borrow game manager")
         
-        // Get player's game ticket for this game
-        let ticketPath = StoragePath(identifier: "MinorityRuleGameTicket_".concat(gameId.toString()))!
-        self.gameTicket = signer.storage.borrow<&MinorityRuleGame.GameTicket>(from: ticketPath)
-            ?? panic("No game ticket found - must have played in the game")
-        
         // Get winner's Flow token vault
         self.winnerVault = signer.storage.borrow<&{FungibleToken.Receiver}>(from: /storage/flowTokenVault)
             ?? panic("Could not borrow Flow token vault")
@@ -32,7 +26,8 @@ transaction(gameId: UInt64) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        let prize <- game.claimPrize(winner: self.winner, ticket: self.gameTicket)
+        // Claim prize - contract verifies winner from stored winners array
+        let prize <- game.claimPrize(winner: self.winner)
         let prizeAmount = prize.balance
         
         self.winnerVault.deposit(from: <- prize)

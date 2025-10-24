@@ -30,13 +30,8 @@ transaction(gameId: UInt64) {
     }
     
     execute {
-        // Join the game and get game ticket
-        let gameTicket <- self.game.joinGame(player: self.player, payment: <- self.payment)
-        
-        // Note: In this simplified version, we don't store the ticket
-        // as it's only used for preventing double voting within the contract
-        // Winner verification happens through event analysis
-        destroy gameTicket
+        // Join the game (no ticket needed anymore - everything stored in contract)
+        self.game.joinGame(player: self.player, payment: <- self.payment)
         
         log("Player ".concat(self.player.toString()).concat(" joined game ").concat(gameId.toString()))
     }

@@ -31,16 +31,16 @@ access(all) contract MinorityRuleGame {
         access(all) case completed
     }
 
-    // GameTicket - Proof of joining a game (cannot be modified by user)
-    access(all) resource GameTicket {
-        access(all) let gameId: UInt64
-        access(all) let playerAddress: Address
-        access(all) let joinedAt: UFix64
+    // Player vote record
+    access(all) struct VoteRecord {
+        access(all) let round: UInt8
+        access(all) let vote: Bool
+        access(all) let timestamp: UFix64
         
-        init(gameId: UInt64, playerAddress: Address) {
-            self.gameId = gameId
-            self.playerAddress = playerAddress
-            self.joinedAt = getCurrentBlock().timestamp
+        init(round: UInt8, vote: Bool) {
+            self.round = round
+            self.vote = vote
+            self.timestamp = getCurrentBlock().timestamp
         }
     }
 
@@ -52,29 +52,34 @@ access(all) contract MinorityRuleGame {
         access(all) let creator: Address
         access(all) let roundDuration: UFix64
         
-        // Minimal state tracking
+        // State tracking
         access(all) var state: GameState
         access(all) var currentRound: UInt8
         access(all) var roundDeadline: UFix64
         access(all) var totalPlayers: UInt32
         
-        // Current round vote counts only
+        // Store all players (contract pays for storage)
+        access(all) var players: [Address]
+        access(all) var playerVoteHistory: {Address: [VoteRecord]}
+        
+        // Current round tracking
         access(all) var currentRoundYesVotes: UInt32
         access(all) var currentRoundNoVotes: UInt32
         access(all) var currentRoundTotalVotes: UInt32
+        access(all) var currentRoundVoters: {Address: Bool}
         
         // Round results - which answer was minority
         access(all) var roundResults: {UInt8: Bool}
         
+        // Players remaining after each round
+        access(all) var remainingPlayers: [Address]
+        
         // Prize vault
         access(all) var prizeVault: @{FungibleToken.Vault}
         
-        // Winners - only populated at game end
+        // Winners - populated at game end
         access(all) var winners: [Address]
         access(all) var winnersClaimed: {Address: Bool}
-        
-        // Track who voted each round (for double-vote prevention)
-        access(self) var roundVoters: {UInt8: {Address: Bool}}
         
         init(
             questionText: String,
@@ -95,14 +100,18 @@ access(all) contract MinorityRuleGame {
             self.roundDeadline = 0.0
             self.totalPlayers = 0
             
+            self.players = []
+            self.playerVoteHistory = {}
+            
             self.currentRoundYesVotes = 0
             self.currentRoundNoVotes = 0
             self.currentRoundTotalVotes = 0
+            self.currentRoundVoters = {}
             
             self.roundResults = {}
+            self.remainingPlayers = []
             self.winners = []
             self.winnersClaimed = {}
-            self.roundVoters = {}
             
             self.prizeVault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
             
@@ -114,15 +123,20 @@ access(all) contract MinorityRuleGame {
             )
         }
         
-        // Player joins the game - returns GameTicket
-        access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}): @GameTicket {
+        // Player joins the game
+        access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}) {
             pre {
                 self.state == GameState.gameCreated: "Game is not accepting new players (must be before round 2)"
                 payment.balance == self.entryFee: "Incorrect entry fee amount"
+                !self.players.contains(player): "Player already joined"
             }
             
             self.prizeVault.deposit(from: <- payment)
             self.totalPlayers = self.totalPlayers + 1
+            
+            // Store player in array
+            self.players.append(player)
+            self.playerVoteHistory[player] = []
             
             emit PlayerJoined(
                 gameId: self.gameId, 
@@ -130,9 +144,6 @@ access(all) contract MinorityRuleGame {
                 amount: self.entryFee,
                 totalPlayers: self.totalPlayers
             )
-            
-            // Return game ticket as proof of joining
-            return <- create GameTicket(gameId: self.gameId, playerAddress: player)
         }
         
         // Start the game
@@ -147,6 +158,9 @@ access(all) contract MinorityRuleGame {
             self.roundDeadline = getCurrentBlock().timestamp + self.roundDuration
             self.currentRoundTotalVotes = self.totalPlayers
             
+            // Initialize remaining players with all players
+            self.remainingPlayers = self.players
+            
             emit GameStarted(gameId: self.gameId, totalPlayers: self.totalPlayers)
             
             // If only 1 or 2 players, end game immediately
@@ -155,25 +169,14 @@ access(all) contract MinorityRuleGame {
             }
         }
         
-        // Submit vote using GameTicket
-        access(all) fun submitVote(player: Address, vote: Bool, ticket: &GameTicket) {
+        // Submit vote
+        access(all) fun submitVote(player: Address, vote: Bool) {
             pre {
                 self.state == GameState.votingOpen: "Voting is not open"
-                ticket.gameId == self.gameId: "Wrong game ticket"
-                ticket.playerAddress == player: "Ticket doesn't match player"
+                self.remainingPlayers.contains(player): "Player not in current round"
+                self.currentRoundVoters[player] == nil: "Already voted this round"
                 getCurrentBlock().timestamp <= self.roundDeadline: "Round deadline has passed"
             }
-            
-            // Initialize round voters if needed
-            if self.roundVoters[self.currentRound] == nil {
-                self.roundVoters[self.currentRound] = {}
-            }
-            
-            // Get current round voters
-            let currentRoundVoters = self.roundVoters[self.currentRound]!
-            
-            // Check if already voted
-            assert(currentRoundVoters[player] == nil, message: "Already voted this round")
             
             // Update vote counts
             if vote {
@@ -182,9 +185,15 @@ access(all) contract MinorityRuleGame {
                 self.currentRoundNoVotes = self.currentRoundNoVotes + 1
             }
             
-            // Mark as voted - need to update the whole dictionary
-            currentRoundVoters[player] = true
-            self.roundVoters[self.currentRound] = currentRoundVoters
+            // Mark as voted
+            self.currentRoundVoters[player] = true
+            
+            // Store vote in history
+            let voteRecord = VoteRecord(round: self.currentRound, vote: vote)
+            if let history = self.playerVoteHistory[player] {
+                history.append(voteRecord)
+                self.playerVoteHistory[player] = history
+            }
             
             emit VoteSubmitted(
                 gameId: self.gameId,
@@ -226,8 +235,24 @@ access(all) contract MinorityRuleGame {
                 votesRemaining: votesRemaining
             )
             
+            // Update remaining players - only those who voted minority continue
+            let newRemainingPlayers: [Address] = []
+            for player in self.remainingPlayers {
+                if let history = self.playerVoteHistory[player] {
+                    // Check if player voted and if their vote was minority
+                    if history.length > 0 {
+                        let lastVote = history[history.length - 1]
+                        if lastVote.round == self.currentRound && lastVote.vote == minorityVote {
+                            newRemainingPlayers.append(player)
+                        }
+                    }
+                }
+            }
+            self.remainingPlayers = newRemainingPlayers
+            
             // Check if game should end
             if votesRemaining <= 2 || votesRemaining == 0 {
+                self.winners = self.remainingPlayers
                 self.endGame()
             } else {
                 // Start next round
@@ -235,6 +260,7 @@ access(all) contract MinorityRuleGame {
                 self.currentRoundYesVotes = 0
                 self.currentRoundNoVotes = 0
                 self.currentRoundTotalVotes = votesRemaining
+                self.currentRoundVoters = {}
                 self.roundDeadline = getCurrentBlock().timestamp + self.roundDuration
                 self.state = GameState.votingOpen
             }
@@ -265,38 +291,25 @@ access(all) contract MinorityRuleGame {
             )
         }
         
-        // Winners claim their prize - verified through events
-        access(all) fun claimPrize(winner: Address, ticket: &GameTicket): @{FungibleToken.Vault} {
+        // Winners claim their prize
+        access(all) fun claimPrize(winner: Address): @{FungibleToken.Vault} {
             pre {
                 self.state == GameState.completed: "Game not completed"
-                ticket.gameId == self.gameId: "Wrong game ticket"
-                ticket.playerAddress == winner: "Ticket doesn't match claimer"
+                self.winners.contains(winner): "Not a winner"
                 self.winnersClaimed[winner] != true: "Already claimed"
-            }
-            
-            // Add to winners list
-            if !self.winners.contains(winner) {
-                self.winners.append(winner)
             }
             
             // Mark as claimed
             self.winnersClaimed[winner] = true
             
-            // Calculate prize share (max 2 winners)
-            let winnersCount = self.currentRoundYesVotes > 0 || self.currentRoundNoVotes > 0 
-                ? (self.currentRoundYesVotes <= self.currentRoundNoVotes ? self.currentRoundYesVotes : self.currentRoundNoVotes)
-                : 1
-            
-            let prizeAmount = self.prizeVault.balance / UFix64(winnersCount)
+            // Calculate prize share
+            let winnersCount = UInt64(self.winners.length)
+            let prizeAmount = winnersCount > 0 ? self.prizeVault.balance / UFix64(winnersCount) : self.prizeVault.balance
             
             emit WinnerClaimed(gameId: self.gameId, winner: winner, amount: prizeAmount)
             
             return <- self.prizeVault.withdraw(amount: prizeAmount)
         }
-        
-        // Note: Winner verification happens off-chain via event analysis
-        // In production, you would use an oracle or have winners submit merkle proofs
-        // For now, we trust that only legitimate winners will claim (enforced socially)
         
         // Get game info
         access(all) fun getGameInfo(): {String: AnyStruct} {
@@ -311,6 +324,8 @@ access(all) contract MinorityRuleGame {
                 "currentYesVotes": self.currentRoundYesVotes,
                 "currentNoVotes": self.currentRoundNoVotes,
                 "prizePool": self.prizeVault.balance,
+                "players": self.players,
+                "remainingPlayers": self.remainingPlayers,
                 "winners": self.winners,
                 "roundResults": self.roundResults
             }
@@ -364,7 +379,7 @@ access(all) contract MinorityRuleGame {
     
     init(platformFeeRecipient: Address) {
         self.nextGameId = 1
-        self.platformFeePercentage = 0.04 // 4%
+        self.platformFeePercentage = 0.02 // 2% platform fee
         self.platformFeeRecipient = platformFeeRecipient
         
         self.GameStoragePath = /storage/MinorityRuleGameManager
