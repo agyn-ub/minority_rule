@@ -1,0 +1,39 @@
+table player {
+    walletAddress: Address
+}
+
+table GameState {
+        gameCreated(it is only before second round, after second round new users cannot enter)
+        votingOpen
+        processingRound
+        complete
+}
+
+table game {
+    gameId: int,
+    questionText: string
+    entryFee: int,
+    creator: Address,
+    prizePool: int,
+    winners: {canbe one or two},
+    state: GameState reference gameState,
+    game: period(this is for cheduled transaction, it means delay)
+    currentRound: round (references to round),
+    deadLine: int (it is for every round and also for scheduled transaction)
+}
+
+table vote {
+    gameId: int reference Game,
+    roundId: references round
+    user: address reference player,
+    answer:boolean
+}
+
+table round {
+    round_id
+    gameId: int reference Game,
+    yes_count: int,
+    no_count: int,
+    round_number
+    roundwinners: boolean(true means yes, false means no)
+}

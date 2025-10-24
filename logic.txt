@@ -1,0 +1,10 @@
+minority rule game.
+
+there will be simple question. for example the sky is blue: only two
+answer yes or no. people will answer yes or no. if users dont answer until end of the round they automatically be eliminated. 
+game continues if all people answer only yes or only no. game continues until 
+two or one participant remain.  If game starts and already round two new users cannot join.
+
+before joining game people stack flow(for example 10 flow.) 
+winner take all of them, if there are two winner they share equally.
+the platform take 4 percent of prize for service. 

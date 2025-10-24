@@ -1,0 +1,1 @@
+every round will be set by game maker deadline. and scheduled transaction will execute it. change status of the game, 
