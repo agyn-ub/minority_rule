@@ -10,7 +10,7 @@ access(all) contract MinorityRuleGame {
     access(all) event VoteSubmitted(gameId: UInt64, round: UInt8, player: Address, vote: Bool)
     access(all) event RoundCompleted(gameId: UInt64, round: UInt8, yesCount: UInt32, noCount: UInt32, minorityVote: Bool, votesRemaining: UInt32)
     access(all) event GameCompleted(gameId: UInt64, totalRounds: UInt8, finalPrize: UFix64, platformFee: UFix64)
-    access(all) event WinnerClaimed(gameId: UInt64, winner: Address, amount: UFix64)
+    access(all) event PrizeDistributed(gameId: UInt64, winner: Address, amount: UFix64)
 
     // Contract state
     access(all) var nextGameId: UInt64
@@ -79,7 +79,6 @@ access(all) contract MinorityRuleGame {
         
         // Winners - populated at game end
         access(all) var winners: [Address]
-        access(all) var winnersClaimed: {Address: Bool}
         
         init(
             questionText: String,
@@ -111,7 +110,6 @@ access(all) contract MinorityRuleGame {
             self.roundResults = {}
             self.remainingPlayers = []
             self.winners = []
-            self.winnersClaimed = {}
             
             self.prizeVault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
             
@@ -266,7 +264,7 @@ access(all) contract MinorityRuleGame {
             }
         }
         
-        // End the game
+        // End the game and distribute prizes
         access(self) fun endGame() {
             self.state = GameState.completed
             
@@ -283,32 +281,39 @@ access(all) contract MinorityRuleGame {
                 recipientVault.deposit(from: <- platformFeeVault)
             }
             
+            // Distribute prizes to winners
+            let remainingPrize = self.prizeVault.balance
+            if self.winners.length > 0 {
+                let prizePerWinner = remainingPrize / UFix64(self.winners.length)
+                
+                for winner in self.winners {
+                    // Get winner's Flow vault capability
+                    let winnerVault = getAccount(winner)
+                        .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                    
+                    if winnerVault != nil {
+                        // Send prize to winner
+                        let winnerPrize <- self.prizeVault.withdraw(amount: prizePerWinner)
+                        winnerVault!.deposit(from: <- winnerPrize)
+                        
+                        emit PrizeDistributed(
+                            gameId: self.gameId,
+                            winner: winner,
+                            amount: prizePerWinner
+                        )
+                    } else {
+                        // If winner doesn't have a vault, log it (they can still claim later if needed)
+                        log("Warning: Winner ".concat(winner.toString()).concat(" doesn't have a Flow vault"))
+                    }
+                }
+            }
+            
             emit GameCompleted(
                 gameId: self.gameId,
                 totalRounds: self.currentRound,
-                finalPrize: self.prizeVault.balance,
+                finalPrize: remainingPrize,
                 platformFee: platformFee
             )
-        }
-        
-        // Winners claim their prize
-        access(all) fun claimPrize(winner: Address): @{FungibleToken.Vault} {
-            pre {
-                self.state == GameState.completed: "Game not completed"
-                self.winners.contains(winner): "Not a winner"
-                self.winnersClaimed[winner] != true: "Already claimed"
-            }
-            
-            // Mark as claimed
-            self.winnersClaimed[winner] = true
-            
-            // Calculate prize share
-            let winnersCount = UInt64(self.winners.length)
-            let prizeAmount = winnersCount > 0 ? self.prizeVault.balance / UFix64(winnersCount) : self.prizeVault.balance
-            
-            emit WinnerClaimed(gameId: self.gameId, winner: winner, amount: prizeAmount)
-            
-            return <- self.prizeVault.withdraw(amount: prizeAmount)
         }
         
         // Get game info
@@ -327,7 +332,8 @@ access(all) contract MinorityRuleGame {
                 "players": self.players,
                 "remainingPlayers": self.remainingPlayers,
                 "winners": self.winners,
-                "roundResults": self.roundResults
+                "roundResults": self.roundResults,
+                "prizesDistributed": self.state == GameState.completed
             }
         }
     }
