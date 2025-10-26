@@ -1,24 +1,53 @@
 import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
+import FungibleToken from "FungibleToken"
+import FlowToken from "FlowToken"
 
-transaction(questionText: String, entryFee: UFix64, roundDuration: UFix64, creator: Address) {
+transaction(questionText: String, entryFee: UFix64, roundDuration: UFix64) {
     
     let gameManager: &MinorityRuleGame.GameManager
+    let game: &MinorityRuleGame.Game
+    let payment: @{FungibleToken.Vault}
+    let schedulingFund: @{FungibleToken.Vault}
+    let creator: Address
     
-    prepare(signer: auth(Storage) &Account) {
+    prepare(signer: auth(Storage, Capabilities) &Account) {
+        self.creator = signer.address
+        
         // Borrow the game manager from contract account
         self.gameManager = MinorityRuleGame.getAccount()
             .storage.borrow<&MinorityRuleGame.GameManager>(from: MinorityRuleGame.GameStoragePath)
             ?? panic("Could not borrow game manager")
-    }
-    
-    execute {
+        
+        // Create the game
         let gameId = self.gameManager.createGame(
             questionText: questionText,
             entryFee: entryFee,
-            creator: creator,
+            creator: self.creator,
             roundDuration: roundDuration
         )
         
-        log("Game created with ID: ".concat(gameId.toString()))
+        // Get reference to the created game
+        self.game = self.gameManager.borrowGame(gameId: gameId)
+            ?? panic("Could not borrow created game")
+        
+        // Get creator's Flow token vault
+        let flowVault = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
+            ?? panic("Could not borrow Flow token vault")
+        
+        // Withdraw entry fee + scheduling fund (1 FLOW)
+        self.payment <- flowVault.withdraw(amount: entryFee)
+        self.schedulingFund <- flowVault.withdraw(amount: 1.0)
+    }
+    
+    execute {
+        // Creator joins as first player and provides scheduling fund
+        self.game.joinGame(
+            player: self.creator, 
+            payment: <- self.payment,
+            schedulingFund: <- self.schedulingFund
+        )
+        
+        log("Game created with ID: ".concat(self.game.gameId.toString()))
+        log("Creator ".concat(self.creator.toString()).concat(" joined and funded scheduling"))
     }
 }

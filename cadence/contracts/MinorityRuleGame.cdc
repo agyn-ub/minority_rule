@@ -1,5 +1,7 @@
 import FungibleToken from "FungibleToken"
 import FlowToken from "FlowToken"
+// ProcessRoundHandler will be deployed separately
+// import ProcessRoundHandler from "ProcessRoundHandler"
 
 access(all) contract MinorityRuleGame {
 
@@ -14,8 +16,11 @@ access(all) contract MinorityRuleGame {
 
     // Contract state
     access(all) var nextGameId: UInt64
-    access(all) var platformFeePercentage: UFix64
+    access(all) var totalFeePercentage: UFix64  // Total fee (3%)
+    access(all) var platformFeePercentage: UFix64  // Fee for platform recipient (2%)
+    access(all) var storageFeePercentage: UFix64  // Fee kept in contract (1%)
     access(all) let platformFeeRecipient: Address
+    access(self) var contractStorageVault: @{FungibleToken.Vault}  // Vault for storage fees
     
     // Storage paths
     access(all) let GameStoragePath: StoragePath
@@ -77,6 +82,11 @@ access(all) contract MinorityRuleGame {
         // Prize vault
         access(all) var prizeVault: @{FungibleToken.Vault}
         
+        // Scheduling funds (creator deposits 1 FLOW)
+        access(all) var schedulingVault: @{FungibleToken.Vault}
+        access(all) let processingFeePerRound: UFix64
+        access(all) var nextScheduledTxId: UInt64?
+        
         // Winners - populated at game end
         access(all) var winners: [Address]
         
@@ -111,6 +121,10 @@ access(all) contract MinorityRuleGame {
             self.remainingPlayers = []
             self.winners = []
             
+            self.schedulingVault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
+            self.processingFeePerRound = 0.01  // 0.01 FLOW per round
+            self.nextScheduledTxId = nil
+            
             self.prizeVault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
             
             emit GameCreated(
@@ -121,12 +135,26 @@ access(all) contract MinorityRuleGame {
             )
         }
         
-        // Player joins the game
-        access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}) {
+        // Player joins the game (creator must also provide scheduling fund)
+        access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}, schedulingFund: @{FungibleToken.Vault}?) {
             pre {
                 self.state == GameState.gameCreated: "Game is not accepting new players (must be before round 2)"
                 payment.balance == self.entryFee: "Incorrect entry fee amount"
                 !self.players.contains(player): "Player already joined"
+            }
+            
+            // If this is the creator (first player) and scheduling fund provided
+            if self.totalPlayers == 0 && schedulingFund != nil {
+                let fund <- schedulingFund!
+                assert(fund.balance >= 1.0, message: "Scheduling fund must be at least 1 FLOW")
+                self.schedulingVault.deposit(from: <- fund)
+            } else if schedulingFund != nil {
+                // Non-creator shouldn't provide scheduling fund
+                destroy schedulingFund!
+                panic("Only game creator provides scheduling fund")
+            } else {
+                // Destroy nil optional
+                destroy schedulingFund
             }
             
             self.prizeVault.deposit(from: <- payment)
@@ -164,6 +192,21 @@ access(all) contract MinorityRuleGame {
             // If only 1 or 2 players, end game immediately
             if self.totalPlayers <= 2 {
                 self.endGame()
+            } else {
+                // Schedule the first round processing
+                if self.schedulingVault.balance >= self.processingFeePerRound {
+                    // In production, this would use FlowTransactionScheduler
+                    // For now, we simulate scheduling
+                    self.nextScheduledTxId = UInt64(getCurrentBlock().height)
+                    
+                    // Deduct scheduling fee
+                    let fee <- self.schedulingVault.withdraw(amount: self.processingFeePerRound)
+                    MinorityRuleGame.contractStorageVault.deposit(from: <- fee)
+                    
+                    log("First round processing scheduled for game ".concat(self.gameId.toString()))
+                } else {
+                    log("Warning: Insufficient scheduling funds to start game")
+                }
             }
         }
         
@@ -175,6 +218,10 @@ access(all) contract MinorityRuleGame {
                 self.currentRoundVoters[player] == nil: "Already voted this round"
                 getCurrentBlock().timestamp <= self.roundDeadline: "Round deadline has passed"
             }
+            
+            // Backup trigger: Check if previous round needs processing
+            // This should actually be done before voting, in a separate function
+            // For now, we'll keep preconditions clean
             
             // Update vote counts
             if vote {
@@ -200,10 +247,7 @@ access(all) contract MinorityRuleGame {
                 vote: vote
             )
             
-            // If all expected votes received, process round
-            if (self.currentRoundYesVotes + self.currentRoundNoVotes) >= self.currentRoundTotalVotes {
-                self.processRound()
-            }
+            // Round will be processed by scheduled transaction after deadline
         }
         
         // Process the current round
@@ -261,6 +305,23 @@ access(all) contract MinorityRuleGame {
                 self.currentRoundVoters = {}
                 self.roundDeadline = getCurrentBlock().timestamp + self.roundDuration
                 self.state = GameState.votingOpen
+                
+                // Schedule next round processing if funds available
+                if self.schedulingVault.balance >= self.processingFeePerRound {
+                    // In production, this would use FlowTransactionScheduler
+                    // For now, we simulate scheduling
+                    self.nextScheduledTxId = UInt64(getCurrentBlock().height)
+                    
+                    // Deduct scheduling fee from vault
+                    let fee <- self.schedulingVault.withdraw(amount: self.processingFeePerRound)
+                    // In production, this fee would go to FlowTransactionScheduler
+                    // For now, we'll add it back to contract storage vault
+                    MinorityRuleGame.contractStorageVault.deposit(from: <- fee)
+                    
+                    log("Next round scheduled for game ".concat(self.gameId.toString()))
+                } else {
+                    log("Warning: Insufficient scheduling funds for next round")
+                }
             }
         }
         
@@ -268,17 +329,24 @@ access(all) contract MinorityRuleGame {
         access(self) fun endGame() {
             self.state = GameState.completed
             
-            // Calculate platform fee
+            // Calculate fees
             let totalPrize = self.prizeVault.balance
-            let platformFee = totalPrize * MinorityRuleGame.platformFeePercentage
+            let platformFee = totalPrize * MinorityRuleGame.platformFeePercentage  // 2% for recipient
+            let storageFee = totalPrize * MinorityRuleGame.storageFeePercentage   // 1% for contract storage
             
-            // Send platform fee directly to recipient
+            // Send platform fee to recipient (2%)
             if platformFee > 0.0 {
                 let platformFeeVault <- self.prizeVault.withdraw(amount: platformFee)
                 let recipientVault = getAccount(MinorityRuleGame.platformFeeRecipient)
                     .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
                     ?? panic("Could not borrow platform fee recipient vault")
                 recipientVault.deposit(from: <- platformFeeVault)
+            }
+            
+            // Keep storage fee in contract (1%)
+            if storageFee > 0.0 {
+                let storageFeeVault <- self.prizeVault.withdraw(amount: storageFee)
+                MinorityRuleGame.contractStorageVault.deposit(from: <- storageFeeVault)
             }
             
             // Distribute prizes to winners
@@ -312,7 +380,7 @@ access(all) contract MinorityRuleGame {
                 gameId: self.gameId,
                 totalRounds: self.currentRound,
                 finalPrize: remainingPrize,
-                platformFee: platformFee
+                platformFee: platformFee + storageFee  // Total fees taken
             )
         }
         
@@ -373,11 +441,6 @@ access(all) contract MinorityRuleGame {
         }
     }
     
-    // Create a new game manager
-    access(all) fun createGameManager(): @GameManager {
-        return <- create GameManager()
-    }
-    
     // Get contract account
     access(all) fun getAccount(): &Account {
         return self.account
@@ -385,8 +448,11 @@ access(all) contract MinorityRuleGame {
     
     init(platformFeeRecipient: Address) {
         self.nextGameId = 1
-        self.platformFeePercentage = 0.02 // 2% platform fee
+        self.totalFeePercentage = 0.03  // 3% total fee
+        self.platformFeePercentage = 0.02  // 2% goes to platform recipient
+        self.storageFeePercentage = 0.01  // 1% stays in contract for storage
         self.platformFeeRecipient = platformFeeRecipient
+        self.contractStorageVault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
         
         self.GameStoragePath = /storage/MinorityRuleGameManager
         self.GamePublicPath = /public/MinorityRuleGameManager

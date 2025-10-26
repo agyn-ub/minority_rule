@@ -30,8 +30,8 @@ transaction(gameId: UInt64) {
     }
     
     execute {
-        // Join the game (no ticket needed anymore - everything stored in contract)
-        self.game.joinGame(player: self.player, payment: <- self.payment)
+        // Join the game (no ticket needed, no scheduling fund for non-creators)
+        self.game.joinGame(player: self.player, payment: <- self.payment, schedulingFund: nil)
         
         log("Player ".concat(self.player.toString()).concat(" joined game ").concat(gameId.toString()))
     }
