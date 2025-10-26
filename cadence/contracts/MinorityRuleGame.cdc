@@ -409,6 +409,12 @@ access(all) contract MinorityRuleGame {
     // Public interface for GameManager
     access(all) resource interface GameManagerPublic {
         access(all) fun borrowGame(gameId: UInt64): &Game?
+        access(all) fun createGame(
+            questionText: String,
+            entryFee: UFix64,
+            creator: Address,
+            roundDuration: UFix64
+        ): UInt64
     }
     
     // Game Manager resource

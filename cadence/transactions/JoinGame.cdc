@@ -4,7 +4,7 @@ import FlowToken from "FlowToken"
 
 transaction(gameId: UInt64) {
     
-    let gameManager: &MinorityRuleGame.GameManager
+    let gameManager: &{MinorityRuleGame.GameManagerPublic}
     let game: &MinorityRuleGame.Game
     let payment: @{FungibleToken.Vault}
     let player: Address
@@ -12,10 +12,14 @@ transaction(gameId: UInt64) {
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.player = signer.address
         
-        // Borrow the game manager
-        self.gameManager = MinorityRuleGame.getAccount()
-            .storage.borrow<&MinorityRuleGame.GameManager>(from: MinorityRuleGame.GameStoragePath)
-            ?? panic("Could not borrow game manager")
+        // Get the contract address (you'll need to pass this as a parameter in production)
+        // For now, using a placeholder - replace 0xCONTRACT with actual deployed address
+        let contractAddress = Address(0x01) // TODO: Replace with actual contract address
+        
+        // Borrow the game manager from public capability
+        self.gameManager = getAccount(contractAddress)
+            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+            ?? panic("Could not borrow game manager from public capability")
         
         // Get the game
         self.game = self.gameManager.borrowGame(gameId: gameId)

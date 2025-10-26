@@ -2,16 +2,20 @@ import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
 
 transaction(gameId: UInt64, vote: Bool) {
     
-    let gameManager: &MinorityRuleGame.GameManager
+    let gameManager: &{MinorityRuleGame.GameManagerPublic}
     let player: Address
     
     prepare(signer: auth(Storage) &Account) {
         self.player = signer.address
         
-        // Borrow the game manager
-        self.gameManager = MinorityRuleGame.getAccount()
-            .storage.borrow<&MinorityRuleGame.GameManager>(from: MinorityRuleGame.GameStoragePath)
-            ?? panic("Could not borrow game manager")
+        // Get the contract address (you'll need to pass this as a parameter in production)
+        // For now, using a placeholder - replace 0xCONTRACT with actual deployed address
+        let contractAddress = Address(0x01) // TODO: Replace with actual contract address
+        
+        // Borrow the game manager from public capability
+        self.gameManager = getAccount(contractAddress)
+            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+            ?? panic("Could not borrow game manager from public capability")
     }
     
     execute {
