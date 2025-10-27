@@ -10,7 +10,7 @@ transaction(gameId: UInt64, vote: Bool) {
         
         // Get the contract address (you'll need to pass this as a parameter in production)
         // For now, using a placeholder - replace 0xCONTRACT with actual deployed address
-        let contractAddress = Address(0x01) // TODO: Replace with actual contract address
+        let contractAddress = Address(0x73c003cd6de60fd4) // MinorityRuleGame deployed address
         
         // Borrow the game manager from public capability
         self.gameManager = getAccount(contractAddress)

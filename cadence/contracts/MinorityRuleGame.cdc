@@ -393,6 +393,8 @@ access(all) contract MinorityRuleGame {
                 "creator": self.creator,
                 "state": self.state.rawValue,
                 "currentRound": self.currentRound,
+                "roundDuration": self.roundDuration,
+                "roundDeadline": self.roundDeadline,
                 "totalPlayers": self.totalPlayers,
                 "currentYesVotes": self.currentRoundYesVotes,
                 "currentNoVotes": self.currentRoundNoVotes,

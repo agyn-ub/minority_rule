@@ -11,6 +11,12 @@
 			"aliases": {
 				"testing": "0000000000000007"
 			}
+		},
+		"ProcessRoundHandler": {
+			"source": "cadence/contracts/ProcessRoundHandler.cdc",
+			"aliases": {
+				"testing": "0000000000000007"
+			}
 		}
 	},
 	"dependencies": {
@@ -128,24 +134,53 @@
 				"location": "emulator-account.pkey"
 			}
 		},
+		"five-account": {
+			"address": "0cba6f974b0aa625",
+			"key": {
+				"type": "file",
+				"location": "five-account.pkey"
+			}
+		},
+		"four-account": {
+			"address": "e8ddd64a5af0a6fa",
+			"key": {
+				"type": "file",
+				"location": "four-account.pkey"
+			}
+		},
 		"one-account": {
 			"address": "73c003cd6de60fd4",
 			"key": {
 				"type": "file",
 				"location": "one-account.pkey"
 			}
+		},
+		"three-account": {
+			"address": "fe89b379c3f4ac9b",
+			"key": {
+				"type": "file",
+				"location": "three-account.pkey"
+			}
+		},
+		"two-account": {
+			"address": "1aee0aa4d20eac44",
+			"key": {
+				"type": "file",
+				"location": "two-account.pkey"
+			}
 		}
 	},
 	"deployments": {
 		"testnet": {
 			"one-account": [
+				"ProcessRoundHandler",
 				"MinorityGameTransactionHandler",
 				{
 					"name": "MinorityRuleGame",
 					"args": [
 						{
-							"type": "Address",
-							"value": "0x73c003cd6de60fd4"
+							"value": "0x73c003cd6de60fd4",
+							"type": "Address"
 						}
 					]
 				}

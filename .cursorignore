@@ -5,3 +5,7 @@ emulator-account.pkey
 # Pay attention to imports directory
 !imports
 one-account.pkey
+two-account.pkey
+three-account.pkey
+four-account.pkey
+five-account.pkey

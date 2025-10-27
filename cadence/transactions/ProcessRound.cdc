@@ -6,7 +6,7 @@ transaction(gameId: UInt64) {
     
     prepare(signer: auth(Storage) &Account) {
         // Get the contract address (replace with actual deployed address)
-        let contractAddress = Address(0x01) // TODO: Replace with actual contract address
+        let contractAddress = Address(0x73c003cd6de60fd4) // MinorityRuleGame deployed address
         
         // Borrow the game manager from public capability
         self.gameManager = getAccount(contractAddress)

@@ -4,7 +4,7 @@ import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
 // Note: In the current implementation, player data is stored in the contract
 access(all) fun main(playerAddress: Address, gameId: UInt64): {String: AnyStruct}? {
     // Get the contract address (replace with actual deployed address)
-    let contractAddress = Address(0x01) // TODO: Replace with actual contract address
+    let contractAddress = Address(0x73c003cd6de60fd4) // MinorityRuleGame deployed address
     
     let gameManager = getAccount(contractAddress)
         .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
