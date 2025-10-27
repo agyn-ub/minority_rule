@@ -1,16 +1,21 @@
 import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
-import MinorityGameTransactionHandler from "../contracts/MinorityGameTransactionHandler.cdc"
+// ProcessRoundHandler would be imported when using FlowTransactionScheduler
+// import ProcessRoundHandler from "../contracts/ProcessRoundHandler.cdc"
 
-// This transaction schedules automatic round processing for a game
+// This transaction manually triggers scheduling of round processing
+// Note: In production, this would use FlowTransactionScheduler
 transaction(gameId: UInt64) {
     
-    let gameManager: &MinorityRuleGame.GameManager
+    let gameManager: &{MinorityRuleGame.GameManagerPublic}
     
     prepare(signer: auth(Storage) &Account) {
-        // Borrow the game manager
-        self.gameManager = MinorityRuleGame.getAccount()
-            .storage.borrow<&MinorityRuleGame.GameManager>(from: MinorityRuleGame.GameStoragePath)
-            ?? panic("Could not borrow game manager")
+        // Get the contract address (replace with actual deployed address)
+        let contractAddress = Address(0x01) // TODO: Replace with actual contract address
+        
+        // Borrow the game manager from public capability
+        self.gameManager = getAccount(contractAddress)
+            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+            ?? panic("Could not borrow game manager from public capability")
     }
     
     execute {
@@ -18,21 +23,21 @@ transaction(gameId: UInt64) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Only schedule if game is in voting state
-        if game.state == MinorityRuleGame.GameState.votingOpen {
-            // Schedule round processing at the deadline
-            MinorityGameTransactionHandler.scheduleRoundProcessing(
-                gameId: gameId,
-                roundNumber: game.currentRound,
-                deadline: game.roundDeadline
-            )
+        // Get game info to check state
+        let gameInfo = game.getGameInfo()
+        let state = gameInfo["state"] as! UInt8? ?? 0
+        
+        // Only schedule if game is in voting state (1)
+        if state == 1 { // GameState.votingOpen
+            // In production, this would use FlowTransactionScheduler
+            // For now, just log the scheduling intent
             
-            log("Scheduled round processing for game "
+            log("Would schedule round processing for game "
                 .concat(gameId.toString())
-                .concat(" round ")
-                .concat(game.currentRound.toString())
-                .concat(" at timestamp ")
-                .concat(game.roundDeadline.toString()))
+                .concat(" at deadline"))
+            
+            // Note: Actual scheduling is handled automatically by the game
+            // when rounds are started or processed
         } else {
             log("Game is not in voting state, scheduling skipped")
         }

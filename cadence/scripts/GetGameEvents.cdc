@@ -20,9 +20,12 @@ access(all) fun main(gameId: UInt64): {String: AnyStruct} {
     // })
     
     // For now, return current game state
-    let gameManager = MinorityRuleGame.getAccount()
-        .storage.borrow<&MinorityRuleGame.GameManager>(from: MinorityRuleGame.GameStoragePath)
-        ?? panic("Could not borrow game manager")
+    // Get the contract address (replace with actual deployed address)
+    let contractAddress = Address(0x01) // TODO: Replace with actual contract address
+    
+    let gameManager = getAccount(contractAddress)
+        .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+        ?? panic("Could not borrow game manager from public capability")
     
     if let game = gameManager.borrowGame(gameId: gameId) {
         let info = game.getGameInfo()

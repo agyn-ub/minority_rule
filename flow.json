@@ -1,25 +1,13 @@
 {
 	"contracts": {
-		"Counter": {
-			"source": "cadence/contracts/Counter.cdc",
-			"aliases": {
-				"testing": "0000000000000007"
-			}
-		},
-		"CounterTransactionHandler": {
-			"source": "cadence/contracts/CounterTransactionHandler.cdc",
+		"MinorityGameTransactionHandler": {
+			"source": "cadence/contracts/MinorityGameTransactionHandler.cdc",
 			"aliases": {
 				"testing": "0000000000000007"
 			}
 		},
 		"MinorityRuleGame": {
 			"source": "cadence/contracts/MinorityRuleGame.cdc",
-			"aliases": {
-				"testing": "0000000000000007"
-			}
-		},
-		"MinorityGameTransactionHandler": {
-			"source": "cadence/contracts/MinorityGameTransactionHandler.cdc",
 			"aliases": {
 				"testing": "0000000000000007"
 			}
@@ -139,15 +127,28 @@
 				"type": "file",
 				"location": "emulator-account.pkey"
 			}
+		},
+		"one-account": {
+			"address": "73c003cd6de60fd4",
+			"key": {
+				"type": "file",
+				"location": "one-account.pkey"
+			}
 		}
 	},
 	"deployments": {
-		"emulator": {
-			"emulator-account": [
-				"Counter",
-				"CounterTransactionHandler",
-				"MinorityRuleGame",
-				"MinorityGameTransactionHandler"
+		"testnet": {
+			"one-account": [
+				"MinorityGameTransactionHandler",
+				{
+					"name": "MinorityRuleGame",
+					"args": [
+						{
+							"type": "Address",
+							"value": "0x73c003cd6de60fd4"
+						}
+					]
+				}
 			]
 		}
 	}

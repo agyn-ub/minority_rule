@@ -30,7 +30,6 @@ access(all) contract MinorityRuleGame {
 
     // Game states
     access(all) enum GameState: UInt8 {
-        access(all) case gameCreated
         access(all) case votingOpen
         access(all) case processingRound
         access(all) case completed
@@ -104,9 +103,10 @@ access(all) contract MinorityRuleGame {
             self.creator = creator
             self.roundDuration = roundDuration
             
-            self.state = GameState.gameCreated
-            self.currentRound = 0
-            self.roundDeadline = 0.0
+            // Start immediately in Round 1
+            self.state = GameState.votingOpen
+            self.currentRound = 1
+            self.roundDeadline = getCurrentBlock().timestamp + roundDuration
             self.totalPlayers = 0
             
             self.players = []
@@ -138,7 +138,8 @@ access(all) contract MinorityRuleGame {
         // Player joins the game (creator must also provide scheduling fund)
         access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}, schedulingFund: @{FungibleToken.Vault}?) {
             pre {
-                self.state == GameState.gameCreated: "Game is not accepting new players (must be before round 2)"
+                self.currentRound == 1: "Can only join during Round 1"
+                self.state == GameState.votingOpen: "Game is not accepting new players"
                 payment.balance == self.entryFee: "Incorrect entry fee amount"
                 !self.players.contains(player): "Player already joined"
             }
@@ -170,29 +171,28 @@ access(all) contract MinorityRuleGame {
                 amount: self.entryFee,
                 totalPlayers: self.totalPlayers
             )
+            
+            // Initialize game when first player (creator) joins
+            self.initializeGameIfNeeded()
+            
+            // Update remaining players and vote count for Round 1
+            if self.currentRound == 1 {
+                self.remainingPlayers.append(player)
+                self.currentRoundTotalVotes = self.totalPlayers
+            }
         }
         
-        // Start the game
-        access(all) fun startGame() {
-            pre {
-                self.state == GameState.gameCreated: "Game already started"
-                self.totalPlayers > 0: "No players have joined"
-            }
-            
-            self.state = GameState.votingOpen
-            self.currentRound = 1
-            self.roundDeadline = getCurrentBlock().timestamp + self.roundDuration
-            self.currentRoundTotalVotes = self.totalPlayers
-            
-            // Initialize remaining players with all players
-            self.remainingPlayers = self.players
-            
-            emit GameStarted(gameId: self.gameId, totalPlayers: self.totalPlayers)
-            
-            // If only 1 or 2 players, end game immediately
-            if self.totalPlayers <= 2 {
-                self.endGame()
-            } else {
+        // Initialize game after first player joins
+        access(self) fun initializeGameIfNeeded() {
+            // Only initialize once when first player joins
+            if self.totalPlayers == 1 {
+                self.currentRoundTotalVotes = self.totalPlayers
+                
+                // Initialize remaining players with all players
+                self.remainingPlayers = self.players
+                
+                emit GameStarted(gameId: self.gameId, totalPlayers: self.totalPlayers)
+                
                 // Schedule the first round processing
                 if self.schedulingVault.balance >= self.processingFeePerRound {
                     // In production, this would use FlowTransactionScheduler
@@ -205,7 +205,7 @@ access(all) contract MinorityRuleGame {
                     
                     log("First round processing scheduled for game ".concat(self.gameId.toString()))
                 } else {
-                    log("Warning: Insufficient scheduling funds to start game")
+                    log("Warning: Insufficient scheduling funds for automatic processing")
                 }
             }
         }

@@ -1,20 +1,29 @@
 import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
 
-// Check if a player has a voting token and its status
-access(all) fun main(playerAddress: Address): {String: AnyStruct}? {
-    let account = getAccount(playerAddress)
+// Check player status in games
+// Note: In the current implementation, player data is stored in the contract
+access(all) fun main(playerAddress: Address, gameId: UInt64): {String: AnyStruct}? {
+    // Get the contract address (replace with actual deployed address)
+    let contractAddress = Address(0x01) // TODO: Replace with actual contract address
     
-    // Try to borrow the voting token from player's storage
-    let tokenCap = account.capabilities.borrow<&MinorityRuleGame.VotingToken>(
-        MinorityRuleGame.VotingTokenPublicPath
-    )
+    let gameManager = getAccount(contractAddress)
+        .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+        ?? panic("Could not borrow game manager from public capability")
     
-    if let token = tokenCap {
-        return {
-            "gameId": token.gameId,
-            "lastVotedRound": token.lastVotedRound,
-            "isEliminated": token.isEliminated,
-            "votesCount": token.voteHistory.length
+    if let game = gameManager.borrowGame(gameId: gameId) {
+        let info = game.getGameInfo()
+        
+        // Check if player is in the game
+        let players = info["players"] as! [Address]? ?? []
+        let remainingPlayers = info["remainingPlayers"] as! [Address]? ?? []
+        
+        if players.contains(playerAddress) {
+            return {
+                "gameId": gameId,
+                "isPlayer": true,
+                "isActive": remainingPlayers.contains(playerAddress),
+                "gameState": info["state"]
+            }
         }
     }
     
