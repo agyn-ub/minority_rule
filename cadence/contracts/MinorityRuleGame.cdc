@@ -1,7 +1,6 @@
 import FungibleToken from "FungibleToken"
 import FlowToken from "FlowToken"
-// ProcessRoundHandler will be deployed separately
-// import ProcessRoundHandler from "ProcessRoundHandler"
+// ProcessRoundHandler will be used via account reference
 
 access(all) contract MinorityRuleGame {
 
@@ -175,9 +174,8 @@ access(all) contract MinorityRuleGame {
             // Initialize game when first player (creator) joins
             self.initializeGameIfNeeded()
             
-            // Update remaining players and vote count for Round 1
+            // Update vote count for Round 1 (remainingPlayers already set in initializeGameIfNeeded)
             if self.currentRound == 1 {
-                self.remainingPlayers.append(player)
                 self.currentRoundTotalVotes = self.totalPlayers
             }
         }
@@ -195,8 +193,7 @@ access(all) contract MinorityRuleGame {
                 
                 // Schedule the first round processing
                 if self.schedulingVault.balance >= self.processingFeePerRound {
-                    // In production, this would use FlowTransactionScheduler
-                    // For now, we simulate scheduling
+                    // For now, simulate scheduling (FlowTransactionScheduler integration coming)
                     self.nextScheduledTxId = UInt64(getCurrentBlock().height)
                     
                     // Deduct scheduling fee
@@ -308,14 +305,11 @@ access(all) contract MinorityRuleGame {
                 
                 // Schedule next round processing if funds available
                 if self.schedulingVault.balance >= self.processingFeePerRound {
-                    // In production, this would use FlowTransactionScheduler
-                    // For now, we simulate scheduling
+                    // For now, simulate scheduling (FlowTransactionScheduler integration coming)
                     self.nextScheduledTxId = UInt64(getCurrentBlock().height)
                     
                     // Deduct scheduling fee from vault
                     let fee <- self.schedulingVault.withdraw(amount: self.processingFeePerRound)
-                    // In production, this fee would go to FlowTransactionScheduler
-                    // For now, we'll add it back to contract storage vault
                     MinorityRuleGame.contractStorageVault.deposit(from: <- fee)
                     
                     log("Next round scheduled for game ".concat(self.gameId.toString()))
