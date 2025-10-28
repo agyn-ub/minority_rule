@@ -174,9 +174,14 @@ access(all) contract MinorityRuleGame {
             // Initialize game when first player (creator) joins
             self.initializeGameIfNeeded()
             
-            // Update vote count for Round 1 (remainingPlayers already set in initializeGameIfNeeded)
+            // Update vote count for Round 1
+            // In Round 1, all players who join can vote
             if self.currentRound == 1 {
                 self.currentRoundTotalVotes = self.totalPlayers
+                // Add new player to remainingPlayers for Round 1
+                if !self.remainingPlayers.contains(player) {
+                    self.remainingPlayers.append(player)
+                }
             }
         }
         
@@ -211,7 +216,11 @@ access(all) contract MinorityRuleGame {
         access(all) fun submitVote(player: Address, vote: Bool) {
             pre {
                 self.state == GameState.votingOpen: "Voting is not open"
-                self.remainingPlayers.contains(player): "Player not in current round"
+                // Round 1: All players who joined can vote
+                // Round 2+: Only remaining players from previous round can vote
+                (self.currentRound == 1 && self.players.contains(player)) || 
+                    (self.currentRound > 1 && self.remainingPlayers.contains(player)): 
+                    "Player not eligible to vote in current round"
                 self.currentRoundVoters[player] == nil: "Already voted this round"
                 getCurrentBlock().timestamp <= self.roundDeadline: "Round deadline has passed"
             }
@@ -276,7 +285,11 @@ access(all) contract MinorityRuleGame {
             
             // Update remaining players - only those who voted minority continue
             let newRemainingPlayers: [Address] = []
-            for player in self.remainingPlayers {
+            // Round 1: Check all players who joined
+            // Round 2+: Check only remaining players from previous round
+            let playersToCheck = self.currentRound == 1 ? self.players : self.remainingPlayers
+            
+            for player in playersToCheck {
                 if let history = self.playerVoteHistory[player] {
                     // Check if player voted and if their vote was minority
                     if history.length > 0 {
