@@ -1,11 +1,5 @@
 {
 	"contracts": {
-		"MinorityGameTransactionHandler": {
-			"source": "cadence/contracts/MinorityGameTransactionHandler.cdc",
-			"aliases": {
-				"testing": "0000000000000007"
-			}
-		},
 		"MinorityRuleGame": {
 			"source": "cadence/contracts/MinorityRuleGame.cdc",
 			"aliases": {
@@ -188,7 +182,6 @@
 		"testnet": {
 			"one-account": [
 				"ScheduledRoundHandler",
-				"MinorityGameTransactionHandler",
 				{
 					"name": "MinorityRuleGame",
 					"args": [
