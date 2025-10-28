@@ -12,10 +12,10 @@
 				"testing": "0000000000000007"
 			}
 		},
-		"ProcessRoundHandler": {
-			"source": "cadence/contracts/ProcessRoundHandler.cdc",
+		"ScheduledRoundHandler": {
+			"source": "./cadence/contracts/ScheduledRoundHandler.cdc",
 			"aliases": {
-				"testing": "0000000000000007"
+				"testnet": "73c003cd6de60fd4"
 			}
 		}
 	},
@@ -155,6 +155,20 @@
 				"location": "one-account.pkey"
 			}
 		},
+		"seven-account": {
+			"address": "b69240f6be3e34ca",
+			"key": {
+				"type": "file",
+				"location": "seven-account.pkey"
+			}
+		},
+		"six-account": {
+			"address": "44a19c1836c03e74",
+			"key": {
+				"type": "file",
+				"location": "six-account.pkey"
+			}
+		},
 		"three-account": {
 			"address": "fe89b379c3f4ac9b",
 			"key": {
@@ -173,7 +187,7 @@
 	"deployments": {
 		"testnet": {
 			"one-account": [
-				"ProcessRoundHandler",
+				"ScheduledRoundHandler",
 				"MinorityGameTransactionHandler",
 				{
 					"name": "MinorityRuleGame",
