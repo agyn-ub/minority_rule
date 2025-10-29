@@ -12,18 +12,17 @@ transaction(gameId: UInt64) {
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.player = signer.address
         
-        // Get the contract address (you'll need to pass this as a parameter in production)
-        // For now, using a placeholder - replace 0xCONTRACT with actual deployed address
-        let contractAddress = Address(0x1aee0aa4d20eac44) // New commit-reveal contract address
+        // Use two-account address where the working contract is deployed
+        let contractAddress = Address(0x1aee0aa4d20eac44)
         
         // Borrow the game manager from public capability
         self.gameManager = getAccount(contractAddress)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         
-        // Get the game
+        // Get reference to the game
         self.game = self.gameManager.borrowGame(gameId: gameId)
-            ?? panic("Game not found")
+            ?? panic("Could not borrow game")
         
         // Get player's Flow token vault
         let flowVault = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
@@ -34,9 +33,13 @@ transaction(gameId: UInt64) {
     }
     
     execute {
-        // Join the game (no ticket needed, no scheduling fund for non-creators)
-        self.game.joinGame(player: self.player, payment: <- self.payment, schedulingFund: nil)
+        // Player joins the game
+        self.game.joinGame(
+            player: self.player, 
+            payment: <- self.payment,
+            schedulingFund: <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
+        )
         
-        log("Player ".concat(self.player.toString()).concat(" joined game ").concat(gameId.toString()))
+        log("Player ".concat(self.player.toString()).concat(" joined game ").concat(self.game.gameId.toString()))
     }
 }

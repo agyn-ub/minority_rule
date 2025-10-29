@@ -13,9 +13,8 @@ transaction(questionText: String, entryFee: UFix64, roundDuration: UFix64) {
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.creator = signer.address
         
-        // Get the contract address (you'll need to pass this as a parameter in production)
-        // For now, using a placeholder - replace 0xCONTRACT with actual deployed address
-        let contractAddress = Address(0x1aee0aa4d20eac44) // New commit-reveal contract address
+        // Use the contract address where MinorityRuleGame is deployed (one-account)
+        let contractAddress = Address(0x73c003cd6de60fd4)
         
         // Borrow the game manager from public capability
         self.gameManager = getAccount(contractAddress)

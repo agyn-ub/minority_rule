@@ -225,10 +225,8 @@ access(all) contract MinorityRuleGame {
             // In Round 1, all players who join can vote
             if self.currentRound == 1 {
                 self.currentRoundTotalVotes = self.totalPlayers
-                // Add new player to remainingPlayers for Round 1
-                if !self.remainingPlayers.contains(player) {
-                    self.remainingPlayers.append(player)
-                }
+                // remainingPlayers will be set correctly in initializeGameIfNeeded()
+                // No need to manually add here to avoid duplicates
             }
         }
         
@@ -238,8 +236,8 @@ access(all) contract MinorityRuleGame {
             if self.totalPlayers == 1 {
                 self.currentRoundTotalVotes = self.totalPlayers
                 
-                // Initialize remaining players with all players
-                self.remainingPlayers = self.players
+                // Don't initialize remainingPlayers here - it will be set correctly 
+                // in processRound() for Round 1 by checking all players who joined
                 
                 emit GameStarted(gameId: self.gameId, totalPlayers: self.totalPlayers)
                 
@@ -456,14 +454,33 @@ access(all) contract MinorityRuleGame {
                 votesRemaining: votesRemaining
             )
             
-            // Update remaining players - only those who revealed minority vote continue
+            // Update remaining players - only those who voted minority vote continue
             let newRemainingPlayers: [Address] = []
             
-            // Only players who successfully revealed can advance
-            for player in self.currentRoundReveals.keys {
-                let revealRecord = self.currentRoundReveals[player]!
-                if revealRecord.vote == minorityVote {
-                    newRemainingPlayers.append(player)
+            // Handle both voting mechanisms: simple voting and commit-reveal
+            if self.currentRoundReveals.length > 0 {
+                // Commit-reveal mode: Only players who successfully revealed can advance
+                for player in self.currentRoundReveals.keys {
+                    let revealRecord = self.currentRoundReveals[player]!
+                    if revealRecord.vote == minorityVote {
+                        newRemainingPlayers.append(player)
+                    }
+                }
+            } else {
+                // Simple voting mode: Check vote history for players who voted minority
+                // For Round 1, check all players; for later rounds, check remainingPlayers
+                let eligiblePlayers = self.currentRound == 1 ? self.players : self.remainingPlayers
+                
+                for player in eligiblePlayers {
+                    if let voteHistory = self.playerVoteHistory[player] {
+                        // Find this round's vote
+                        for voteRecord in voteHistory {
+                            if voteRecord.round == self.currentRound && voteRecord.vote == minorityVote {
+                                newRemainingPlayers.append(player)
+                                break
+                            }
+                        }
+                    }
                 }
             }
             self.remainingPlayers = newRemainingPlayers

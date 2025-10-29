@@ -1,12 +1,15 @@
-import MinorityRuleGame from 0x01
+import MinorityRuleGame from 0x1aee0aa4d20eac44
 
 transaction(gameId: UInt64, vote: Bool, salt: String) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
+    let playerAddress: Address
     
     prepare(signer: &Account) {
+        self.playerAddress = signer.address
+        
         // Get the contract account
-        let contractAddress = Address(0x01) // TODO: Replace with actual contract address
+        let contractAddress = Address(0x1aee0aa4d20eac44) // New commit-reveal contract address
         let contractAccount = getAccount(contractAddress)
         
         // Borrow the game manager from public path
@@ -21,7 +24,7 @@ transaction(gameId: UInt64, vote: Bool, salt: String) {
             ?? panic("Game not found")
         
         // Submit the vote reveal
-        game.submitReveal(player: self.account.address, vote: vote, salt: salt)
+        game.submitReveal(player: self.playerAddress, vote: vote, salt: salt)
         
         log("Vote revealed for game ".concat(gameId.toString()).concat(": ").concat(vote ? "YES" : "NO"))
     }

@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Game Configuration - CHANGE THIS FOR EACH TEST
-export GAME_ID=19
+export GAME_ID=5
 
 # Network Configuration
 export NETWORK="testnet"
-export CONTRACT_ADDRESS="0x73c003cd6de60fd4"
+export CONTRACT_ADDRESS="0x1aee0aa4d20eac44"
 
 # Account Names (from flow.json)
 export PLAYER1="one-account"
