@@ -1,24 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import * as fcl from '@onflow/fcl';
 import * as t from '@onflow/types';
 import { SUBMIT_VOTE } from '@/lib/flow/cadence/transactions/SubmitVote';
 import { useFlowUser } from '@/hooks/useFlowUser';
+import { VoteRecord } from '@/types/game';
 
 interface VotingPanelProps {
   gameId: string;
   currentRound: number;
+  playerVoteHistory: Record<string, VoteRecord[]>;
 }
 
-export function VotingPanel({ gameId, currentRound }: VotingPanelProps) {
+export function VotingPanel({ gameId, currentRound, playerVoteHistory }: VotingPanelProps) {
   const { user } = useFlowUser();
-  const [hasVoted, setHasVoted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Check if user has already voted in the current round
+  const hasVotedThisRound = useMemo(() => {
+    if (!user?.addr || !playerVoteHistory) return false;
+    
+    const userVoteHistory = playerVoteHistory[user.addr] || [];
+    return userVoteHistory.some(vote => vote.round === currentRound);
+  }, [user?.addr, playerVoteHistory, currentRound]);
+
+  // Get the user's vote for this round if they've voted
+  const userVoteThisRound = useMemo(() => {
+    if (!user?.addr || !playerVoteHistory) return null;
+    
+    const userVoteHistory = playerVoteHistory[user.addr] || [];
+    const vote = userVoteHistory.find(vote => vote.round === currentRound);
+    return vote || null;
+  }, [user?.addr, playerVoteHistory, currentRound]);
+
   const handleVote = async (vote: boolean) => {
-    if (!user?.addr || hasVoted || submitting) return;
+    if (!user?.addr || hasVotedThisRound || submitting) return;
 
     setSubmitting(true);
     setError(null);
@@ -42,7 +60,7 @@ export function VotingPanel({ gameId, currentRound }: VotingPanelProps) {
       const result = await fcl.tx(transactionId).onceSealed();
       console.log('Vote transaction sealed:', result);
       
-      setHasVoted(true);
+      // Note: hasVotedThisRound will be updated when the game data is refetched
     } catch (err: any) {
       console.error('Vote transaction failed:', err);
       setError(err.message || 'Failed to submit vote');
@@ -51,10 +69,17 @@ export function VotingPanel({ gameId, currentRound }: VotingPanelProps) {
     }
   };
 
-  if (hasVoted) {
+  if (hasVotedThisRound) {
     return (
       <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-        <p className="text-green-800">Your vote has been submitted for this round!</p>
+        <p className="text-green-800">
+          Your vote has been submitted for this round! 
+          {userVoteThisRound && (
+            <span className="font-semibold ml-1">
+              You voted: {userVoteThisRound.vote ? 'YES' : 'NO'}
+            </span>
+          )}
+        </p>
       </div>
     );
   }

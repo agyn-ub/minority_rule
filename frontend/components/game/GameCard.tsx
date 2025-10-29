@@ -1,5 +1,6 @@
 'use client';
 
+import React, { memo, useMemo } from 'react';
 import Link from 'next/link';
 import { Game, GameState } from '@/types/game';
 import { formatDistanceToNow } from 'date-fns';
@@ -8,8 +9,8 @@ interface GameCardProps {
   game: Game;
 }
 
-export function GameCard({ game }: GameCardProps) {
-  const getStateLabel = () => {
+const GameCard = memo(function GameCard({ game }: GameCardProps) {
+  const getStateLabel = useMemo(() => {
     switch (game.state) {
       case GameState.VotingOpen:
         return <span className="text-green-600">Voting Open</span>;
@@ -20,10 +21,23 @@ export function GameCard({ game }: GameCardProps) {
       default:
         return <span className="text-gray-500">Unknown</span>;
     }
-  };
+  }, [game.state]);
 
-  const deadline = new Date(parseFloat(game.roundDeadline) * 1000);
-  const isExpired = deadline < new Date();
+  const { deadline, isExpired, deadlineText } = useMemo(() => {
+    const deadline = new Date(parseFloat(game.roundDeadline) * 1000);
+    const isExpired = deadline < new Date();
+    const deadlineText = isExpired ? 'Expired' : formatDistanceToNow(deadline, { addSuffix: true });
+    
+    return { deadline, isExpired, deadlineText };
+  }, [game.roundDeadline]);
+
+  const playerCountText = useMemo(() => {
+    return `${game.remainingPlayers.length} / ${game.totalPlayers}`;
+  }, [game.remainingPlayers.length, game.totalPlayers]);
+
+  const prizeAmount = useMemo(() => {
+    return game.prizeAmount || '0';
+  }, [game.prizeAmount]);
 
   return (
     <Link href={`/game/${game.gameId}`}>
@@ -36,7 +50,7 @@ export function GameCard({ game }: GameCardProps) {
         <div className="space-y-1 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-600">Status:</span>
-            {getStateLabel()}
+            {getStateLabel}
           </div>
           
           <div className="flex justify-between">
@@ -51,14 +65,14 @@ export function GameCard({ game }: GameCardProps) {
 
           <div className="flex justify-between">
             <span className="text-gray-600">Players:</span>
-            <span>{game.remainingPlayers.length} / {game.totalPlayers}</span>
+            <span>{playerCountText}</span>
           </div>
 
           {game.state === GameState.VotingOpen && (
             <div className="flex justify-between">
               <span className="text-gray-600">Deadline:</span>
               <span className={isExpired ? 'text-red-600' : ''}>
-                {isExpired ? 'Expired' : formatDistanceToNow(deadline, { addSuffix: true })}
+                {deadlineText}
               </span>
             </div>
           )}
@@ -67,7 +81,7 @@ export function GameCard({ game }: GameCardProps) {
             <div className="mt-2 pt-2 border-t">
               <div className="text-gray-600">Winners: {game.winners.length}</div>
               <div className="text-green-600 font-semibold">
-                Prize: {game.prizeAmount || '0'} FLOW
+                Prize: {prizeAmount} FLOW
               </div>
             </div>
           )}
@@ -75,4 +89,6 @@ export function GameCard({ game }: GameCardProps) {
       </div>
     </Link>
   );
-}
+});
+
+export { GameCard };

@@ -90,7 +90,11 @@ export default function GamePage() {
 
                 {isRemainingPlayer && (
                   <div className="mt-4">
-                    <VotingPanel gameId={game.gameId} currentRound={game.currentRound} />
+                    <VotingPanel 
+                      gameId={game.gameId} 
+                      currentRound={game.currentRound}
+                      playerVoteHistory={game.playerVoteHistory}
+                    />
                   </div>
                 )}
 

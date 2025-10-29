@@ -1,11 +1,27 @@
 'use client';
 
+import React, { useMemo } from 'react';
 import { useGames } from '@/hooks/useGames';
 import { GameCard } from './GameCard';
-import { GameState } from '@/types/game';
+import { GameState, Game } from '@/types/game';
 
 export function GameList() {
   const { games, loading, error } = useGames();
+
+  // Sort games by gameId in descending order (newest first)
+  const sortedGames = useMemo(() => {
+    return [...games].sort((a, b) => {
+      const gameIdA = parseInt(a.gameId);
+      const gameIdB = parseInt(b.gameId);
+      return gameIdB - gameIdA; // Descending order
+    });
+  }, [games]);
+
+  const { activeGames, completedGames } = useMemo(() => {
+    const active = sortedGames.filter(g => g.state !== GameState.Completed);
+    const completed = sortedGames.filter(g => g.state === GameState.Completed);
+    return { activeGames: active, completedGames: completed };
+  }, [sortedGames]);
 
   if (loading) {
     return (
@@ -30,9 +46,6 @@ export function GameList() {
       </div>
     );
   }
-
-  const activeGames = games.filter(g => g.state !== GameState.Completed);
-  const completedGames = games.filter(g => g.state === GameState.Completed);
 
   return (
     <div className="space-y-8">

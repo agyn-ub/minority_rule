@@ -14,7 +14,7 @@ transaction(questionText: String, entryFee: UFix64, roundDuration: UFix64) {
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.creator = signer.address
         
-        let contractAddress = 0xMinorityRuleGame
+        let contractAddress = Address(0xMinorityRuleGame)
         
         // Borrow the game manager from public capability
         self.gameManager = getAccount(contractAddress)

@@ -9,7 +9,7 @@ transaction(gameId: UInt64, vote: Bool) {
     prepare(signer: auth(Storage) &Account) {
         self.player = signer.address
         
-        let contractAddress = 0xMinorityRuleGame
+        let contractAddress = Address(0xMinorityRuleGame)
         
         // Borrow the game manager from public capability
         self.gameManager = getAccount(contractAddress)

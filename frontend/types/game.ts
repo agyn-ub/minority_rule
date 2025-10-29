@@ -28,6 +28,25 @@ export interface Game {
   remainingPlayers: string[];
   winners: string[];
   prizeAmount?: string;
+  roundResults: Record<number, boolean>; // round -> winning vote (true=YES, false=NO)
+}
+
+export interface RoundResult {
+  round: number;
+  yesVotes: number;
+  noVotes: number;
+  totalVotes: number;
+  winningVote: boolean; // true=YES, false=NO
+  winners: string[]; // players who voted with minority
+  losers: string[]; // players who were eliminated
+}
+
+export interface GameAnalysis {
+  completedRounds: RoundResult[];
+  eliminatedPlayers: string[];
+  survivingPlayers: string[];
+  isGameComplete: boolean;
+  currentRoundVotes: { yes: number; no: number; total: number };
 }
 
 export interface PlayerStatus {
