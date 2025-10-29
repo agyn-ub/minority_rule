@@ -191,6 +191,18 @@
 						}
 					]
 				}
+			],
+			"two-account": [
+				"ScheduledRoundHandler",
+				{
+					"name": "MinorityRuleGame",
+					"args": [
+						{
+							"value": "0x1aee0aa4d20eac44",
+							"type": "Address"
+						}
+					]
+				}
 			]
 		}
 	}

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Game Configuration - CHANGE THIS FOR EACH TEST
-export GAME_ID=18
+export GAME_ID=19
 
 # Network Configuration
 export NETWORK="testnet"

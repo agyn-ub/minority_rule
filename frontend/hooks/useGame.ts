@@ -57,26 +57,32 @@ export function useGame(gameId: string) {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchRef = useRef<number>(0);
 
-  const parseGameData = useCallback((gameData: any): Game => ({
-    gameId: gameData.gameId,
-    questionText: gameData.questionText,
-    entryFee: gameData.entryFee,
-    creator: gameData.creator,
-    roundDuration: gameData.roundDuration,
-    state: Number(gameData.state),
-    currentRound: Number(gameData.currentRound),
-    roundDeadline: gameData.roundDeadline,
-    totalPlayers: Number(gameData.totalPlayers),
-    players: gameData.players || [],
-    playerVoteHistory: gameData.playerVoteHistory || {},
-    currentRoundYesVotes: Number(gameData.currentRoundYesVotes || 0),
-    currentRoundNoVotes: Number(gameData.currentRoundNoVotes || 0),
-    currentRoundTotalVotes: Number(gameData.currentRoundTotalVotes || 0),
-    remainingPlayers: gameData.remainingPlayers || [],
-    winners: gameData.winners || [],
-    prizeAmount: gameData.prizeAmount,
-    roundResults: gameData.roundResults || {}
-  }), []);
+  const parseGameData = useCallback((gameData: any): Game => {
+    const currentRoundYesVotes = Number(gameData.currentYesVotes || gameData.currentRoundYesVotes || 0);
+    const currentRoundNoVotes = Number(gameData.currentNoVotes || gameData.currentRoundNoVotes || 0);
+    const currentRoundTotalVotes = currentRoundYesVotes + currentRoundNoVotes;
+    
+    return {
+      gameId: gameData.gameId,
+      questionText: gameData.questionText,
+      entryFee: gameData.entryFee,
+      creator: gameData.creator,
+      roundDuration: gameData.roundDuration,
+      state: Number(gameData.state),
+      currentRound: Number(gameData.currentRound),
+      roundDeadline: gameData.roundDeadline,
+      totalPlayers: Number(gameData.totalPlayers),
+      players: gameData.players || [],
+      playerVoteHistory: gameData.playerVoteHistory || {},
+      currentRoundYesVotes,
+      currentRoundNoVotes,
+      currentRoundTotalVotes,
+      remainingPlayers: gameData.remainingPlayers || [],
+      winners: gameData.winners || [],
+      prizeAmount: gameData.prizeAmount,
+      roundResults: gameData.roundResults || {}
+    };
+  }, []);
 
   const fetchGame = useCallback(async (force = false) => {
     if (!gameId) return;
@@ -100,7 +106,33 @@ export function useGame(gameId: string) {
       });
 
       if (result) {
+        // Debug logging for Game 19
+        if (gameId === '19') {
+          console.log('🔍 Game 19 Raw Data:', {
+            gameId: result.gameId,
+            currentYesVotes: result.currentYesVotes,
+            currentNoVotes: result.currentNoVotes,
+            currentRoundYesVotes: result.currentRoundYesVotes,
+            currentRoundNoVotes: result.currentRoundNoVotes,
+            playerVoteHistory: result.playerVoteHistory,
+            players: result.players,
+            remainingPlayers: result.remainingPlayers
+          });
+        }
+        
         const newGame = parseGameData(result);
+        
+        // Debug parsed data for Game 19
+        if (gameId === '19') {
+          console.log('🔍 Game 19 Parsed Data:', {
+            currentRoundYesVotes: newGame.currentRoundYesVotes,
+            currentRoundNoVotes: newGame.currentRoundNoVotes,
+            currentRoundTotalVotes: newGame.currentRoundTotalVotes,
+            playerVoteHistory: newGame.playerVoteHistory,
+            players: newGame.players,
+            remainingPlayers: newGame.remainingPlayers
+          });
+        }
         
         // Only update state if data actually changed
         setGame(prevGame => {

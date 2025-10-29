@@ -9,6 +9,11 @@ access(all) contract MinorityRuleGame {
     access(all) event PlayerJoined(gameId: UInt64, player: Address, amount: UFix64, totalPlayers: UInt32)
     access(all) event GameStarted(gameId: UInt64, totalPlayers: UInt32)
     access(all) event VoteSubmitted(gameId: UInt64, round: UInt8, player: Address, vote: Bool)
+    access(all) event VoteCommitted(gameId: UInt64, round: UInt8, player: Address)
+    access(all) event VoteRevealed(gameId: UInt64, round: UInt8, player: Address, vote: Bool)
+    access(all) event CommitPhaseStarted(gameId: UInt64, round: UInt8, deadline: UFix64)
+    access(all) event RevealPhaseStarted(gameId: UInt64, round: UInt8, deadline: UFix64)
+    access(all) event InvalidReveal(gameId: UInt64, round: UInt8, player: Address)
     access(all) event RoundCompleted(gameId: UInt64, round: UInt8, yesCount: UInt32, noCount: UInt32, minorityVote: Bool, votesRemaining: UInt32)
     access(all) event GameCompleted(gameId: UInt64, totalRounds: UInt8, finalPrize: UFix64, platformFee: UFix64)
     access(all) event PrizeDistributed(gameId: UInt64, winner: Address, amount: UFix64)
@@ -30,6 +35,8 @@ access(all) contract MinorityRuleGame {
     // Game states
     access(all) enum GameState: UInt8 {
         access(all) case votingOpen
+        access(all) case commitPhase
+        access(all) case revealPhase
         access(all) case processingRound
         access(all) case completed
     }
@@ -43,6 +50,34 @@ access(all) contract MinorityRuleGame {
         init(round: UInt8, vote: Bool) {
             self.round = round
             self.vote = vote
+            self.timestamp = getCurrentBlock().timestamp
+        }
+    }
+
+    // Player commit record (stores hash of vote + salt)
+    access(all) struct CommitRecord {
+        access(all) let round: UInt8
+        access(all) let commitHash: String
+        access(all) let timestamp: UFix64
+        
+        init(round: UInt8, commitHash: String) {
+            self.round = round
+            self.commitHash = commitHash
+            self.timestamp = getCurrentBlock().timestamp
+        }
+    }
+
+    // Player reveal record (stores revealed vote + salt)
+    access(all) struct RevealRecord {
+        access(all) let round: UInt8
+        access(all) let vote: Bool
+        access(all) let salt: String
+        access(all) let timestamp: UFix64
+        
+        init(round: UInt8, vote: Bool, salt: String) {
+            self.round = round
+            self.vote = vote
+            self.salt = salt
             self.timestamp = getCurrentBlock().timestamp
         }
     }
@@ -70,6 +105,12 @@ access(all) contract MinorityRuleGame {
         access(all) var currentRoundNoVotes: UInt32
         access(all) var currentRoundTotalVotes: UInt32
         access(all) var currentRoundVoters: {Address: Bool}
+        
+        // Commit-reveal tracking
+        access(all) var currentRoundCommits: {Address: CommitRecord}
+        access(all) var currentRoundReveals: {Address: RevealRecord}
+        access(all) var commitDeadline: UFix64
+        access(all) var revealDeadline: UFix64
         
         // Round results - which answer was minority
         access(all) var roundResults: {UInt8: Bool}
@@ -115,6 +156,12 @@ access(all) contract MinorityRuleGame {
             self.currentRoundNoVotes = 0
             self.currentRoundTotalVotes = 0
             self.currentRoundVoters = {}
+            
+            // Initialize commit-reveal tracking
+            self.currentRoundCommits = {}
+            self.currentRoundReveals = {}
+            self.commitDeadline = getCurrentBlock().timestamp + (roundDuration * 0.8) // 80% for commit
+            self.revealDeadline = getCurrentBlock().timestamp + roundDuration // 20% for reveal
             
             self.roundResults = {}
             self.remainingPlayers = []
@@ -256,16 +303,142 @@ access(all) contract MinorityRuleGame {
             // Round will be processed by scheduled transaction after deadline
         }
         
-        // Process the current round
-        access(all) fun processRound() {
+        // Submit vote commitment (hash of vote + salt)
+        access(all) fun submitCommit(player: Address, commitHash: String) {
             pre {
-                self.state == GameState.votingOpen: "Game not in voting state"
-                getCurrentBlock().timestamp > self.roundDeadline || 
-                    (self.currentRoundYesVotes + self.currentRoundNoVotes) >= self.currentRoundTotalVotes: 
-                    "Round not ready to process"
+                self.state == GameState.commitPhase: "Commit phase is not active"
+                // Round 1: All players who joined can commit
+                // Round 2+: Only remaining players from previous round can commit
+                (self.currentRound == 1 && self.players.contains(player)) || 
+                    (self.currentRound > 1 && self.remainingPlayers.contains(player)): 
+                    "Player not eligible to commit in current round"
+                self.currentRoundCommits[player] == nil: "Already committed this round"
+                getCurrentBlock().timestamp <= self.commitDeadline: "Commit deadline has passed"
+                commitHash.length == 64: "Commit hash must be 64 characters (SHA3-256)"
+            }
+            
+            // Store commitment
+            let commitRecord = CommitRecord(round: self.currentRound, commitHash: commitHash)
+            self.currentRoundCommits[player] = commitRecord
+            
+            emit VoteCommitted(
+                gameId: self.gameId,
+                round: self.currentRound,
+                player: player
+            )
+            
+            // Check if all eligible players have committed
+            let eligiblePlayers = self.currentRound == 1 ? self.players : self.remainingPlayers
+            if self.currentRoundCommits.length == eligiblePlayers.length {
+                self.startRevealPhase()
+            }
+        }
+        
+        // Submit vote reveal (actual vote + salt for verification)
+        access(all) fun submitReveal(player: Address, vote: Bool, salt: String) {
+            pre {
+                self.state == GameState.revealPhase: "Reveal phase is not active"
+                self.currentRoundCommits[player] != nil: "No commitment found for player"
+                self.currentRoundReveals[player] == nil: "Already revealed this round"
+                getCurrentBlock().timestamp <= self.revealDeadline: "Reveal deadline has passed"
+                salt.length == 64: "Salt must be 64 characters (32-byte hex)"
+            }
+            
+            // Verify the reveal matches the commitment
+            let voteString = vote ? "true" : "false"
+            let combinedString = voteString.concat(salt)
+            let calculatedHash = String.encodeHex(HashAlgorithm.SHA3_256.hash(combinedString.utf8))
+            
+            let commitment = self.currentRoundCommits[player]!
+            if calculatedHash != commitment.commitHash {
+                emit InvalidReveal(
+                    gameId: self.gameId,
+                    round: self.currentRound,
+                    player: player
+                )
+                panic("Reveal does not match commitment")
+            }
+            
+            // Store valid reveal
+            let revealRecord = RevealRecord(round: self.currentRound, vote: vote, salt: salt)
+            self.currentRoundReveals[player] = revealRecord
+            
+            // Update vote counts
+            if vote {
+                self.currentRoundYesVotes = self.currentRoundYesVotes + 1
+            } else {
+                self.currentRoundNoVotes = self.currentRoundNoVotes + 1
+            }
+            
+            // Store vote in history
+            let voteRecord = VoteRecord(round: self.currentRound, vote: vote)
+            if let history = self.playerVoteHistory[player] {
+                history.append(voteRecord)
+                self.playerVoteHistory[player] = history
+            }
+            
+            emit VoteRevealed(
+                gameId: self.gameId,
+                round: self.currentRound,
+                player: player,
+                vote: vote
+            )
+            
+            // Check if all committed players have revealed or reveal deadline passed
+            if self.currentRoundReveals.length == self.currentRoundCommits.length ||
+               getCurrentBlock().timestamp > self.revealDeadline {
+                self.startProcessingRound()
+            }
+        }
+        
+        // Start commit phase
+        access(all) fun startCommitPhase() {
+            pre {
+                self.state == GameState.votingOpen: "Game must be in voting open state"
+            }
+            
+            self.state = GameState.commitPhase
+            let commitDuration = self.roundDuration * 0.8  // 80% of round for commits
+            self.commitDeadline = getCurrentBlock().timestamp + commitDuration
+            self.revealDeadline = getCurrentBlock().timestamp + self.roundDuration
+            
+            emit CommitPhaseStarted(
+                gameId: self.gameId,
+                round: self.currentRound,
+                deadline: self.commitDeadline
+            )
+        }
+        
+        // Start reveal phase
+        access(self) fun startRevealPhase() {
+            pre {
+                self.state == GameState.commitPhase: "Game must be in commit phase"
+            }
+            
+            self.state = GameState.revealPhase
+            
+            emit RevealPhaseStarted(
+                gameId: self.gameId,
+                round: self.currentRound,
+                deadline: self.revealDeadline
+            )
+        }
+        
+        // Start processing round
+        access(self) fun startProcessingRound() {
+            pre {
+                self.state == GameState.revealPhase: "Game must be in reveal phase"
             }
             
             self.state = GameState.processingRound
+            // processRound() will be called next
+        }
+        
+        // Process the current round
+        access(all) fun processRound() {
+            pre {
+                self.state == GameState.processingRound: "Game not ready for processing"
+            }
             
             // Determine minority vote
             let minorityVote: Bool = self.currentRoundYesVotes <= self.currentRoundNoVotes
@@ -283,21 +456,14 @@ access(all) contract MinorityRuleGame {
                 votesRemaining: votesRemaining
             )
             
-            // Update remaining players - only those who voted minority continue
+            // Update remaining players - only those who revealed minority vote continue
             let newRemainingPlayers: [Address] = []
-            // Round 1: Check all players who joined
-            // Round 2+: Check only remaining players from previous round
-            let playersToCheck = self.currentRound == 1 ? self.players : self.remainingPlayers
             
-            for player in playersToCheck {
-                if let history = self.playerVoteHistory[player] {
-                    // Check if player voted and if their vote was minority
-                    if history.length > 0 {
-                        let lastVote = history[history.length - 1]
-                        if lastVote.round == self.currentRound && lastVote.vote == minorityVote {
-                            newRemainingPlayers.append(player)
-                        }
-                    }
+            // Only players who successfully revealed can advance
+            for player in self.currentRoundReveals.keys {
+                let revealRecord = self.currentRoundReveals[player]!
+                if revealRecord.vote == minorityVote {
+                    newRemainingPlayers.append(player)
                 }
             }
             self.remainingPlayers = newRemainingPlayers
@@ -313,8 +479,24 @@ access(all) contract MinorityRuleGame {
                 self.currentRoundNoVotes = 0
                 self.currentRoundTotalVotes = votesRemaining
                 self.currentRoundVoters = {}
+                
+                // Clear commit-reveal data for next round
+                self.currentRoundCommits = {}
+                self.currentRoundReveals = {}
+                
+                // Set deadlines for next round
                 self.roundDeadline = getCurrentBlock().timestamp + self.roundDuration
-                self.state = GameState.votingOpen
+                self.commitDeadline = getCurrentBlock().timestamp + (self.roundDuration * 0.8)
+                self.revealDeadline = getCurrentBlock().timestamp + self.roundDuration
+                
+                // Start directly in commit phase for subsequent rounds
+                self.state = GameState.commitPhase
+                
+                emit CommitPhaseStarted(
+                    gameId: self.gameId,
+                    round: self.currentRound,
+                    deadline: self.commitDeadline
+                )
                 
                 // Schedule next round processing if funds available
                 if self.schedulingVault.balance >= self.processingFeePerRound {
@@ -407,10 +589,17 @@ access(all) contract MinorityRuleGame {
                 "currentNoVotes": self.currentRoundNoVotes,
                 "prizePool": self.prizeVault.balance,
                 "players": self.players,
+                "playerVoteHistory": self.playerVoteHistory,
                 "remainingPlayers": self.remainingPlayers,
                 "winners": self.winners,
                 "roundResults": self.roundResults,
-                "prizesDistributed": self.state == GameState.completed
+                "prizesDistributed": self.state == GameState.completed,
+                "commitDeadline": self.commitDeadline,
+                "revealDeadline": self.revealDeadline,
+                "currentRoundCommits": self.currentRoundCommits.keys,
+                "currentRoundReveals": self.currentRoundReveals.keys,
+                "commitCount": self.currentRoundCommits.length,
+                "revealCount": self.currentRoundReveals.length
             }
         }
     }

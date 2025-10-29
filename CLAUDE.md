@@ -10,7 +10,7 @@ This is a **Minority Rule Game** implemented on the Flow blockchain using Cadenc
 
 ### Storage Model (Full On-Chain)
 The contract stores ALL player data on-chain after careful consideration of tradeoffs:
-- **Initial approach**: Event-based (minimal storage, players tracked via events)
+- **Initial approach**: Event-based (minimal storage, players tracked via eventsal
 - **Security issue**: Players could fake vote history with self-controlled resources
 - **Final decision**: Store everything in contract with 3% total fee to cover costs
   - `players: [Address]` - All participants
