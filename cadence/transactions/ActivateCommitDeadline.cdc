@@ -1,13 +1,11 @@
 import MinorityRuleGame from "MinorityRuleGame"
 
-transaction(gameId: UInt64, durationInSeconds: UFix64) {
+// Forte callback transaction: Activate commit deadline and start accepting commits
+transaction(gameId: UInt64, duration: UFix64) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let creator: Address
     
     prepare(signer: &Account) {
-        self.creator = signer.address
-        
         // Get the contract account
         let contractAccount = getAccount(0x0cba6f974b0aa625)
         
@@ -22,13 +20,11 @@ transaction(gameId: UInt64, durationInSeconds: UFix64) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Schedule commit deadline (for Forte scheduling)
-        game.scheduleCommitDeadline(creator: self.creator, duration: durationInSeconds)
+        // Activate commit deadline (called by Forte scheduler)
+        game.activateCommitDeadline(duration: duration)
         
-        log("Commit deadline scheduled for game "
+        log("Commit deadline activated for game "
             .concat(gameId.toString())
-            .concat(" - Duration: ")
-            .concat(durationInSeconds.toString())
-            .concat(" seconds - Now configure Forte scheduler"))
+            .concat(" - Players can now submit commits"))
     }
 }

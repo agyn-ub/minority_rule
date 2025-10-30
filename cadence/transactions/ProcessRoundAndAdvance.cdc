@@ -1,13 +1,11 @@
 import MinorityRuleGame from "MinorityRuleGame"
 
-transaction(gameId: UInt64, durationInSeconds: UFix64) {
+// Forte callback transaction: Process round results and advance to next round or end game
+transaction(gameId: UInt64) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let creator: Address
     
     prepare(signer: &Account) {
-        self.creator = signer.address
-        
         // Get the contract account
         let contractAccount = getAccount(0x0cba6f974b0aa625)
         
@@ -22,13 +20,11 @@ transaction(gameId: UInt64, durationInSeconds: UFix64) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Schedule commit deadline (for Forte scheduling)
-        game.scheduleCommitDeadline(creator: self.creator, duration: durationInSeconds)
+        // Process round and advance (called by Forte scheduler when reveal deadline reached)
+        game.processRoundAndAdvance()
         
-        log("Commit deadline scheduled for game "
+        log("Round processed for game "
             .concat(gameId.toString())
-            .concat(" - Duration: ")
-            .concat(durationInSeconds.toString())
-            .concat(" seconds - Now configure Forte scheduler"))
+            .concat(" - Check game state for next steps"))
     }
 }

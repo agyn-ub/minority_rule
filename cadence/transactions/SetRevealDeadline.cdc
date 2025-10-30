@@ -22,14 +22,14 @@ transaction(gameId: UInt64, durationInSeconds: UFix64) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Set reveal deadline (this transitions to reveal phase)
-        game.setRevealDeadline(creator: self.creator, duration: durationInSeconds)
+        // Schedule reveal deadline (for Forte scheduling - doesn't transition yet)
+        game.scheduleRevealDeadline(creator: self.creator, duration: durationInSeconds)
         
-        log("Reveal deadline set for game "
+        log("Reveal deadline scheduled for game "
             .concat(gameId.toString())
             .concat(" - Duration: ")
             .concat(durationInSeconds.toString())
-            .concat(" seconds"))
-        log("Game transitioned to reveal phase")
+            .concat(" seconds - Now configure Forte scheduler"))
+        log("Game will transition to reveal phase when Forte activates it")
     }
 }

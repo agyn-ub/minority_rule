@@ -36,6 +36,9 @@ access(all) contract MinorityRuleGame {
 
     // Game states
     access(all) enum GameState: UInt8 {
+        access(all) case beforeRound
+        access(all) case setCommitDeadline
+        access(all) case setRevealDeadline
         access(all) case commitPhase
         access(all) case revealPhase
         access(all) case processingRound
@@ -140,7 +143,7 @@ access(all) contract MinorityRuleGame {
             self.creator = creator
             
             // Start immediately in Round 1 with commit phase (commit-reveal pattern)
-            self.state = GameState.commitPhase
+            self.state = GameState.beforeRound
             self.currentRound = 1
             self.totalPlayers = 0
             
@@ -237,7 +240,7 @@ access(all) contract MinorityRuleGame {
                     (self.currentRound > 1 && self.remainingPlayers.contains(player)): 
                     "Player not eligible to commit in current round"
                 self.currentRoundCommits[player] == nil: "Already committed this round"
-                getCurrentBlock().timestamp <= self.commitDeadline: "Commit deadline has passed"
+                self.commitDeadline == 0.0 || getCurrentBlock().timestamp <= self.commitDeadline: "Commit deadline has passed"
                 commitHash.length == 64: "Commit hash must be 64 characters (SHA3-256)"
             }
             
@@ -264,7 +267,7 @@ access(all) contract MinorityRuleGame {
                 self.state == GameState.revealPhase: "Reveal phase is not active"
                 self.currentRoundCommits[player] != nil: "No commitment found for player"
                 self.currentRoundReveals[player] == nil: "Already revealed this round"
-                getCurrentBlock().timestamp <= self.revealDeadline: "Reveal deadline has passed"
+                self.revealDeadline == 0.0 || getCurrentBlock().timestamp <= self.revealDeadline: "Reveal deadline has passed"
                 salt.length == 64: "Salt must be 64 characters (32-byte hex)"
             }
             
@@ -514,55 +517,98 @@ access(all) contract MinorityRuleGame {
             }
         }
         
-        // Creator sets commit deadline
-        access(all) fun setCommitDeadline(creator: Address, duration: UFix64) {
+        // Creator schedules commit deadline (for Forte scheduling - doesn't set deadline yet)
+        access(all) fun scheduleCommitDeadline(creator: Address, duration: UFix64) {
             pre {
-                creator == self.creator: "Only game creator can set deadlines"
-                self.state == GameState.commitPhase: "Can only set deadline during commit phase"
-                self.commitDeadline == 0.0: "Commit deadline already set for this round"
+                creator == self.creator: "Only game creator can schedule deadlines"
+                self.state == GameState.beforeRound: "Can only schedule before round starts"
+                self.currentCommitDuration == nil: "Commit deadline already scheduled for this round"
                 duration > 0.0: "Duration must be greater than 0"
             }
             
-            self.commitDeadline = getCurrentBlock().timestamp + duration
+            // Store scheduling info but don't set actual deadline yet (Forte will call back to set it)
             self.currentCommitDuration = duration
             self.roundCommitDurations[self.currentRound] = duration
-            
+            self.state = GameState.setCommitDeadline
+
             emit CommitDeadlineSet(
                 gameId: self.gameId,
                 round: self.currentRound,
                 duration: duration,
+                deadline: 0.0  // Will be set by Forte callback
+            )
+        }
+        
+        // Forte callback: Actually set the commit deadline (called by scheduler)
+        access(all) fun activateCommitDeadline(duration: UFix64) {
+            pre {
+                self.state == GameState.commitPhase: "Can only activate during commit phase"
+                self.commitDeadline == 0.0: "Commit deadline already active"
+                duration > 0.0: "Duration must be greater than 0"
+            }
+            
+            self.commitDeadline = getCurrentBlock().timestamp + duration
+            
+            emit CommitPhaseStarted(
+                gameId: self.gameId,
+                round: self.currentRound,
                 deadline: self.commitDeadline
             )
         }
         
-        // Creator sets reveal deadline (transitions to reveal phase)
-        access(all) fun setRevealDeadline(creator: Address, duration: UFix64) {
+        // Creator schedules reveal deadline (for Forte scheduling - doesn't transition yet)
+        access(all) fun scheduleRevealDeadline(creator: Address, duration: UFix64) {
             pre {
-                creator == self.creator: "Only game creator can set deadlines"
-                self.state == GameState.commitPhase: "Must be in commit phase to set reveal deadline"
-                self.commitDeadline > 0.0: "Commit deadline must be set first"
-                getCurrentBlock().timestamp >= self.commitDeadline: "Commit phase must be over"
+                creator == self.creator: "Only game creator can schedule deadlines"
+                self.state == GameState.setCommitDeadline: "Must be in set commit deadline state to schedule reveal deadline"
+                self.currentCommitDuration != nil: "Commit deadline must be scheduled first"
+                self.currentRevealDuration == nil: "Reveal deadline already scheduled for this round"
+                duration > 0.0: "Duration must be greater than 0"
+            }
+            
+            // Store scheduling info but don't transition yet (Forte will call back to activate)
+            self.currentRevealDuration = duration
+            self.roundRevealDurations[self.currentRound] = duration
+            self.state = GameState.setRevealDeadline
+            
+            emit RevealDeadlineSet(
+                gameId: self.gameId,
+                round: self.currentRound,
+                duration: duration,
+                deadline: 0.0  // Will be set by Forte callback
+            )
+        }
+        
+        // Forte callback: Transition to reveal phase (called by scheduler when commit deadline reached)
+        access(all) fun activateRevealPhase(duration: UFix64) {
+            pre {
+                self.state == GameState.commitPhase: "Can only transition from commit phase"
+                self.revealDeadline == 0.0: "Reveal phase already active"
                 duration > 0.0: "Duration must be greater than 0"
             }
             
             // Transition to reveal phase
             self.state = GameState.revealPhase
             self.revealDeadline = getCurrentBlock().timestamp + duration
-            self.currentRevealDuration = duration
-            self.roundRevealDurations[self.currentRound] = duration
             
             emit RevealPhaseStarted(
                 gameId: self.gameId,
                 round: self.currentRound,
                 deadline: self.revealDeadline
             )
+        }
+        
+        // Forte callback: Process round and calculate results (called by scheduler when reveal deadline reached)
+        access(all) fun processRoundAndAdvance() {
+            pre {
+                self.state == GameState.revealPhase: "Can only process from reveal phase"
+            }
             
-            emit RevealDeadlineSet(
-                gameId: self.gameId,
-                round: self.currentRound,
-                duration: duration,
-                deadline: self.revealDeadline
-            )
+            // Move to processing state
+            self.state = GameState.processingRound
+            
+            // Process the round logic
+            self.processRound()
         }
         
         // Get round timing information
