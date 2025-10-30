@@ -3,7 +3,8 @@
 		"MinorityRuleGame": {
 			"source": "cadence/contracts/MinorityRuleGame.cdc",
 			"aliases": {
-				"testing": "0000000000000007"
+				"testing": "0000000000000007",
+				"testnet": "1aee0aa4d20eac44"
 			}
 		},
 		"ScheduledRoundHandler": {
@@ -180,18 +181,6 @@
 	},
 	"deployments": {
 		"testnet": {
-			"one-account": [
-				"ScheduledRoundHandler",
-				{
-					"name": "MinorityRuleGame",
-					"args": [
-						{
-							"value": "0x73c003cd6de60fd4",
-							"type": "Address"
-						}
-					]
-				}
-			],
 			"two-account": [
 				"ScheduledRoundHandler",
 				{

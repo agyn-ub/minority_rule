@@ -1,4 +1,4 @@
-import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
+import MinorityRuleGame from "MinorityRuleGame"
 import FungibleToken from "FungibleToken"
 import FlowToken from "FlowToken"
 
@@ -13,12 +13,8 @@ transaction(questionText: String, entryFee: UFix64, roundDuration: UFix64) {
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.creator = signer.address
         
-        // Get the contract address (you'll need to pass this as a parameter in production)
-        // For now, using a placeholder - replace 0xCONTRACT with actual deployed address
-        let contractAddress = Address(0x1aee0aa4d20eac44) // New commit-reveal contract address
-        
-        // Borrow the game manager from public capability
-        self.gameManager = getAccount(contractAddress)
+        // Borrow the game manager from the contract account (address resolved via flow.json aliases)
+        self.gameManager = getAccount(0x1aee0aa4d20eac44)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         

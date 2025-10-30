@@ -1,4 +1,4 @@
-import MinorityRuleGame from 0x1aee0aa4d20eac44
+import MinorityRuleGame from "MinorityRuleGame"
 
 transaction(gameId: UInt64, commitHash: String) {
     
@@ -9,8 +9,7 @@ transaction(gameId: UInt64, commitHash: String) {
         self.playerAddress = signer.address
         
         // Get the contract account
-        let contractAddress = Address(0x1aee0aa4d20eac44) // New commit-reveal contract address
-        let contractAccount = getAccount(contractAddress)
+        let contractAccount = getAccount(0x1aee0aa4d20eac44)
         
         // Borrow the game manager from public path
         self.gameManager = contractAccount

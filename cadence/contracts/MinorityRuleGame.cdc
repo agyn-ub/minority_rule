@@ -143,8 +143,8 @@ access(all) contract MinorityRuleGame {
             self.creator = creator
             self.roundDuration = roundDuration
             
-            // Start immediately in Round 1
-            self.state = GameState.votingOpen
+            // Start immediately in Round 1 with commit phase (commit-reveal pattern)
+            self.state = GameState.commitPhase
             self.currentRound = 1
             self.roundDeadline = getCurrentBlock().timestamp + roundDuration
             self.totalPlayers = 0
@@ -179,13 +179,20 @@ access(all) contract MinorityRuleGame {
                 creator: self.creator,
                 questionText: self.questionText
             )
+            
+            // Emit commit phase started event
+            emit CommitPhaseStarted(
+                gameId: self.gameId,
+                round: self.currentRound,
+                deadline: self.commitDeadline
+            )
         }
         
         // Player joins the game (creator must also provide scheduling fund)
         access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}, schedulingFund: @{FungibleToken.Vault}?) {
             pre {
                 self.currentRound == 1: "Can only join during Round 1"
-                self.state == GameState.votingOpen: "Game is not accepting new players"
+                self.state == GameState.commitPhase: "Game is not accepting new players"
                 payment.balance == self.entryFee: "Incorrect entry fee amount"
                 !self.players.contains(player): "Player already joined"
             }
@@ -257,10 +264,10 @@ access(all) contract MinorityRuleGame {
             }
         }
         
-        // Submit vote
+        // Submit vote (legacy - use commit-reveal instead)
         access(all) fun submitVote(player: Address, vote: Bool) {
             pre {
-                self.state == GameState.votingOpen: "Voting is not open"
+                false: "Use commit-reveal pattern instead of direct voting"
                 // Round 1: All players who joined can vote
                 // Round 2+: Only remaining players from previous round can vote
                 (self.currentRound == 1 && self.players.contains(player)) || 
@@ -389,23 +396,6 @@ access(all) contract MinorityRuleGame {
             }
         }
         
-        // Start commit phase
-        access(all) fun startCommitPhase() {
-            pre {
-                self.state == GameState.votingOpen: "Game must be in voting open state"
-            }
-            
-            self.state = GameState.commitPhase
-            let commitDuration = self.roundDuration * 0.8  // 80% of round for commits
-            self.commitDeadline = getCurrentBlock().timestamp + commitDuration
-            self.revealDeadline = getCurrentBlock().timestamp + self.roundDuration
-            
-            emit CommitPhaseStarted(
-                gameId: self.gameId,
-                round: self.currentRound,
-                deadline: self.commitDeadline
-            )
-        }
         
         // Start reveal phase
         access(self) fun startRevealPhase() {
