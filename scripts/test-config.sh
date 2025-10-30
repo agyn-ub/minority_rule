@@ -5,7 +5,7 @@ export GAME_ID=5
 
 # Network Configuration
 export NETWORK="testnet"
-export CONTRACT_ADDRESS="0x1aee0aa4d20eac44"
+export CONTRACT_ADDRESS="0xfe89b379c3f4ac9b"
 
 # Account Names (from flow.json)
 export PLAYER1="one-account"

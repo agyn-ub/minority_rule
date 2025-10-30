@@ -124,10 +124,6 @@ access(all) contract MinorityRuleGame {
         // Prize vault
         access(all) var prizeVault: @{FungibleToken.Vault}
         
-        // Scheduling funds (creator deposits 1 FLOW)
-        access(all) var schedulingVault: @{FungibleToken.Vault}
-        access(all) let processingFeePerRound: UFix64
-        access(all) var nextScheduledTxId: UInt64?
         
         // Winners - populated at game end
         access(all) var winners: [Address]
@@ -171,10 +167,6 @@ access(all) contract MinorityRuleGame {
             self.remainingPlayers = []
             self.winners = []
             
-            self.schedulingVault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
-            self.processingFeePerRound = 0.01  // 0.01 FLOW per round
-            self.nextScheduledTxId = nil
-            
             self.prizeVault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
             
             emit GameCreated(
@@ -192,27 +184,13 @@ access(all) contract MinorityRuleGame {
             )
         }
         
-        // Player joins the game (creator must also provide scheduling fund)
-        access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}, schedulingFund: @{FungibleToken.Vault}?) {
+        // Player joins the game
+        access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}) {
             pre {
                 self.currentRound == 1: "Can only join during Round 1"
                 self.state == GameState.commitPhase: "Game is not accepting new players"
                 payment.balance == self.entryFee: "Incorrect entry fee amount"
                 !self.players.contains(player): "Player already joined"
-            }
-            
-            // If this is the creator (first player) and scheduling fund provided
-            if self.totalPlayers == 0 && schedulingFund != nil {
-                let fund <- schedulingFund!
-                assert(fund.balance >= 1.0, message: "Scheduling fund must be at least 1 FLOW")
-                self.schedulingVault.deposit(from: <- fund)
-            } else if schedulingFund != nil {
-                // Non-creator shouldn't provide scheduling fund
-                destroy schedulingFund!
-                panic("Only game creator provides scheduling fund")
-            } else {
-                // Destroy nil optional
-                destroy schedulingFund
             }
             
             self.prizeVault.deposit(from: <- payment)
@@ -245,19 +223,7 @@ access(all) contract MinorityRuleGame {
                 
                 emit GameStarted(gameId: self.gameId, totalPlayers: self.totalPlayers)
                 
-                // Schedule the first round processing
-                if self.schedulingVault.balance >= self.processingFeePerRound {
-                    // For now, simulate scheduling (FlowTransactionScheduler integration coming)
-                    self.nextScheduledTxId = UInt64(getCurrentBlock().height)
-                    
-                    // Deduct scheduling fee
-                    let fee <- self.schedulingVault.withdraw(amount: self.processingFeePerRound)
-                    MinorityRuleGame.contractStorageVault.deposit(from: <- fee)
-                    
-                    log("First round processing scheduled for game ".concat(self.gameId.toString()))
-                } else {
-                    log("Warning: Insufficient scheduling funds for automatic processing")
-                }
+                log("Game started - creator must manually schedule round processing via Forte")
             }
         }
         
@@ -458,19 +424,7 @@ access(all) contract MinorityRuleGame {
                     deadline: self.commitDeadline
                 )
                 
-                // Schedule next round processing if funds available
-                if self.schedulingVault.balance >= self.processingFeePerRound {
-                    // For now, simulate scheduling (FlowTransactionScheduler integration coming)
-                    self.nextScheduledTxId = UInt64(getCurrentBlock().height)
-                    
-                    // Deduct scheduling fee from vault
-                    let fee <- self.schedulingVault.withdraw(amount: self.processingFeePerRound)
-                    MinorityRuleGame.contractStorageVault.deposit(from: <- fee)
-                    
-                    log("Next round scheduled for game ".concat(self.gameId.toString()))
-                } else {
-                    log("Warning: Insufficient scheduling funds for next round")
-                }
+                log("Next round ready - creator must manually schedule via Forte")
             }
         }
         

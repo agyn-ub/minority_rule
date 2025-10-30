@@ -1,5 +1,5 @@
 //create a game
-flow transactions send cadence/transactions/CreateGame.cdc "Is the sky blue?" 10.0 3600.0 --network testnet --signer two-account
+flow transactions send cadence/transactions/CreateGame.cdc "Is the sky blue?" 10.0 --network testnet --signer one-account
 
 
 //join game 

@@ -13,7 +13,7 @@ transaction(gameId: UInt64) {
         self.player = signer.address
         
         // Borrow the game manager from the contract account
-        self.gameManager = getAccount(0x1aee0aa4d20eac44)
+        self.gameManager = getAccount(0xfe89b379c3f4ac9b)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         
@@ -30,8 +30,8 @@ transaction(gameId: UInt64) {
     }
     
     execute {
-        // Join the game (no ticket needed, no scheduling fund for non-creators)
-        self.game.joinGame(player: self.player, payment: <- self.payment, schedulingFund: nil)
+        // Join the game
+        self.game.joinGame(player: self.player, payment: <- self.payment)
         
         log("Player ".concat(self.player.toString()).concat(" joined game ").concat(gameId.toString()))
     }

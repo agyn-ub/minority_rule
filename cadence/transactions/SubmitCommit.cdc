@@ -9,7 +9,7 @@ transaction(gameId: UInt64, commitHash: String) {
         self.playerAddress = signer.address
         
         // Get the contract account
-        let contractAccount = getAccount(0x1aee0aa4d20eac44)
+        let contractAccount = getAccount(0xfe89b379c3f4ac9b)
         
         // Borrow the game manager from public path
         self.gameManager = contractAccount

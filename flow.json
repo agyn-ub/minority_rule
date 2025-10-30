@@ -181,7 +181,7 @@
 	},
 	"deployments": {
 		"testnet": {
-			"two-account": [
+			"three-account": [
 				"ScheduledRoundHandler",
 				{
 					"name": "MinorityRuleGame",
