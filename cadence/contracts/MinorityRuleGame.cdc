@@ -36,7 +36,6 @@ access(all) contract MinorityRuleGame {
 
     // Game states
     access(all) enum GameState: UInt8 {
-        access(all) case votingOpen
         access(all) case commitPhase
         access(all) case revealPhase
         access(all) case processingRound

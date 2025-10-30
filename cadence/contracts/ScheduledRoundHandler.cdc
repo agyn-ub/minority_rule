@@ -47,7 +47,7 @@ access(all) contract ScheduledRoundHandler {
             emit RoundProcessedByScheduler(gameId: self.gameId, round: currentRound)
             
             // Log the result
-            if game.state == MinorityRuleGame.GameState.votingOpen {
+            if game.state == MinorityRuleGame.GameState.commitPhase {
                 log("Round processed, game continues to round ".concat(game.currentRound.toString()))
             } else {
                 log("Game ".concat(self.gameId.toString()).concat(" completed"))

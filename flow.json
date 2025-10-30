@@ -4,13 +4,13 @@
 			"source": "cadence/contracts/MinorityRuleGame.cdc",
 			"aliases": {
 				"testing": "0000000000000007",
-				"testnet": "fe89b379c3f4ac9b"
+				"testnet": "0cba6f974b0aa625"
 			}
 		},
 		"ScheduledRoundHandler": {
 			"source": "./cadence/contracts/ScheduledRoundHandler.cdc",
 			"aliases": {
-				"testnet": "73c003cd6de60fd4"
+				"testnet": "0cba6f974b0aa625"
 			}
 		}
 	},
@@ -181,13 +181,13 @@
 	},
 	"deployments": {
 		"testnet": {
-			"three-account": [
+			"five-account": [
 				"ScheduledRoundHandler",
 				{
 					"name": "MinorityRuleGame",
 					"args": [
 						{
-							"value": "0xfe89b379c3f4ac9b",
+							"value": "0x0cba6f974b0aa625",
 							"type": "Address"
 						}
 					]
