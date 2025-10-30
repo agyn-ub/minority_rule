@@ -1,10 +1,8 @@
-import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
+import MinorityRuleGame from "MinorityRuleGame"
 
 // Check player status in games
 // Note: In the current implementation, player data is stored in the contract
-access(all) fun main(playerAddress: Address, gameId: UInt64): {String: AnyStruct}? {
-    // Get the contract address (replace with actual deployed address)
-    let contractAddress = Address(0x73c003cd6de60fd4) // MinorityRuleGame deployed address
+access(all) fun main(playerAddress: Address, gameId: UInt64, contractAddress: Address): {String: AnyStruct}? {
     
     let gameManager = getAccount(contractAddress)
         .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)

@@ -2,7 +2,7 @@ import MinorityRuleGame from "MinorityRuleGame"
 import FungibleToken from "FungibleToken"
 import FlowToken from "FlowToken"
 
-transaction(questionText: String, entryFee: UFix64, roundDuration: UFix64) {
+transaction(questionText: String, entryFee: UFix64) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
     let game: &MinorityRuleGame.Game
@@ -22,8 +22,7 @@ transaction(questionText: String, entryFee: UFix64, roundDuration: UFix64) {
         let gameId = self.gameManager.createGame(
             questionText: questionText,
             entryFee: entryFee,
-            creator: self.creator,
-            roundDuration: roundDuration
+            creator: self.creator
         )
         
         // Get reference to the created game

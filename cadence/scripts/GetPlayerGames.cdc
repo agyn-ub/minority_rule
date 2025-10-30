@@ -1,4 +1,4 @@
-import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
+import MinorityRuleGame from "MinorityRuleGame"
 
 // Note: In the event-based architecture, player participation is tracked via events, not stored state
 // To get player games, query the blockchain events:

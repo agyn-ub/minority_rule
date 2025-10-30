@@ -1,4 +1,4 @@
-import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
+import MinorityRuleGame from "MinorityRuleGame"
 
 access(all) fun main(gameId: UInt64, contractAddress: Address): {String: AnyStruct}? {
     // Get the contract account

@@ -1,0 +1,9 @@
+//create a game
+flow transactions send cadence/transactions/CreateGame.cdc "Is the sky blue?" 10.0 3600.0 --network testnet --signer two-account
+
+
+//join game 
+flow transactions send cadence/transactions/JoinGame.cdc 13 --network testnet --signer three-account
+
+//generate salt
+node generate-salt.js 12 four-account

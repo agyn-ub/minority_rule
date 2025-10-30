@@ -1,4 +1,4 @@
-import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
+import MinorityRuleGame from "MinorityRuleGame"
 
 // This script demonstrates how to query game events
 // In production, you would use Flow SDK to query events from blockchain history

@@ -13,6 +13,8 @@ access(all) contract MinorityRuleGame {
     access(all) event VoteRevealed(gameId: UInt64, round: UInt8, player: Address, vote: Bool)
     access(all) event CommitPhaseStarted(gameId: UInt64, round: UInt8, deadline: UFix64)
     access(all) event RevealPhaseStarted(gameId: UInt64, round: UInt8, deadline: UFix64)
+    access(all) event CommitDeadlineSet(gameId: UInt64, round: UInt8, duration: UFix64, deadline: UFix64)
+    access(all) event RevealDeadlineSet(gameId: UInt64, round: UInt8, duration: UFix64, deadline: UFix64)
     access(all) event InvalidReveal(gameId: UInt64, round: UInt8, player: Address)
     access(all) event RoundCompleted(gameId: UInt64, round: UInt8, yesCount: UInt32, noCount: UInt32, minorityVote: Bool, votesRemaining: UInt32)
     access(all) event GameCompleted(gameId: UInt64, totalRounds: UInt8, finalPrize: UFix64, platformFee: UFix64)
@@ -88,12 +90,9 @@ access(all) contract MinorityRuleGame {
         access(all) let questionText: String
         access(all) let entryFee: UFix64
         access(all) let creator: Address
-        access(all) let roundDuration: UFix64
-        
         // State tracking
         access(all) var state: GameState
         access(all) var currentRound: UInt8
-        access(all) var roundDeadline: UFix64
         access(all) var totalPlayers: UInt32
         
         // Store all players (contract pays for storage)
@@ -103,14 +102,18 @@ access(all) contract MinorityRuleGame {
         // Current round tracking
         access(all) var currentRoundYesVotes: UInt32
         access(all) var currentRoundNoVotes: UInt32
-        access(all) var currentRoundTotalVotes: UInt32
-        access(all) var currentRoundVoters: {Address: Bool}
         
         // Commit-reveal tracking
         access(all) var currentRoundCommits: {Address: CommitRecord}
         access(all) var currentRoundReveals: {Address: RevealRecord}
         access(all) var commitDeadline: UFix64
         access(all) var revealDeadline: UFix64
+        
+        // Creator-controlled timing storage
+        access(all) var roundCommitDurations: {UInt8: UFix64}  // Round -> Commit duration
+        access(all) var roundRevealDurations: {UInt8: UFix64}  // Round -> Reveal duration
+        access(all) var currentCommitDuration: UFix64?
+        access(all) var currentRevealDuration: UFix64?
         
         // Round results - which answer was minority
         access(all) var roundResults: {UInt8: Bool}
@@ -132,8 +135,7 @@ access(all) contract MinorityRuleGame {
         init(
             questionText: String,
             entryFee: UFix64,
-            creator: Address,
-            roundDuration: UFix64
+            creator: Address
         ) {
             self.gameId = MinorityRuleGame.nextGameId
             MinorityRuleGame.nextGameId = MinorityRuleGame.nextGameId + 1
@@ -141,12 +143,10 @@ access(all) contract MinorityRuleGame {
             self.questionText = questionText
             self.entryFee = entryFee
             self.creator = creator
-            self.roundDuration = roundDuration
             
             // Start immediately in Round 1 with commit phase (commit-reveal pattern)
             self.state = GameState.commitPhase
             self.currentRound = 1
-            self.roundDeadline = getCurrentBlock().timestamp + roundDuration
             self.totalPlayers = 0
             
             self.players = []
@@ -154,14 +154,18 @@ access(all) contract MinorityRuleGame {
             
             self.currentRoundYesVotes = 0
             self.currentRoundNoVotes = 0
-            self.currentRoundTotalVotes = 0
-            self.currentRoundVoters = {}
             
             // Initialize commit-reveal tracking
             self.currentRoundCommits = {}
             self.currentRoundReveals = {}
-            self.commitDeadline = getCurrentBlock().timestamp + (roundDuration * 0.8) // 80% for commit
-            self.revealDeadline = getCurrentBlock().timestamp + roundDuration // 20% for reveal
+            self.commitDeadline = 0.0 // Creator will set this manually
+            self.revealDeadline = 0.0 // Creator will set this manually
+            
+            // Initialize timing storage
+            self.roundCommitDurations = {}
+            self.roundRevealDurations = {}
+            self.currentCommitDuration = nil
+            self.currentRevealDuration = nil
             
             self.roundResults = {}
             self.remainingPlayers = []
@@ -228,20 +232,13 @@ access(all) contract MinorityRuleGame {
             // Initialize game when first player (creator) joins
             self.initializeGameIfNeeded()
             
-            // Update vote count for Round 1
-            // In Round 1, all players who join can vote
-            if self.currentRound == 1 {
-                self.currentRoundTotalVotes = self.totalPlayers
-                // remainingPlayers will be set correctly in initializeGameIfNeeded()
-                // No need to manually add here to avoid duplicates
-            }
+            // Game initialization handled in initializeGameIfNeeded()
         }
         
         // Initialize game after first player joins
         access(self) fun initializeGameIfNeeded() {
             // Only initialize once when first player joins
             if self.totalPlayers == 1 {
-                self.currentRoundTotalVotes = self.totalPlayers
                 
                 // Don't initialize remainingPlayers here - it will be set correctly 
                 // in processRound() for Round 1 by checking all players who joined
@@ -264,49 +261,6 @@ access(all) contract MinorityRuleGame {
             }
         }
         
-        // Submit vote (legacy - use commit-reveal instead)
-        access(all) fun submitVote(player: Address, vote: Bool) {
-            pre {
-                false: "Use commit-reveal pattern instead of direct voting"
-                // Round 1: All players who joined can vote
-                // Round 2+: Only remaining players from previous round can vote
-                (self.currentRound == 1 && self.players.contains(player)) || 
-                    (self.currentRound > 1 && self.remainingPlayers.contains(player)): 
-                    "Player not eligible to vote in current round"
-                self.currentRoundVoters[player] == nil: "Already voted this round"
-                getCurrentBlock().timestamp <= self.roundDeadline: "Round deadline has passed"
-            }
-            
-            // Backup trigger: Check if previous round needs processing
-            // This should actually be done before voting, in a separate function
-            // For now, we'll keep preconditions clean
-            
-            // Update vote counts
-            if vote {
-                self.currentRoundYesVotes = self.currentRoundYesVotes + 1
-            } else {
-                self.currentRoundNoVotes = self.currentRoundNoVotes + 1
-            }
-            
-            // Mark as voted
-            self.currentRoundVoters[player] = true
-            
-            // Store vote in history
-            let voteRecord = VoteRecord(round: self.currentRound, vote: vote)
-            if let history = self.playerVoteHistory[player] {
-                history.append(voteRecord)
-                self.playerVoteHistory[player] = history
-            }
-            
-            emit VoteSubmitted(
-                gameId: self.gameId,
-                round: self.currentRound,
-                player: player,
-                vote: vote
-            )
-            
-            // Round will be processed by scheduled transaction after deadline
-        }
         
         // Submit vote commitment (hash of vote + salt)
         access(all) fun submitCommit(player: Address, commitHash: String) {
@@ -484,17 +438,16 @@ access(all) contract MinorityRuleGame {
                 self.currentRound = self.currentRound + 1
                 self.currentRoundYesVotes = 0
                 self.currentRoundNoVotes = 0
-                self.currentRoundTotalVotes = votesRemaining
-                self.currentRoundVoters = {}
                 
                 // Clear commit-reveal data for next round
                 self.currentRoundCommits = {}
                 self.currentRoundReveals = {}
                 
-                // Set deadlines for next round
-                self.roundDeadline = getCurrentBlock().timestamp + self.roundDuration
-                self.commitDeadline = getCurrentBlock().timestamp + (self.roundDuration * 0.8)
-                self.revealDeadline = getCurrentBlock().timestamp + self.roundDuration
+                // Reset deadlines - creator will set new ones manually
+                self.commitDeadline = 0.0
+                self.revealDeadline = 0.0
+                self.currentCommitDuration = nil
+                self.currentRevealDuration = nil
                 
                 // Start directly in commit phase for subsequent rounds
                 self.state = GameState.commitPhase
@@ -589,8 +542,6 @@ access(all) contract MinorityRuleGame {
                 "creator": self.creator,
                 "state": self.state.rawValue,
                 "currentRound": self.currentRound,
-                "roundDuration": self.roundDuration,
-                "roundDeadline": self.roundDeadline,
                 "totalPlayers": self.totalPlayers,
                 "currentYesVotes": self.currentRoundYesVotes,
                 "currentNoVotes": self.currentRoundNoVotes,
@@ -609,6 +560,80 @@ access(all) contract MinorityRuleGame {
                 "revealCount": self.currentRoundReveals.length
             }
         }
+        
+        // Creator sets commit deadline
+        access(all) fun setCommitDeadline(creator: Address, duration: UFix64) {
+            pre {
+                creator == self.creator: "Only game creator can set deadlines"
+                self.state == GameState.commitPhase: "Can only set deadline during commit phase"
+                self.commitDeadline == 0.0: "Commit deadline already set for this round"
+                duration > 0.0: "Duration must be greater than 0"
+            }
+            
+            self.commitDeadline = getCurrentBlock().timestamp + duration
+            self.currentCommitDuration = duration
+            self.roundCommitDurations[self.currentRound] = duration
+            
+            emit CommitDeadlineSet(
+                gameId: self.gameId,
+                round: self.currentRound,
+                duration: duration,
+                deadline: self.commitDeadline
+            )
+        }
+        
+        // Creator sets reveal deadline (transitions to reveal phase)
+        access(all) fun setRevealDeadline(creator: Address, duration: UFix64) {
+            pre {
+                creator == self.creator: "Only game creator can set deadlines"
+                self.state == GameState.commitPhase: "Must be in commit phase to set reveal deadline"
+                self.commitDeadline > 0.0: "Commit deadline must be set first"
+                getCurrentBlock().timestamp >= self.commitDeadline: "Commit phase must be over"
+                duration > 0.0: "Duration must be greater than 0"
+            }
+            
+            // Transition to reveal phase
+            self.state = GameState.revealPhase
+            self.revealDeadline = getCurrentBlock().timestamp + duration
+            self.currentRevealDuration = duration
+            self.roundRevealDurations[self.currentRound] = duration
+            
+            emit RevealPhaseStarted(
+                gameId: self.gameId,
+                round: self.currentRound,
+                deadline: self.revealDeadline
+            )
+            
+            emit RevealDeadlineSet(
+                gameId: self.gameId,
+                round: self.currentRound,
+                duration: duration,
+                deadline: self.revealDeadline
+            )
+        }
+        
+        // Get round timing information
+        access(all) fun getRoundTimings(round: UInt8): {String: UFix64} {
+            return {
+                "commitDuration": self.roundCommitDurations[round] ?? 0.0,
+                "revealDuration": self.roundRevealDurations[round] ?? 0.0
+            }
+        }
+        
+        // Get current phase information
+        access(all) fun getCurrentPhaseInfo(): {String: AnyStruct} {
+            return {
+                "state": self.state.rawValue,
+                "round": self.currentRound,
+                "commitDeadline": self.commitDeadline,
+                "revealDeadline": self.revealDeadline,
+                "currentCommitDuration": self.currentCommitDuration,
+                "currentRevealDuration": self.currentRevealDuration,
+                "timeRemaining": self.state == GameState.commitPhase 
+                    ? (self.commitDeadline > getCurrentBlock().timestamp ? self.commitDeadline - getCurrentBlock().timestamp : 0.0)
+                    : (self.revealDeadline > getCurrentBlock().timestamp ? self.revealDeadline - getCurrentBlock().timestamp : 0.0)
+            }
+        }
     }
     
     // Public interface for GameManager
@@ -617,8 +642,7 @@ access(all) contract MinorityRuleGame {
         access(all) fun createGame(
             questionText: String,
             entryFee: UFix64,
-            creator: Address,
-            roundDuration: UFix64
+            creator: Address
         ): UInt64
     }
     
@@ -633,14 +657,12 @@ access(all) contract MinorityRuleGame {
         access(all) fun createGame(
             questionText: String,
             entryFee: UFix64,
-            creator: Address,
-            roundDuration: UFix64
+            creator: Address
         ): UInt64 {
             let game <- create Game(
                 questionText: questionText,
                 entryFee: entryFee,
-                creator: creator,
-                roundDuration: roundDuration
+                creator: creator
             )
             let gameId = game.gameId
             self.games[gameId] <-! game
