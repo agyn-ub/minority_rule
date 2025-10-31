@@ -3,16 +3,16 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { sha3_256 } = require('js-sha3');
 
 // Check command line arguments
-if (process.argv.length !== 4) {
-    console.log('Usage: node generate-salt.js <gameId> <accountName>');
-    console.log('Example: node generate-salt.js 1 three-account');
+if (process.argv.length !== 3) {
+    console.log('Usage: node generate-salt.js <accountName>');
+    console.log('Example: node generate-salt.js three-account');
     process.exit(1);
 }
 
-const gameId = process.argv[2];
-const accountName = process.argv[3];
+const accountName = process.argv[2];
 
 function generateSalt() {
     return crypto.randomBytes(32).toString('hex');
@@ -21,7 +21,8 @@ function generateSalt() {
 function generateCommitHash(vote, salt) {
     const voteString = vote ? "true" : "false";
     const combinedString = voteString + salt;
-    return crypto.createHash('sha256').update(combinedString).digest('hex');
+    // Use SHA3_256 to match Flow contract: HashAlgorithm.SHA3_256.hash()
+    return sha3_256(combinedString);
 }
 
 // Generate voting data
@@ -32,7 +33,6 @@ const timestamp = new Date().toISOString();
 
 // Create voting data object
 const votingData = {
-    gameId: gameId,
     account: accountName,
     timestamp: timestamp,
     salt: salt,
@@ -41,10 +41,10 @@ const votingData = {
         voteFalse: hashFalse
     },
     commands: {
-        commitTrue: `flow transactions send cadence/transactions/SubmitCommit.cdc ${gameId} "${hashTrue}" --network testnet --signer ${accountName}`,
-        commitFalse: `flow transactions send cadence/transactions/SubmitCommit.cdc ${gameId} "${hashFalse}" --network testnet --signer ${accountName}`,
-        revealTrue: `flow transactions send cadence/transactions/SubmitReveal.cdc ${gameId} true "${salt}" --network testnet --signer ${accountName}`,
-        revealFalse: `flow transactions send cadence/transactions/SubmitReveal.cdc ${gameId} false "${salt}" --network testnet --signer ${accountName}`
+        commitTrue: `flow transactions send cadence/transactions/SubmitCommit.cdc <GAME_ID> "${hashTrue}" --network testnet --signer ${accountName}`,
+        commitFalse: `flow transactions send cadence/transactions/SubmitCommit.cdc <GAME_ID> "${hashFalse}" --network testnet --signer ${accountName}`,
+        revealTrue: `flow transactions send cadence/transactions/SubmitReveal.cdc <GAME_ID> true "${salt}" --network testnet --signer ${accountName}`,
+        revealFalse: `flow transactions send cadence/transactions/SubmitReveal.cdc <GAME_ID> false "${salt}" --network testnet --signer ${accountName}`
     }
 };
 
@@ -55,27 +55,31 @@ if (!fs.existsSync(outputDir)) {
 }
 
 // Write voting data to JSON file
-const dataFilename = `${outputDir}/game-${gameId}-${accountName}.json`;
+const dataFilename = `${outputDir}/${accountName}-voting-data.json`;
 fs.writeFileSync(dataFilename, JSON.stringify(votingData, null, 2));
 
 // Generate shell scripts
 const commitTrueScript = `#!/bin/bash
-echo "Committing vote=TRUE for game ${gameId} with account ${accountName}"
+echo "Committing vote=TRUE for account ${accountName}"
+echo "Replace <GAME_ID> with your actual game ID"
 ${votingData.commands.commitTrue}
 `;
 
 const commitFalseScript = `#!/bin/bash
-echo "Committing vote=FALSE for game ${gameId} with account ${accountName}"
+echo "Committing vote=FALSE for account ${accountName}"
+echo "Replace <GAME_ID> with your actual game ID"
 ${votingData.commands.commitFalse}
 `;
 
 const revealTrueScript = `#!/bin/bash
-echo "Revealing vote=TRUE for game ${gameId} with account ${accountName}"
+echo "Revealing vote=TRUE for account ${accountName}"
+echo "Replace <GAME_ID> with your actual game ID"
 ${votingData.commands.revealTrue}
 `;
 
 const revealFalseScript = `#!/bin/bash
-echo "Revealing vote=FALSE for game ${gameId} with account ${accountName}"
+echo "Revealing vote=FALSE for account ${accountName}"
+echo "Replace <GAME_ID> with your actual game ID"
 ${votingData.commands.revealFalse}
 `;
 
@@ -85,7 +89,7 @@ if (!fs.existsSync(scriptsDir)) {
     fs.mkdirSync(scriptsDir);
 }
 
-const scriptPrefix = `game-${gameId}-${accountName}`;
+const scriptPrefix = `${accountName}`;
 fs.writeFileSync(`${scriptsDir}/${scriptPrefix}-commit-true.sh`, commitTrueScript);
 fs.writeFileSync(`${scriptsDir}/${scriptPrefix}-commit-false.sh`, commitFalseScript);
 fs.writeFileSync(`${scriptsDir}/${scriptPrefix}-reveal-true.sh`, revealTrueScript);
@@ -104,7 +108,7 @@ scriptFiles.forEach(file => {
 });
 
 // Display results
-console.log(`✅ Generated voting data for Game ${gameId}, Account: ${accountName}`);
+console.log(`✅ Generated voting data for Account: ${accountName}`);
 console.log('');
 console.log('📊 Voting Information:');
 console.log(`Salt: ${salt}`);
@@ -116,12 +120,14 @@ console.log(`Data: ${dataFilename}`);
 console.log(`Scripts: ${scriptsDir}/${scriptPrefix}-*.sh`);
 console.log('');
 console.log('🚀 Usage:');
-console.log('1. Choose your vote and run the appropriate commit script:');
+console.log('1. Edit the scripts to replace <GAME_ID> with your actual game ID');
+console.log('2. Choose your vote and run the appropriate commit script:');
 console.log(`   ./${scriptsDir}/${scriptPrefix}-commit-true.sh     # To vote YES`);
 console.log(`   ./${scriptsDir}/${scriptPrefix}-commit-false.sh    # To vote NO`);
 console.log('');
-console.log('2. After reveal phase starts, run the matching reveal script:');
+console.log('3. After reveal phase starts, run the matching reveal script:');
 console.log(`   ./${scriptsDir}/${scriptPrefix}-reveal-true.sh     # If you voted YES`);
 console.log(`   ./${scriptsDir}/${scriptPrefix}-reveal-false.sh    # If you voted NO`);
 console.log('');
 console.log('⚠️  IMPORTANT: Remember which vote you committed to!');
+console.log('💡 TIP: The salt is game-independent and can be reused across different games.');

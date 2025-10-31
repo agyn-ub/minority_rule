@@ -6,7 +6,7 @@ This guide walks you through testing the Minority Rule Game with the **Forte Sch
 
 - Flow CLI installed and configured
 - Test accounts created with sufficient FLOW tokens
-- Contract deployed to testnet (six-account: 0xb69240f6be3e34ca)
+- Contract deployed to testnet (seven-account: 0xb69240f6be3e34ca)
 
 ## Game Flow Overview with Flow Scheduled Transactions
 
@@ -27,7 +27,7 @@ The game uses **automated phase transitions** with Flow's scheduled transaction 
 ```bash
 flow transactions send cadence/transactions/CreateGame.cdc \
   "Is the sky blue?" 10.0 \
-  --network testnet --signer six-account
+  --network testnet --signer seven-account
 ```
 **Result:** Game created and starts immediately in `commitPhase` state
 
@@ -35,18 +35,37 @@ flow transactions send cadence/transactions/CreateGame.cdc \
 ```bash
 # Schedule automatic end of commit phase in 1 hour (3600 seconds)
 flow transactions send cadence/transactions/ScheduleCommitDeadline.cdc \
-  2 3600.0 \
-  --network testnet --signer six-account
+  8 60.0 \
+  --network testnet --signer seven-account
+
+  flow scripts execute cadence/scripts/GetScheduledTransactionStatus.cdc \
+  35232 \
+  --network testnet
 ```
 **Result:** EndCommitHandler scheduled to automatically transition to `revealPhase` after delay
-**Authorization:** Only the game creator (six-account in this example) can schedule deadlines
+**Authorization:** Only the game creator (seven-account in this example) can schedule deadlines
 
 #### 3. Schedule Reveal Deadline (Creator Only)
 ```bash
+
+
+  # just for users to inform
+   flow transactions send cadence/transactions/SetCommitDeadline.cdc \
+    8 60.0 \
+    --network testnet --signer seven-account
+
+ # just for users to inform
+flow transactions send cadence/transactions/SetRevealDeadline.cdc \
+    8 60.0 \
+    --network testnet --signer seven-account
+
+
+
+
 # Schedule automatic end of reveal phase in 30 minutes (1800 seconds) after reveal phase starts
 flow transactions send cadence/transactions/ScheduleRevealDeadline.cdc \
-  2 1800.0 \
-  --network testnet --signer six-account
+  8 60.0 \
+  --network testnet --signer seven-account
 ```
 **Result:** EndRevealHandler scheduled to automatically process round after reveal phase delay
 **Authorization:** Only the game creator can schedule deadlines
@@ -57,8 +76,8 @@ flow transactions send cadence/transactions/ScheduleRevealDeadline.cdc \
 ```bash
 # Creator joins game (game starts immediately, no scheduling delay)
 flow transactions send cadence/transactions/JoinGame.cdc \
-  2 \
-  --network testnet --signer six-account
+  8 \
+  --network testnet --signer one-account
 
 # Player 2 joins
 flow transactions send cadence/transactions/JoinGame.cdc \
@@ -89,7 +108,7 @@ First generate commit hashes using your salt generation script, then submit:
 # Creator commits (example hash)
 flow transactions send cadence/transactions/SubmitCommit.cdc \
   2 "77dcfad4d6c49e9e1d65b5b8b767bc9dc608f17b966d45109619d2750b646453" \
-  --network testnet --signer six-account
+  --network testnet --signer seven-account
 
 # Player 2 commits 
 flow transactions send cadence/transactions/SubmitCommit.cdc \
@@ -131,7 +150,7 @@ cd scripts && ./check-transaction-status.sh <transaction_id>
 # Creator reveals (vote=true, salt from generation)
 flow transactions send cadence/transactions/SubmitReveal.cdc \
   2 true "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" \
-  --network testnet --signer six-account
+  --network testnet --signer seven-account
 
 # Player 2 reveals (vote=false)
 flow transactions send cadence/transactions/SubmitReveal.cdc \
@@ -182,13 +201,13 @@ If more than 2 players remain, the game automatically starts a new round in `com
 ### Check Game Status with Human-Readable Times
 ```bash
 # Comprehensive game info
-flow scripts execute cadence/scripts/GetGameInfo.cdc 2 --network testnet
+flow scripts execute cadence/scripts/GetGameInfo.cdc 8 --network testnet
 
 # Current phase and timing
-flow scripts execute cadence/scripts/GetCurrentPhase.cdc 2 --network testnet
+flow scripts execute cadence/scripts/GetCurrentPhase.cdc 8 --network testnet
 
 # Specific player status
-flow scripts execute cadence/scripts/GetPlayerStatus.cdc 2 0xb69240f6be3e34ca --network testnet
+flow scripts execute cadence/scripts/GetPlayerStatus.cdc 8 0x73c003cd6de60fd4 --network testnet
 
 # Round history and analytics
 flow scripts execute cadence/scripts/GetRoundHistory.cdc 2 --network testnet
@@ -198,6 +217,8 @@ flow scripts execute cadence/scripts/GetAllActiveGames.cdc 10 --network testnet
 
 # Detailed game statistics
 flow scripts execute cadence/scripts/GetGameStats.cdc 2 --network testnet
+
+
 
 # Check scheduled transaction status
 cd scripts && ./check-transaction-status.sh <transaction_id>
@@ -245,7 +266,7 @@ The game now shows exact dates and times instead of Unix timestamps:
 - **Double commit**: Try committing twice (should fail)
 
 ### Scenario 4: Authorization Testing
-**Setup**: Game created by six-account, other players try to schedule deadlines
+**Setup**: Game created by seven-account, other players try to schedule deadlines
 **Test unauthorized scheduling**:
 ```bash
 # This will FAIL - only creator can schedule deadlines
@@ -288,7 +309,7 @@ flow transactions send cadence/transactions/ScheduleCommitDeadline.cdc \
 - ✅ **Commit-reveal voting** - Prevents vote manipulation
 - ✅ **Only revealed players continue** - Must both commit AND reveal
 - ✅ **Scheduling fees** - Pay FLOW for scheduled transaction execution
-- ✅ **Contract address**: 0xb69240f6be3e34ca (six-account)
+- ✅ **Contract address**: 0xb69240f6be3e34ca (seven-account)
 - ✅ **Check transaction status** - Use `./scripts/check-transaction-status.sh` to monitor scheduled transactions
 
 ## Troubleshooting
@@ -301,3 +322,8 @@ flow transactions send cadence/transactions/ScheduleCommitDeadline.cdc \
 | "Reveal does not match commitment" | Wrong vote or salt | Use exact same vote and salt from commit generation |
 | "Game not found" | Wrong game ID | Check existing games with GetAllActiveGames script |
 | "Access denied: Only the game creator can perform this action" | Non-creator trying to schedule deadlines | Only the game creator can call ScheduleCommitDeadline/ScheduleRevealDeadline |
+
+#transaction info
+flow scripts execute cadence/scripts/GetScheduledTransactionStatus.cdc \
+  35236 \
+  --network testnet

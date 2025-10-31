@@ -254,7 +254,14 @@ access(all) contract MinorityRuleGame {
                     round: self.currentRound,
                     player: player
                 )
-                panic("Reveal does not match commitment")
+                panic("Reveal does not match commitment. Expected: "
+                    .concat(commitment.commitHash)
+                    .concat(", Calculated: ")
+                    .concat(calculatedHash)
+                    .concat(", Vote: ")
+                    .concat(vote ? "true" : "false")
+                    .concat(", Salt: ")
+                    .concat(salt))
             }
             
             // Store valid reveal
@@ -342,32 +349,36 @@ access(all) contract MinorityRuleGame {
             )
         }
 
-        access(all) fun setCommitDeadline(deadline: UFix64) {
+        access(all) fun setCommitDeadline(durationSeconds: UFix64) {
             pre {
                 self.state == GameState.commitPhase: "Game must be in commit phase"
+                durationSeconds > 0.0: "Duration must be positive"
             }
             
+            let deadline = getCurrentBlock().timestamp + durationSeconds
             self.commitDeadline = deadline
 
             emit CommitDeadlineSet(
                 gameId: self.gameId,
                 round: self.currentRound,
-                duration: self.currentCommitDuration!,
+                duration: durationSeconds,
                 deadline: deadline
             )
         }
         
-        access(all) fun setRevealDeadline(deadline: UFix64) {
+        access(all) fun setRevealDeadline(durationSeconds: UFix64) {
             pre {
-                self.state == GameState.commitPhase: "Game must be in commit phase"
+                self.state == GameState.commitPhase || self.state == GameState.revealPhase: "Game must be in commit phase or reveal phase"
+                durationSeconds > 0.0: "Duration must be positive"
             }
             
+            let deadline = getCurrentBlock().timestamp + durationSeconds
             self.revealDeadline = deadline
 
             emit RevealDeadlineSet(
                 gameId: self.gameId,
                 round: self.currentRound,
-                duration: self.currentRevealDuration!,
+                duration: durationSeconds,
                 deadline: deadline
             )
         }
@@ -602,6 +613,27 @@ access(all) contract MinorityRuleGame {
                 "timeRemaining": self.getTimeRemainingInPhase(),
                 "currentCommitDuration": self.currentCommitDuration,
                 "currentRevealDuration": self.currentRevealDuration
+            }
+        }
+        
+        // Test function for debugging commit-reveal hash calculations
+        access(all) fun testCommitReveal(commitHash: String, vote: Bool, salt: String): {String: String} {
+            // Same calculation as submitReveal
+            let voteString = vote ? "true" : "false"
+            let combinedString = voteString.concat(salt)
+            let calculatedHash = String.encodeHex(HashAlgorithm.SHA3_256.hash(combinedString.utf8))
+            
+            return {
+                "expectedHash": commitHash,
+                "calculatedHash": calculatedHash,
+                "vote": voteString,
+                "salt": salt,
+                "combinedString": combinedString,
+                "matches": calculatedHash == commitHash ? "true" : "false",
+                "algorithm": "SHA3_256",
+                "voteStringLength": voteString.length.toString(),
+                "saltLength": salt.length.toString(),
+                "combinedLength": combinedString.length.toString()
             }
         }
     }

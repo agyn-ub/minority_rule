@@ -1,0 +1,43 @@
+{
+    "revealDeadline": 1761933942.00000000,
+    "entryFee": 10.00000000,
+    "currentYesVotes": 1,
+    "timeRemainingInPhase": "No active deadline",
+    "playerVoteHistory": {
+        0x1aee0aa4d20eac44: [A.b69240f6be3e34ca.MinorityRuleGame.VoteRecord(round: 1, vote: false, timestamp: 1761933818.00000000)
+        ],
+        0xfe89b379c3f4ac9b: [A.b69240f6be3e34ca.MinorityRuleGame.VoteRecord(round: 1, vote: false, timestamp: 1761933799.00000000)
+        ],
+        0x73c003cd6de60fd4: [A.b69240f6be3e34ca.MinorityRuleGame.VoteRecord(round: 1, vote: true, timestamp: 1761933779.00000000)
+        ]
+    },
+    "commitDeadline": 1761933563.00000000,
+    "roundResults": {
+        1: true
+    },
+    "commitDeadlineFormatted": "2025/11/18 17:59:23 UTC",
+    "revealCount": 3,
+    "questionText": "Is the sky blue?",
+    "remainingPlayers": [
+        0x73c003cd6de60fd4
+    ],
+    "creator": 0xb69240f6be3e34ca,
+    "prizesDistributed": true,
+    "commitCount": 3,
+    "state": 3,
+    "revealDeadlineFormatted": "2025/11/18 18:5:42 UTC",
+    "totalPlayers": 3,
+    "currentRound": 1,
+    "prizePool": 0.00000000,
+    "winners": [
+        0x73c003cd6de60fd4
+    ],
+    "players": [
+        0x73c003cd6de60fd4,
+        0x1aee0aa4d20eac44,
+        0xfe89b379c3f4ac9b
+    ],
+    "currentNoVotes": 2,
+    "stateName": "revealPhase",
+    "gameId": 8
+}

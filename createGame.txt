@@ -1,19 +1,3 @@
-//create a game
-flow transactions send cadence/transactions/CreateGame.cdc "Is the sky blue?" 10.0 --network testnet --signer one-account
-
-
-//join game 
-flow transactions send cadence/transactions/JoinGame.cdc 2 --network testnet --signer two-account
-
-flow transactions send cadence/transactions/JoinGame.cdc 2 --network testnet --signer three-account
-
-flow scripts execute cadence/scripts/GetGameInfo.cdc \
-  1 0cba6f974b0aa625 \
-  --network testnet
-  
-  flow scripts execute cadence/scripts/GetPhaseInfo.cdc \
-  1 0cba6f974b0aa625 \
-  --network testnet
-
-  //generate salt
-node generate-salt.js 1 one-account
+flow transactions send cadence/transactions/TestCommitReveal.cdc \
+    5 "356bda8c78ac3b410c9fbdd79ee94f38279fc11dbf4035067327abc2fda9d5be" false "247f08ba36921946cab632449382628ea5d3131789a7750ea83388dd7a90d3e2" \
+    --network testnet --signer two-account

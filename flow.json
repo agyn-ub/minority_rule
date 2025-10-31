@@ -7,12 +7,6 @@
 				"testnet": "0xb69240f6be3e34ca"
 			}
 		},
-		"ScheduledRoundHandler": {
-			"source": "./cadence/contracts/ScheduledRoundHandler.cdc",
-			"aliases": {
-				"testnet": "0xb69240f6be3e34ca"
-			}
-		},
 		"EndCommitHandler": {
 			"source": "./cadence/contracts/EndCommitHandler.cdc",
 			"aliases": {
@@ -193,8 +187,7 @@
 	},
 	"deployments": {
 		"testnet": {
-			"six-account": [
-				"ScheduledRoundHandler",
+			"seven-account": [
 				"EndCommitHandler",
 				"EndRevealHandler",
 				{

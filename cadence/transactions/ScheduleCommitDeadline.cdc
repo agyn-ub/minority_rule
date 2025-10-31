@@ -33,8 +33,8 @@ transaction(gameId: UInt64, delaySeconds: UFix64) {
         // Create handler for this specific game
         let handler <- EndCommitHandler.createHandler(gameId: gameId, contractAddress: self.contractAddress)
         
-        // Store handler in signer's storage
-        let handlerStoragePath = /storage/EndCommitHandler
+        // Store handler in signer's storage with unique path per game
+        let handlerStoragePath = StoragePath(identifier: "EndCommitHandler_".concat(gameId.toString()))!
         self.signer.storage.save(<-handler, to: handlerStoragePath)
         
         // Issue capability for scheduled execution
@@ -45,7 +45,7 @@ transaction(gameId: UInt64, delaySeconds: UFix64) {
         
         // Set scheduling parameters
         let priority = FlowTransactionScheduler.Priority(rawValue: 1)!  // Medium priority
-        let executionEffort: UInt64 = 10
+        let executionEffort: UInt64 = 300
         let transactionData: AnyStruct? = nil
         
         // For now, use a reasonable fee estimate (0.1 FLOW)
