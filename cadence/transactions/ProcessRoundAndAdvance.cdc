@@ -21,7 +21,7 @@ transaction(gameId: UInt64) {
             ?? panic("Game not found")
         
         // Process round and advance (called by Forte scheduler when reveal deadline reached)
-        game.processRoundAndAdvance()
+        game.processRound()
         
         log("Round processed for game "
             .concat(gameId.toString())

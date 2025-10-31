@@ -12,7 +12,8 @@ access(all) contract MinorityRuleGame {
     access(all) event VoteCommitted(gameId: UInt64, round: UInt8, player: Address)
     access(all) event VoteRevealed(gameId: UInt64, round: UInt8, player: Address, vote: Bool)
     access(all) event CommitPhaseStarted(gameId: UInt64, round: UInt8, deadline: UFix64)
-    access(all) event RevealPhaseStarted(gameId: UInt64, round: UInt8, deadline: UFix64)
+    access(all) event RevealPhaseStarted(gameId: UInt64, round: UInt8)
+    access(all) event NewRoundStarted(gameId: UInt64, round: UInt8)
     access(all) event CommitDeadlineSet(gameId: UInt64, round: UInt8, duration: UFix64, deadline: UFix64)
     access(all) event RevealDeadlineSet(gameId: UInt64, round: UInt8, duration: UFix64, deadline: UFix64)
     access(all) event InvalidReveal(gameId: UInt64, round: UInt8, player: Address)
@@ -36,7 +37,6 @@ access(all) contract MinorityRuleGame {
 
     // Game states
     access(all) enum GameState: UInt8 {
-        access(all) case beforeRound
         access(all) case setCommitDeadline
         access(all) case setRevealDeadline
         access(all) case commitPhase
@@ -142,8 +142,7 @@ access(all) contract MinorityRuleGame {
             self.entryFee = entryFee
             self.creator = creator
             
-            // Start immediately in Round 1 with commit phase (commit-reveal pattern)
-            self.state = GameState.beforeRound
+            self.state = GameState.setCommitDeadline
             self.currentRound = 1
             self.totalPlayers = 0
             
@@ -208,27 +207,7 @@ access(all) contract MinorityRuleGame {
                 amount: self.entryFee,
                 totalPlayers: self.totalPlayers
             )
-            
-            // Initialize game when first player (creator) joins
-            self.initializeGameIfNeeded()
-            
-            // Game initialization handled in initializeGameIfNeeded()
         }
-        
-        // Initialize game after first player joins
-        access(self) fun initializeGameIfNeeded() {
-            // Only initialize once when first player joins
-            if self.totalPlayers == 1 {
-                
-                // Don't initialize remainingPlayers here - it will be set correctly 
-                // in processRound() for Round 1 by checking all players who joined
-                
-                emit GameStarted(gameId: self.gameId, totalPlayers: self.totalPlayers)
-                
-                log("Game started - creator must manually schedule round processing via Forte")
-            }
-        }
-        
         
         // Submit vote commitment (hash of vote + salt)
         access(all) fun submitCommit(player: Address, commitHash: String) {
@@ -253,12 +232,6 @@ access(all) contract MinorityRuleGame {
                 round: self.currentRound,
                 player: player
             )
-            
-            // Check if all eligible players have committed
-            let eligiblePlayers = self.currentRound == 1 ? self.players : self.remainingPlayers
-            if self.currentRoundCommits.length == eligiblePlayers.length {
-                self.startRevealPhase()
-            }
         }
         
         // Submit vote reveal (actual vote + salt for verification)
@@ -310,124 +283,6 @@ access(all) contract MinorityRuleGame {
                 player: player,
                 vote: vote
             )
-            
-            // Check if all committed players have revealed or reveal deadline passed
-            if self.currentRoundReveals.length == self.currentRoundCommits.length ||
-               getCurrentBlock().timestamp > self.revealDeadline {
-                self.startProcessingRound()
-            }
-        }
-        
-        
-        // Start reveal phase
-        access(self) fun startRevealPhase() {
-            pre {
-                self.state == GameState.commitPhase: "Game must be in commit phase"
-            }
-            
-            self.state = GameState.revealPhase
-            
-            emit RevealPhaseStarted(
-                gameId: self.gameId,
-                round: self.currentRound,
-                deadline: self.revealDeadline
-            )
-        }
-        
-        // Start processing round
-        access(self) fun startProcessingRound() {
-            pre {
-                self.state == GameState.revealPhase: "Game must be in reveal phase"
-            }
-            
-            self.state = GameState.processingRound
-            // processRound() will be called next
-        }
-        
-        // Process the current round
-        access(all) fun processRound() {
-            pre {
-                self.state == GameState.processingRound: "Game not ready for processing"
-            }
-            
-            // Determine minority vote
-            let minorityVote: Bool = self.currentRoundYesVotes <= self.currentRoundNoVotes
-            let votesRemaining: UInt32 = minorityVote ? self.currentRoundYesVotes : self.currentRoundNoVotes
-            
-            // Store round result
-            self.roundResults[self.currentRound] = minorityVote
-            
-            emit RoundCompleted(
-                gameId: self.gameId,
-                round: self.currentRound,
-                yesCount: self.currentRoundYesVotes,
-                noCount: self.currentRoundNoVotes,
-                minorityVote: minorityVote,
-                votesRemaining: votesRemaining
-            )
-            
-            // Update remaining players - only those who voted minority vote continue
-            let newRemainingPlayers: [Address] = []
-            
-            // Handle both voting mechanisms: simple voting and commit-reveal
-            if self.currentRoundReveals.length > 0 {
-                // Commit-reveal mode: Only players who successfully revealed can advance
-                for player in self.currentRoundReveals.keys {
-                    let revealRecord = self.currentRoundReveals[player]!
-                    if revealRecord.vote == minorityVote {
-                        newRemainingPlayers.append(player)
-                    }
-                }
-            } else {
-                // Simple voting mode: Check vote history for players who voted minority
-                // For Round 1, check all players; for later rounds, check remainingPlayers
-                let eligiblePlayers = self.currentRound == 1 ? self.players : self.remainingPlayers
-                
-                for player in eligiblePlayers {
-                    if let voteHistory = self.playerVoteHistory[player] {
-                        // Find this round's vote
-                        for voteRecord in voteHistory {
-                            if voteRecord.round == self.currentRound && voteRecord.vote == minorityVote {
-                                newRemainingPlayers.append(player)
-                                break
-                            }
-                        }
-                    }
-                }
-            }
-            self.remainingPlayers = newRemainingPlayers
-            
-            // Check if game should end
-            if votesRemaining <= 2 || votesRemaining == 0 {
-                self.winners = self.remainingPlayers
-                self.endGame()
-            } else {
-                // Start next round
-                self.currentRound = self.currentRound + 1
-                self.currentRoundYesVotes = 0
-                self.currentRoundNoVotes = 0
-                
-                // Clear commit-reveal data for next round
-                self.currentRoundCommits = {}
-                self.currentRoundReveals = {}
-                
-                // Reset deadlines - creator will set new ones manually
-                self.commitDeadline = 0.0
-                self.revealDeadline = 0.0
-                self.currentCommitDuration = nil
-                self.currentRevealDuration = nil
-                
-                // Start directly in commit phase for subsequent rounds
-                self.state = GameState.commitPhase
-                
-                emit CommitPhaseStarted(
-                    gameId: self.gameId,
-                    round: self.currentRound,
-                    deadline: self.commitDeadline
-                )
-                
-                log("Next round ready - creator must manually schedule via Forte")
-            }
         }
         
         // End the game and distribute prizes
@@ -521,7 +376,7 @@ access(all) contract MinorityRuleGame {
         access(all) fun scheduleCommitDeadline(creator: Address, duration: UFix64) {
             pre {
                 creator == self.creator: "Only game creator can schedule deadlines"
-                self.state == GameState.beforeRound: "Can only schedule before round starts"
+                self.state == GameState.setCommitDeadline: "set CommitDeadline"
                 self.currentCommitDuration == nil: "Commit deadline already scheduled for this round"
                 duration > 0.0: "Duration must be greater than 0"
             }
@@ -529,7 +384,7 @@ access(all) contract MinorityRuleGame {
             // Store scheduling info but don't set actual deadline yet (Forte will call back to set it)
             self.currentCommitDuration = duration
             self.roundCommitDurations[self.currentRound] = duration
-            self.state = GameState.setCommitDeadline
+            self.state = GameState.setRevealDeadline
 
             emit CommitDeadlineSet(
                 gameId: self.gameId,
@@ -539,28 +394,11 @@ access(all) contract MinorityRuleGame {
             )
         }
         
-        // Forte callback: Actually set the commit deadline (called by scheduler)
-        access(all) fun activateCommitDeadline(duration: UFix64) {
-            pre {
-                self.state == GameState.commitPhase: "Can only activate during commit phase"
-                self.commitDeadline == 0.0: "Commit deadline already active"
-                duration > 0.0: "Duration must be greater than 0"
-            }
-            
-            self.commitDeadline = getCurrentBlock().timestamp + duration
-            
-            emit CommitPhaseStarted(
-                gameId: self.gameId,
-                round: self.currentRound,
-                deadline: self.commitDeadline
-            )
-        }
-        
         // Creator schedules reveal deadline (for Forte scheduling - doesn't transition yet)
         access(all) fun scheduleRevealDeadline(creator: Address, duration: UFix64) {
             pre {
                 creator == self.creator: "Only game creator can schedule deadlines"
-                self.state == GameState.setCommitDeadline: "Must be in set commit deadline state to schedule reveal deadline"
+                self.state == GameState.setRevealDeadline: "Must be in set commit deadline state to schedule reveal deadline"
                 self.currentCommitDuration != nil: "Commit deadline must be scheduled first"
                 self.currentRevealDuration == nil: "Reveal deadline already scheduled for this round"
                 duration > 0.0: "Duration must be greater than 0"
@@ -569,8 +407,8 @@ access(all) contract MinorityRuleGame {
             // Store scheduling info but don't transition yet (Forte will call back to activate)
             self.currentRevealDuration = duration
             self.roundRevealDurations[self.currentRound] = duration
-            self.state = GameState.setRevealDeadline
-            
+            self.state = GameState.commitPhase
+
             emit RevealDeadlineSet(
                 gameId: self.gameId,
                 round: self.currentRound,
@@ -578,39 +416,91 @@ access(all) contract MinorityRuleGame {
                 deadline: 0.0  // Will be set by Forte callback
             )
         }
-        
-        // Forte callback: Transition to reveal phase (called by scheduler when commit deadline reached)
-        access(all) fun activateRevealPhase(duration: UFix64) {
+
+        // Start reveal phase. Must be called by forte scheduler when commit deadline is reached.
+        access(all) fun startRevealPhase() {
             pre {
-                self.state == GameState.commitPhase: "Can only transition from commit phase"
-                self.revealDeadline == 0.0: "Reveal phase already active"
-                duration > 0.0: "Duration must be greater than 0"
+                self.state == GameState.commitPhase: "Game must be in commit phase"
             }
             
-            // Transition to reveal phase
             self.state = GameState.revealPhase
-            self.revealDeadline = getCurrentBlock().timestamp + duration
             
             emit RevealPhaseStarted(
                 gameId: self.gameId,
-                round: self.currentRound,
-                deadline: self.revealDeadline
+                round: self.currentRound
             )
         }
-        
-        // Forte callback: Process round and calculate results (called by scheduler when reveal deadline reached)
-        access(all) fun processRoundAndAdvance() {
+
+        // Process the current round. Must be called by forte scheduler when reveal deadline is reached.
+        access(all) fun processRound() {
             pre {
-                self.state == GameState.revealPhase: "Can only process from reveal phase"
+                self.state == GameState.revealPhase: "Must be in reveal phase to process round"
             }
             
-            // Move to processing state
-            self.state = GameState.processingRound
+            // Determine minority vote
+            let minorityVote: Bool = self.currentRoundYesVotes <= self.currentRoundNoVotes
+            let votesRemaining: UInt32 = minorityVote ? self.currentRoundYesVotes : self.currentRoundNoVotes
             
-            // Process the round logic
-            self.processRound()
+            // Store round result
+            self.roundResults[self.currentRound] = minorityVote
+            
+            emit RoundCompleted(
+                gameId: self.gameId,
+                round: self.currentRound,
+                yesCount: self.currentRoundYesVotes,
+                noCount: self.currentRoundNoVotes,
+                minorityVote: minorityVote,
+                votesRemaining: votesRemaining
+            )
+            
+            // Update remaining players - only those who voted minority vote continue
+            let newRemainingPlayers: [Address] = []
+            
+            // Handle both voting mechanisms: commit-reveal
+            if self.currentRoundReveals.length > 0 {
+                // Commit-reveal mode: Only players who successfully revealed can advance
+                for player in self.currentRoundReveals.keys {
+                    let revealRecord = self.currentRoundReveals[player]!
+                    if revealRecord.vote == minorityVote {
+                        newRemainingPlayers.append(player)
+                    }
+                }
+            } 
+
+            self.remainingPlayers = newRemainingPlayers
+            
+            // Check if game should end
+            if votesRemaining <= 2 || votesRemaining == 0 {
+                self.winners = self.remainingPlayers
+                self.endGame()
+            } else {
+                // Start next round
+                self.currentRound = self.currentRound + 1
+                self.currentRoundYesVotes = 0
+                self.currentRoundNoVotes = 0
+                
+                // Clear commit-reveal data for next round
+                self.currentRoundCommits = {}
+                self.currentRoundReveals = {}
+                
+                // Reset deadlines - creator will set new ones manually
+                self.commitDeadline = 0.0
+                self.revealDeadline = 0.0
+                self.currentCommitDuration = nil
+                self.currentRevealDuration = nil
+                
+                // Start directly in commit phase for subsequent rounds
+                self.state = GameState.setCommitDeadline
+                
+                emit NewRoundStarted(
+                    gameId: self.gameId,
+                    round: self.currentRound
+                )
+                
+                log("Next round ready - creator must manually schedule via Forte")
+            }
         }
-        
+
         // Get round timing information
         access(all) fun getRoundTimings(round: UInt8): {String: UFix64} {
             return {
@@ -623,6 +513,7 @@ access(all) contract MinorityRuleGame {
         access(all) fun getCurrentPhaseInfo(): {String: AnyStruct} {
             return {
                 "state": self.state.rawValue,
+                "stateName": self.state,
                 "round": self.currentRound,
                 "commitDeadline": self.commitDeadline,
                 "revealDeadline": self.revealDeadline,
