@@ -5,46 +5,29 @@ import FlowToken from "FlowToken"
 transaction(questionText: String, entryFee: UFix64) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let game: &MinorityRuleGame.Game
-    let payment: @{FungibleToken.Vault}
+    let gameId: UInt64
     let creator: Address
     
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.creator = signer.address
         
         // Borrow the game manager from the contract account
-        self.gameManager = getAccount(0x0cba6f974b0aa625)
+        self.gameManager = getAccount(0x44a19c1836c03e74)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         
         // Create the game
-        let gameId = self.gameManager.createGame(
+        self.gameId = self.gameManager.createGame(
             questionText: questionText,
             entryFee: entryFee,
             creator: self.creator
         )
-        
-        // Get reference to the created game
-        self.game = self.gameManager.borrowGame(gameId: gameId)
-            ?? panic("Could not borrow created game")
-        
-        // Get creator's Flow token vault
-        let flowVault = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
-            ?? panic("Could not borrow Flow token vault")
-        
-        // Withdraw entry fee only (no scheduling fees)
-        self.payment <- flowVault.withdraw(amount: entryFee)
     }
     
     execute {
-        // Creator joins as first player
-        self.game.joinGame(
-            player: self.creator, 
-            payment: <- self.payment
-        )
-        
-        log("Game created with ID: ".concat(self.game.gameId.toString()))
-        log("Creator ".concat(self.creator.toString()).concat(" joined game"))
-        log("Game state: setCommitDeadline - Ready for scheduling")
+        log("Game created with ID: ".concat(self.gameId.toString()))
+        log("Creator: ".concat(self.creator.toString()))
+        log("Game state: setCommitDeadline - Creator must schedule deadlines via Forte before players can join")
+        log("Next step: Call ScheduleCommitDeadline transaction")
     }
 }

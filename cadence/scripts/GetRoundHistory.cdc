@@ -4,7 +4,7 @@ import MinorityRuleGame from "MinorityRuleGame"
 access(all) fun main(gameId: UInt64): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0x0cba6f974b0aa625)
+    let contractAccount = getAccount(0x44a19c1836c03e74)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount

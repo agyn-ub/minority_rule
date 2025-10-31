@@ -4,7 +4,7 @@ import MinorityRuleGame from "MinorityRuleGame"
 access(all) fun main(maxGames: UInt64?): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0x0cba6f974b0aa625)
+    let contractAccount = getAccount(0x44a19c1836c03e74)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount
@@ -12,7 +12,7 @@ access(all) fun main(maxGames: UInt64?): {String: AnyStruct} {
         ?? panic("Could not borrow game manager from public path")
     
     // Get contract state to know how many games exist
-    let contractAccount2 = getAccount(0x0cba6f974b0aa625)
+    let contractAccount2 = getAccount(0x44a19c1836c03e74)
     let nextGameId = MinorityRuleGame.nextGameId
     
     var gamesList: [{String: AnyStruct}] = []

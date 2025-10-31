@@ -8,7 +8,7 @@ transaction(gameId: UInt64) {
     
     prepare(signer: &Account) {
         // Get the contract account
-        let contractAccount = getAccount(0x0cba6f974b0aa625)
+        let contractAccount = getAccount(0x44a19c1836c03e74)
         
         // Borrow the game manager from public path
         self.gameManager = contractAccount
