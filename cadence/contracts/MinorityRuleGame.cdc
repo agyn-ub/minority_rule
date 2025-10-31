@@ -37,8 +37,6 @@ access(all) contract MinorityRuleGame {
 
     // Game states
     access(all) enum GameState: UInt8 {
-        access(all) case setCommitDeadline
-        access(all) case setRevealDeadline
         access(all) case commitPhase
         access(all) case revealPhase
         access(all) case processingRound
@@ -142,7 +140,7 @@ access(all) contract MinorityRuleGame {
             self.entryFee = entryFee
             self.creator = creator
             
-            self.state = GameState.setCommitDeadline
+            self.state = GameState.commitPhase
             self.currentRound = 1
             self.totalPlayers = 0
             
@@ -343,6 +341,36 @@ access(all) contract MinorityRuleGame {
                 platformFee: platformFee + storageFee  // Total fees taken
             )
         }
+
+        access(all) fun setCommitDeadline(deadline: UFix64) {
+            pre {
+                self.state == GameState.commitPhase: "Game must be in commit phase"
+            }
+            
+            self.commitDeadline = deadline
+
+            emit CommitDeadlineSet(
+                gameId: self.gameId,
+                round: self.currentRound,
+                duration: self.currentCommitDuration!,
+                deadline: deadline
+            )
+        }
+        
+        access(all) fun setRevealDeadline(deadline: UFix64) {
+            pre {
+                self.state == GameState.commitPhase: "Game must be in commit phase"
+            }
+            
+            self.revealDeadline = deadline
+
+            emit RevealDeadlineSet(
+                gameId: self.gameId,
+                round: self.currentRound,
+                duration: self.currentRevealDuration!,
+                deadline: deadline
+            )
+        }
         
         // Get game info
         access(all) fun getGameInfo(): {String: AnyStruct} {
@@ -371,51 +399,6 @@ access(all) contract MinorityRuleGame {
                 "revealCount": self.currentRoundReveals.length
             }
         }
-        
-        // Creator schedules commit deadline (for Forte scheduling - doesn't set deadline yet)
-        access(all) fun scheduleCommitDeadline(creator: Address, duration: UFix64) {
-            pre {
-                creator == self.creator: "Only game creator can schedule deadlines"
-                self.state == GameState.setCommitDeadline: "set CommitDeadline"
-                self.currentCommitDuration == nil: "Commit deadline already scheduled for this round"
-                duration > 0.0: "Duration must be greater than 0"
-            }
-            
-            // Store scheduling info but don't set actual deadline yet (Forte will call back to set it)
-            self.currentCommitDuration = duration
-            self.roundCommitDurations[self.currentRound] = duration
-            self.state = GameState.setRevealDeadline
-
-            emit CommitDeadlineSet(
-                gameId: self.gameId,
-                round: self.currentRound,
-                duration: duration,
-                deadline: 0.0  // Will be set by Forte callback
-            )
-        }
-        
-        // Creator schedules reveal deadline (for Forte scheduling - doesn't transition yet)
-        access(all) fun scheduleRevealDeadline(creator: Address, duration: UFix64) {
-            pre {
-                creator == self.creator: "Only game creator can schedule deadlines"
-                self.state == GameState.setRevealDeadline: "Must be in set commit deadline state to schedule reveal deadline"
-                self.currentCommitDuration != nil: "Commit deadline must be scheduled first"
-                self.currentRevealDuration == nil: "Reveal deadline already scheduled for this round"
-                duration > 0.0: "Duration must be greater than 0"
-            }
-            
-            // Store scheduling info but don't transition yet (Forte will call back to activate)
-            self.currentRevealDuration = duration
-            self.roundRevealDurations[self.currentRound] = duration
-            self.state = GameState.commitPhase
-
-            emit RevealDeadlineSet(
-                gameId: self.gameId,
-                round: self.currentRound,
-                duration: duration,
-                deadline: 0.0  // Will be set by Forte callback
-            )
-        }
 
         // Start reveal phase. Must be called by forte scheduler when commit deadline is reached.
         access(all) fun startRevealPhase() {
@@ -436,6 +419,8 @@ access(all) contract MinorityRuleGame {
             pre {
                 self.state == GameState.revealPhase: "Must be in reveal phase to process round"
             }
+            
+            self.state = GameState.processingRound
             
             // Determine minority vote
             let minorityVote: Bool = self.currentRoundYesVotes <= self.currentRoundNoVotes
@@ -490,7 +475,7 @@ access(all) contract MinorityRuleGame {
                 self.currentRevealDuration = nil
                 
                 // Start directly in commit phase for subsequent rounds
-                self.state = GameState.setCommitDeadline
+                self.state = GameState.commitPhase
                 
                 emit NewRoundStarted(
                     gameId: self.gameId,
@@ -522,6 +507,101 @@ access(all) contract MinorityRuleGame {
                 "timeRemaining": self.state == GameState.commitPhase 
                     ? (self.commitDeadline > getCurrentBlock().timestamp ? self.commitDeadline - getCurrentBlock().timestamp : 0.0)
                     : (self.revealDeadline > getCurrentBlock().timestamp ? self.revealDeadline - getCurrentBlock().timestamp : 0.0)
+            }
+        }
+        
+        // Format Unix timestamp to human-readable date string
+        access(all) fun formatTimestamp(_ timestamp: UFix64): String {
+            if timestamp == 0.0 {
+                return "Not set"
+            }
+            
+            // Convert UFix64 timestamp to basic date components
+            let totalSeconds = UInt64(timestamp)
+            let totalMinutes = totalSeconds / 60
+            let totalHours = totalMinutes / 60
+            let totalDays = totalHours / 24
+            
+            // Approximate calculation for demonstration
+            // In production, you'd want a more sophisticated date library
+            let year = 1970 + Int(totalDays / 365)
+            let dayOfYear = totalDays % 365
+            let month = (dayOfYear / 30) + 1  // Rough approximation
+            let day = (dayOfYear % 30) + 1
+            let hour = totalHours % 24
+            let minute = totalMinutes % 60
+            let second = totalSeconds % 60
+            
+            return year.toString().concat("/")
+                .concat(month.toString()).concat("/")
+                .concat(day.toString()).concat(" ")
+                .concat(hour.toString()).concat(":")
+                .concat(minute.toString()).concat(":")
+                .concat(second.toString()).concat(" UTC")
+        }
+        
+        // Get commit deadline in human-readable format
+        access(all) fun getCommitDeadlineFormatted(): String {
+            return self.formatTimestamp(self.commitDeadline)
+        }
+        
+        // Get reveal deadline in human-readable format  
+        access(all) fun getRevealDeadlineFormatted(): String {
+            return self.formatTimestamp(self.revealDeadline)
+        }
+        
+        // Get time remaining in current phase as human-readable string
+        access(all) fun getTimeRemainingInPhase(): String {
+            let currentTime = getCurrentBlock().timestamp
+            var deadline: UFix64 = 0.0
+            
+            switch self.state {
+                case GameState.commitPhase:
+                    deadline = self.commitDeadline
+                case GameState.revealPhase:
+                    deadline = self.revealDeadline
+                default:
+                    return "No active deadline"
+            }
+            
+            if deadline == 0.0 {
+                return "Deadline not set"
+            }
+            
+            if currentTime >= deadline {
+                return "Phase ended"
+            }
+            
+            let remainingSeconds = UInt64(deadline - currentTime)
+            let hours = remainingSeconds / 3600
+            let minutes = (remainingSeconds % 3600) / 60
+            let seconds = remainingSeconds % 60
+            
+            if hours > 0 {
+                return hours.toString().concat("h ")
+                    .concat(minutes.toString()).concat("m ")
+                    .concat(seconds.toString()).concat("s remaining")
+            } else if minutes > 0 {
+                return minutes.toString().concat("m ")
+                    .concat(seconds.toString()).concat("s remaining")
+            } else {
+                return seconds.toString().concat("s remaining")
+            }
+        }
+        
+        // Get complete phase information with formatted times
+        access(all) fun getPhaseInfo(): {String: AnyStruct} {
+            return {
+                "state": self.state.rawValue,
+                "stateName": self.state,
+                "round": self.currentRound,
+                "commitDeadline": self.commitDeadline,
+                "commitDeadlineFormatted": self.getCommitDeadlineFormatted(),
+                "revealDeadline": self.revealDeadline,
+                "revealDeadlineFormatted": self.getRevealDeadlineFormatted(),
+                "timeRemaining": self.getTimeRemainingInPhase(),
+                "currentCommitDuration": self.currentCommitDuration,
+                "currentRevealDuration": self.currentRevealDuration
             }
         }
     }

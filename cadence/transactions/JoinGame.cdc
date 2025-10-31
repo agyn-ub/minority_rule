@@ -13,7 +13,7 @@ transaction(gameId: UInt64) {
         self.player = signer.address
         
         // Borrow the game manager from the contract account
-        self.gameManager = getAccount(0x44a19c1836c03e74)
+        self.gameManager = getAccount(0xb69240f6be3e34ca)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         

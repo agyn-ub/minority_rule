@@ -6,24 +6,22 @@ This guide walks you through testing the Minority Rule Game with the **Forte Sch
 
 - Flow CLI installed and configured
 - Test accounts created with sufficient FLOW tokens
-- Contract deployed to testnet (six-account: 0x44a19c1836c03e74)
+- Contract deployed to testnet (six-account: 0xb69240f6be3e34ca)
 
-## Game Flow Overview with Forte Integration
+## Game Flow Overview with Flow Scheduled Transactions
 
-The game uses a **creator-controlled timing system** with Forte scheduler:
+The game uses **automated phase transitions** with Flow's scheduled transaction system:
 
-1. **Game Creation** → `setCommitDeadline` state
-2. **Creator Schedules** → Commit deadline with Forte → `setRevealDeadline` state  
-3. **Creator Schedules** → Reveal deadline with Forte → `commitPhase` state
-4. **Players Join & Commit** → Submit vote commitments
-5. **Forte Triggers** → Reveal phase when commit deadline reached
-6. **Players Reveal** → Submit actual votes with salt
-7. **Forte Triggers** → Round processing when reveal deadline reached
-8. **Repeat or End** → Next round or game completion
+1. **Game Creation** → `commitPhase` state (starts immediately)
+2. **Players Join & Commit** → Submit vote commitments
+3. **Scheduled EndCommitHandler** → Automatically transitions to `revealPhase`
+4. **Players Reveal** → Submit actual votes with salt
+5. **Scheduled EndRevealHandler** → Automatically processes round (`processingRound` → `commitPhase` or `completed`)
+6. **Repeat or End** → Next round or game completion
 
 ## Complete Transaction Workflow
 
-### Phase 1: Game Setup (Creator Only)
+### Phase 1: Game Setup
 
 #### 1. Create New Game
 ```bash
@@ -31,54 +29,58 @@ flow transactions send cadence/transactions/CreateGame.cdc \
   "Is the sky blue?" 10.0 \
   --network testnet --signer six-account
 ```
-**Result:** Game created in `setCommitDeadline` state, ready for scheduling
+**Result:** Game created and starts immediately in `commitPhase` state
 
-#### 2. Schedule Commit Deadline
+#### 2. Schedule Commit Deadline (Creator Only)
 ```bash
+# Schedule automatic end of commit phase in 1 hour (3600 seconds)
 flow transactions send cadence/transactions/ScheduleCommitDeadline.cdc \
-  1 3600.0 \
+  2 3600.0 \
   --network testnet --signer six-account
 ```
-**Result:** Game moves to `setRevealDeadline` state. Now configure Forte scheduler for commit deadline.
+**Result:** EndCommitHandler scheduled to automatically transition to `revealPhase` after delay
+**Authorization:** Only the game creator (six-account in this example) can schedule deadlines
 
-#### 3. Schedule Reveal Deadline  
+#### 3. Schedule Reveal Deadline (Creator Only)
 ```bash
+# Schedule automatic end of reveal phase in 30 minutes (1800 seconds) after reveal phase starts
 flow transactions send cadence/transactions/ScheduleRevealDeadline.cdc \
-  1 1800.0 \
+  2 1800.0 \
   --network testnet --signer six-account
 ```
-**Result:** Game moves to `commitPhase` state. Players can now join and commit! Configure Forte scheduler for reveal deadline.
+**Result:** EndRevealHandler scheduled to automatically process round after reveal phase delay
+**Authorization:** Only the game creator can schedule deadlines
 
 ### Phase 2: Player Participation
 
 #### 4. Players Join Game (Round 1 Only)
 ```bash
-# Creator joins game (after scheduling is complete)
+# Creator joins game (game starts immediately, no scheduling delay)
 flow transactions send cadence/transactions/JoinGame.cdc \
-  1 \
+  2 \
   --network testnet --signer six-account
 
 # Player 2 joins
 flow transactions send cadence/transactions/JoinGame.cdc \
-  1 \
+  2 \
   --network testnet --signer one-account
 
 # Player 3 joins  
 flow transactions send cadence/transactions/JoinGame.cdc \
-  1 \
+  2 \
   --network testnet --signer two-account
 
 # Player 4 joins
 flow transactions send cadence/transactions/JoinGame.cdc \
-  1 \
+  2 \
   --network testnet --signer three-account
 
 # Player 5 joins
 flow transactions send cadence/transactions/JoinGame.cdc \
-  1 \
+  2 \
   --network testnet --signer four-account
 ```
-**Requirements:** Must join during Round 1 after game reaches `commitPhase`, pay entry fee (10 FLOW each)
+**Requirements:** Must join during Round 1 while in `commitPhase`, pay entry fee (10 FLOW each)
 
 #### 5. Players Submit Commit Hashes
 First generate commit hashes using your salt generation script, then submit:
@@ -86,118 +88,148 @@ First generate commit hashes using your salt generation script, then submit:
 ```bash
 # Creator commits (example hash)
 flow transactions send cadence/transactions/SubmitCommit.cdc \
-  1 "77dcfad4d6c49e9e1d65b5b8b767bc9dc608f17b966d45109619d2750b646453" \
+  2 "77dcfad4d6c49e9e1d65b5b8b767bc9dc608f17b966d45109619d2750b646453" \
   --network testnet --signer six-account
 
 # Player 2 commits 
 flow transactions send cadence/transactions/SubmitCommit.cdc \
-  1 "a1b2c3d4e5f6789..." \
+  2 "a1b2c3d4e5f6789..." \
   --network testnet --signer one-account
 
 # Player 3 commits
 flow transactions send cadence/transactions/SubmitCommit.cdc \
-  1 "b2c3d4e5f6789a..." \
+  2 "b2c3d4e5f6789a..." \
   --network testnet --signer two-account
 
 # Player 4 commits
 flow transactions send cadence/transactions/SubmitCommit.cdc \
-  1 "c3d4e5f6789ab..." \
+  2 "c3d4e5f6789ab..." \
   --network testnet --signer three-account
 
 # Player 5 commits
 flow transactions send cadence/transactions/SubmitCommit.cdc \
-  1 "d4e5f6789abc..." \
+  2 "d4e5f6789abc..." \
   --network testnet --signer four-account
 ```
 
-### Phase 3: Forte Scheduler Callbacks
+### Phase 3: Automatic Phase Transitions
 
-#### 6. Forte Triggers Reveal Phase (Automatic)
-When commit deadline reached, Forte calls:
+#### 6. Scheduled Transition to Reveal Phase (Automatic)
+When commit deadline reached, EndCommitHandler automatically executes:
+- **No manual intervention needed**
+- **Flow's scheduled transaction system handles it**
+- **Game transitions to `revealPhase` state**
+
+To check scheduled transaction status:
 ```bash
-flow transactions send cadence/transactions/StartRevealPhase.cdc \
-  1 \
-  --network testnet --signer forte-scheduler-account
+# Check status of scheduled transaction (use transaction ID from scheduling)
+cd scripts && ./check-transaction-status.sh <transaction_id>
 ```
-**Result:** Game transitions to `revealPhase` state
 
 #### 7. Players Reveal Votes
 ```bash
 # Creator reveals (vote=true, salt from generation)
 flow transactions send cadence/transactions/SubmitReveal.cdc \
-  1 true "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" \
+  2 true "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef" \
   --network testnet --signer six-account
 
 # Player 2 reveals (vote=false)
 flow transactions send cadence/transactions/SubmitReveal.cdc \
-  1 false "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890" \
+  2 false "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890" \
   --network testnet --signer one-account
 
 # Player 3 reveals (vote=false)
 flow transactions send cadence/transactions/SubmitReveal.cdc \
-  1 false "567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234" \
+  2 false "567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234" \
   --network testnet --signer two-account
 
 # Player 4 reveals (vote=true)  
 flow transactions send cadence/transactions/SubmitReveal.cdc \
-  1 true "cdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab" \
+  2 true "cdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab" \
   --network testnet --signer three-account
 
 # Player 5 reveals (vote=false)
 flow transactions send cadence/transactions/SubmitReveal.cdc \
-  1 false "90abcdef1234567890abcdef1234567890abcdef1234567890abcdef123456" \
+  2 false "90abcdef1234567890abcdef1234567890abcdef1234567890abcdef123456" \
   --network testnet --signer four-account
 ```
 
-#### 8. Forte Processes Round (Automatic)
-When reveal deadline reached, Forte calls:
+#### 8. Scheduled Round Processing (Automatic)
+When reveal deadline reached, EndRevealHandler automatically executes:
+- **No manual intervention needed**
+- **Flow's scheduled transaction system handles it**
+- **Round processed, minority voters advance to next round OR game ends with prizes distributed**
+
+To check scheduled transaction status:
 ```bash
-flow transactions send cadence/transactions/ProcessRound.cdc \
-  1 \
-  --network testnet --signer forte-scheduler-account
+# Check status of scheduled transaction (use transaction ID from scheduling)
+cd scripts && ./check-transaction-status.sh <transaction_id>
 ```
-**Result:** Round processed, minority voters advance to next round OR game ends with prizes distributed
 
 ### Phase 4: Next Round (If Game Continues)
 
-If more than 2 players remain, the game starts a new round in `setCommitDeadline` state. Creator must:
+If more than 2 players remain, the game automatically starts a new round in `commitPhase` state. The creator must:
 
-1. **Schedule new commit deadline** (repeat step 2)
-2. **Schedule new reveal deadline** (repeat step 3)  
+1. **Schedule new commit deadline** (repeat step 2) - Creator only
+2. **Schedule new reveal deadline** (repeat step 3) - Creator only  
 3. **Remaining players commit** (repeat step 5)
-4. **Forte triggers reveal** (repeat step 6)
+4. **Scheduled handler triggers reveal** (automatic)
 5. **Remaining players reveal** (repeat step 7)
-6. **Forte processes round** (repeat step 8)
+6. **Scheduled handler processes round** (automatic)
 
 ## Monitoring Commands
 
-### Check Game Status
+### Check Game Status with Human-Readable Times
 ```bash
 # Comprehensive game info
-flow scripts execute cadence/scripts/GetGameInfo.cdc 1 --network testnet
+flow scripts execute cadence/scripts/GetGameInfo.cdc 2 --network testnet
 
 # Current phase and timing
-flow scripts execute cadence/scripts/GetCurrentPhase.cdc 1 --network testnet
+flow scripts execute cadence/scripts/GetCurrentPhase.cdc 2 --network testnet
 
 # Specific player status
-flow scripts execute cadence/scripts/GetPlayerStatus.cdc 1 0x44a19c1836c03e74 --network testnet
+flow scripts execute cadence/scripts/GetPlayerStatus.cdc 2 0xb69240f6be3e34ca --network testnet
 
 # Round history and analytics
-flow scripts execute cadence/scripts/GetRoundHistory.cdc 1 --network testnet
+flow scripts execute cadence/scripts/GetRoundHistory.cdc 2 --network testnet
 
 # All games overview
 flow scripts execute cadence/scripts/GetAllActiveGames.cdc 10 --network testnet
 
 # Detailed game statistics
-flow scripts execute cadence/scripts/GetGameStats.cdc 1 --network testnet
+flow scripts execute cadence/scripts/GetGameStats.cdc 2 --network testnet
+
+# Check scheduled transaction status
+cd scripts && ./check-transaction-status.sh <transaction_id>
 ```
+
+**New Feature: Human-Readable Time Display**
+
+The game now shows exact dates and times instead of Unix timestamps:
+
+**Example Output:**
+```json
+{
+  "commitDeadline": 1698765432.0,
+  "commitDeadlineFormatted": "2024/11/1 15:30:32 UTC",
+  "revealDeadline": 1698767232.0, 
+  "revealDeadlineFormatted": "2024/11/1 16:00:32 UTC",
+  "timeRemaining": "2h 15m 30s remaining"
+}
+```
+
+**Benefits:**
+- ✅ **Clear deadlines**: See exact date/time when phases end
+- ✅ **Countdown timers**: Know how much time is left
+- ✅ **Better UX**: No more confusing Unix timestamps
+- ✅ **Multiple formats**: Both raw and formatted times available
 
 ## Testing Scenarios
 
 ### Scenario 1: Complete Game Flow
-1. **Creator**: Creates game → schedules commit deadline → schedules reveal deadline
+1. **Creator**: Creates game (starts immediately) → schedules commit deadline → schedules reveal deadline
 2. **Players**: Join game → submit commits → submit reveals  
-3. **Forte**: Triggers reveal phase → processes round
+3. **Flow Scheduled Transactions**: Automatically trigger reveal phase → automatically process round
 4. **Result**: Minority voters advance, majority eliminated
 5. **Repeat**: Until ≤2 players remain, then prizes distributed
 
@@ -212,15 +244,26 @@ flow scripts execute cadence/scripts/GetGameStats.cdc 1 --network testnet
 - **Wrong salt**: Reveal with wrong salt (transaction fails)
 - **Double commit**: Try committing twice (should fail)
 
+### Scenario 4: Authorization Testing
+**Setup**: Game created by six-account, other players try to schedule deadlines
+**Test unauthorized scheduling**:
+```bash
+# This will FAIL - only creator can schedule deadlines
+flow transactions send cadence/transactions/ScheduleCommitDeadline.cdc \
+  2 3600.0 \
+  --network testnet --signer one-account
+```
+**Expected Error**: "Access denied: Only the game creator (0xb69240f6be3e34ca) can perform this action. Caller: 0x73c003cd6de60fd4"
+
+**Result**: Authorization working correctly, game creator maintains control
+
 ## State Machine Reference
 
 | State | Description | Who Can Act | Next State |
 |-------|-------------|-------------|------------|
-| `setCommitDeadline` | Waiting for creator to schedule commit deadline | Creator only | `setRevealDeadline` |
-| `setRevealDeadline` | Waiting for creator to schedule reveal deadline | Creator only | `commitPhase` |
-| `commitPhase` | Players can join (Round 1) and submit commits | Players | `revealPhase` (via Forte) |
-| `revealPhase` | Players reveal their votes | Players | `processingRound` (via Forte) |
-| `processingRound` | Processing round results | Forte only | `setCommitDeadline` OR `completed` |
+| `commitPhase` | Players can join (Round 1) and submit commits | Players | `revealPhase` (via scheduled handler) |
+| `revealPhase` | Players reveal their votes | Players | `processingRound` (via scheduled handler) |
+| `processingRound` | Processing round results | Scheduled handler only | `commitPhase` OR `completed` |
 | `completed` | Game finished, prizes distributed | No one | Final state |
 
 ## Expected Output Example
@@ -240,12 +283,13 @@ flow scripts execute cadence/scripts/GetGameStats.cdc 1 --network testnet
 
 ## Important Notes
 
-- ✅ **Creator controls timing** - Must manually schedule deadlines
-- ✅ **Forte handles transitions** - Automatic phase changes at deadlines
+- ✅ **Creator controls scheduling** - Only game creators can schedule deadlines
+- ✅ **Flow handles transitions** - Automatic phase changes via scheduled transactions
 - ✅ **Commit-reveal voting** - Prevents vote manipulation
 - ✅ **Only revealed players continue** - Must both commit AND reveal
-- ✅ **No scheduling fees** - Pay-per-use Forte integration
-- ✅ **Contract address**: 0x44a19c1836c03e74 (six-account)
+- ✅ **Scheduling fees** - Pay FLOW for scheduled transaction execution
+- ✅ **Contract address**: 0xb69240f6be3e34ca (six-account)
+- ✅ **Check transaction status** - Use `./scripts/check-transaction-status.sh` to monitor scheduled transactions
 
 ## Troubleshooting
 
@@ -256,3 +300,4 @@ flow scripts execute cadence/scripts/GetGameStats.cdc 1 --network testnet
 | "Commit deadline already scheduled" | Already called ScheduleCommitDeadline | Game is ready for ScheduleRevealDeadline |
 | "Reveal does not match commitment" | Wrong vote or salt | Use exact same vote and salt from commit generation |
 | "Game not found" | Wrong game ID | Check existing games with GetAllActiveGames script |
+| "Access denied: Only the game creator can perform this action" | Non-creator trying to schedule deadlines | Only the game creator can call ScheduleCommitDeadline/ScheduleRevealDeadline |

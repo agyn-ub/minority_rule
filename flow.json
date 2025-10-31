@@ -4,13 +4,25 @@
 			"source": "cadence/contracts/MinorityRuleGame.cdc",
 			"aliases": {
 				"testing": "0000000000000007",
-				"testnet": "0x44a19c1836c03e74"
+				"testnet": "0xb69240f6be3e34ca"
 			}
 		},
 		"ScheduledRoundHandler": {
 			"source": "./cadence/contracts/ScheduledRoundHandler.cdc",
 			"aliases": {
-				"testnet": "0x44a19c1836c03e74"
+				"testnet": "0xb69240f6be3e34ca"
+			}
+		},
+		"EndCommitHandler": {
+			"source": "./cadence/contracts/EndCommitHandler.cdc",
+			"aliases": {
+				"testnet": "0xb69240f6be3e34ca"
+			}
+		},
+		"EndRevealHandler": {
+			"source": "./cadence/contracts/EndRevealHandler.cdc",
+			"aliases": {
+				"testnet": "0xb69240f6be3e34ca"
 			}
 		}
 	},
@@ -183,11 +195,13 @@
 		"testnet": {
 			"six-account": [
 				"ScheduledRoundHandler",
+				"EndCommitHandler",
+				"EndRevealHandler",
 				{
 					"name": "MinorityRuleGame",
 					"args": [
 						{
-							"value": "0x44a19c1836c03e74",
+							"value": "0xb69240f6be3e34ca",
 							"type": "Address"
 						}
 					]

@@ -16,7 +16,7 @@ access(all) contract ScheduledRoundHandler {
     access(all) let HandlerPublicPath: PublicPath
 
     // Transaction Handler resource for scheduled execution
-    access(all) resource Handler: FlowTransactionScheduler.TransactionHandler {
+access(all) resource Handler: FlowTransactionScheduler.TransactionHandler {
         
         access(all) let gameId: UInt64
         access(all) let contractAddress: Address
