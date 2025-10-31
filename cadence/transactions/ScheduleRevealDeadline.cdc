@@ -1,11 +1,13 @@
 import MinorityRuleGame from "MinorityRuleGame"
 
-// Forte callback transaction: Transition to reveal phase when commit deadline reached
-transaction(gameId: UInt64) {
+transaction(gameId: UInt64, durationInSeconds: UFix64) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
+    let creator: Address
     
     prepare(signer: &Account) {
+        self.creator = signer.address
+        
         // Get the contract account
         let contractAccount = getAccount(0x0cba6f974b0aa625)
         
@@ -20,11 +22,14 @@ transaction(gameId: UInt64) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Start reveal phase (called by Forte scheduler when commit deadline reached)
-        game.startRevealPhase()
+        // Schedule reveal deadline (for Forte scheduling - doesn't transition yet)
+        game.scheduleRevealDeadline(creator: self.creator, duration: durationInSeconds)
         
-        log("Reveal phase started for game "
+        log("Reveal deadline scheduled for game "
             .concat(gameId.toString())
-            .concat(" - Players can now reveal their votes"))
+            .concat(" - Duration: ")
+            .concat(durationInSeconds.toString())
+            .concat(" seconds"))
+        log("Game state: commitPhase - Players can now commit! Configure Forte scheduler for reveal deadline")
     }
 }

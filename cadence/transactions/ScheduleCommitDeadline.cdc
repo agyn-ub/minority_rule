@@ -29,6 +29,7 @@ transaction(gameId: UInt64, durationInSeconds: UFix64) {
             .concat(gameId.toString())
             .concat(" - Duration: ")
             .concat(durationInSeconds.toString())
-            .concat(" seconds - Now configure Forte scheduler"))
+            .concat(" seconds"))
+        log("Game state: setRevealDeadline - Now configure Forte scheduler for commit deadline")
     }
 }

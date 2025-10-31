@@ -1,6 +1,7 @@
 import MinorityRuleGame from "MinorityRuleGame"
 
-// Forte callback transaction: Process round results and advance to next round or end game
+// FORTE CALLBACK TRANSACTION
+// This transaction is called by Forte scheduler when commit deadline is reached
 transaction(gameId: UInt64) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
@@ -20,11 +21,10 @@ transaction(gameId: UInt64) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Process round and advance (called by Forte scheduler when reveal deadline reached)
-        game.processRound()
+        // Start reveal phase (called by Forte scheduler when commit deadline reached)
+        game.startRevealPhase()
         
-        log("Round processed for game "
-            .concat(gameId.toString())
-            .concat(" - Check game state for next steps"))
+        log("🔄 FORTE SCHEDULER: Reveal phase started for game ".concat(gameId.toString()))
+        log("Players can now reveal their votes")
     }
 }

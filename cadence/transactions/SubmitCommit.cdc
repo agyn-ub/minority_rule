@@ -22,9 +22,10 @@ transaction(gameId: UInt64, commitHash: String) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Submit the commitment hash
+        // Submit the commitment hash (only works in commitPhase)
         game.submitCommit(player: self.playerAddress, commitHash: commitHash)
         
         log("Vote commitment submitted for game ".concat(gameId.toString()))
+        log("Player: ".concat(self.playerAddress.toString()))
     }
 }

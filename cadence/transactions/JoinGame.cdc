@@ -30,7 +30,7 @@ transaction(gameId: UInt64) {
     }
     
     execute {
-        // Join the game
+        // Join the game (only allowed during Round 1)
         self.game.joinGame(player: self.player, payment: <- self.payment)
         
         log("Player ".concat(self.player.toString()).concat(" joined game ").concat(gameId.toString()))

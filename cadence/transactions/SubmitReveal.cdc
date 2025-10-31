@@ -22,9 +22,11 @@ transaction(gameId: UInt64, vote: Bool, salt: String) {
         let game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Submit the vote reveal
+        // Submit the vote reveal (only works in revealPhase)
         game.submitReveal(player: self.playerAddress, vote: vote, salt: salt)
         
-        log("Vote revealed for game ".concat(gameId.toString()).concat(": ").concat(vote ? "YES" : "NO"))
+        log("Vote revealed for game ".concat(gameId.toString()))
+        log("Player: ".concat(self.playerAddress.toString()))
+        log("Vote: ".concat(vote ? "YES" : "NO"))
     }
 }
