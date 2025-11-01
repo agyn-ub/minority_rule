@@ -11,9 +11,36 @@ interface GameCardProps {
 
 const GameCard = memo(function GameCard({ game }: GameCardProps) {
   const getStateLabel = useMemo(() => {
+    // Use stateName if available for better display
+    if (game.stateName) {
+      switch (game.stateName) {
+        case 'setCommitDeadline':
+          return <span className="text-orange-600">Setup: Commit Deadline</span>;
+        case 'setRevealDeadline':
+          return <span className="text-orange-600">Setup: Reveal Deadline</span>;
+        case 'commitPhase':
+          return <span className="text-green-600">Commit Phase</span>;
+        case 'revealPhase':
+          return <span className="text-blue-600">Reveal Phase</span>;
+        case 'processingRound':
+          return <span className="text-yellow-600">Processing</span>;
+        case 'completed':
+          return <span className="text-gray-600">Completed</span>;
+        default:
+          return <span className="text-gray-500">{game.stateName}</span>;
+      }
+    }
+    
+    // Fallback to numeric state
     switch (game.state) {
-      case GameState.VotingOpen:
-        return <span className="text-green-600">Voting Open</span>;
+      case GameState.SetCommitDeadline:
+        return <span className="text-orange-600">Setup: Commit Deadline</span>;
+      case GameState.SetRevealDeadline:
+        return <span className="text-orange-600">Setup: Reveal Deadline</span>;
+      case GameState.CommitPhase:
+        return <span className="text-green-600">Commit Phase</span>;
+      case GameState.RevealPhase:
+        return <span className="text-blue-600">Reveal Phase</span>;
       case GameState.ProcessingRound:
         return <span className="text-yellow-600">Processing</span>;
       case GameState.Completed:
@@ -21,23 +48,58 @@ const GameCard = memo(function GameCard({ game }: GameCardProps) {
       default:
         return <span className="text-gray-500">Unknown</span>;
     }
-  }, [game.state]);
+  }, [game.state, game.stateName]);
 
   const { deadline, isExpired, deadlineText } = useMemo(() => {
+    // Use formatted deadlines from enhanced script if available
+    if (game.stateName === 'commitPhase' && game.commitDeadlineFormatted) {
+      return {
+        deadline: new Date(),
+        isExpired: false,
+        deadlineText: `Commit: ${game.commitDeadlineFormatted}`
+      };
+    }
+    
+    if (game.stateName === 'revealPhase' && game.revealDeadlineFormatted) {
+      return {
+        deadline: new Date(),
+        isExpired: false,
+        deadlineText: `Reveal: ${game.revealDeadlineFormatted}`
+      };
+    }
+    
+    // Show time remaining if available
+    if (game.timeRemainingInPhase) {
+      return {
+        deadline: new Date(),
+        isExpired: false,
+        deadlineText: game.timeRemainingInPhase
+      };
+    }
+    
+    // Fallback to old deadline logic
+    if (!game.roundDeadline || game.roundDeadline === '0.0') {
+      return { 
+        deadline: new Date(), 
+        isExpired: false, 
+        deadlineText: 'No deadline set' 
+      };
+    }
+    
     const deadline = new Date(parseFloat(game.roundDeadline) * 1000);
     const isExpired = deadline < new Date();
     const deadlineText = isExpired ? 'Expired' : formatDistanceToNow(deadline, { addSuffix: true });
     
     return { deadline, isExpired, deadlineText };
-  }, [game.roundDeadline]);
+  }, [game.roundDeadline, game.commitDeadlineFormatted, game.revealDeadlineFormatted, game.timeRemainingInPhase, game.stateName]);
 
   const playerCountText = useMemo(() => {
     return `${game.remainingPlayers.length} / ${game.totalPlayers}`;
   }, [game.remainingPlayers.length, game.totalPlayers]);
 
   const prizeAmount = useMemo(() => {
-    return game.prizeAmount || '0';
-  }, [game.prizeAmount]);
+    return game.prizePool || game.prizeAmount || '0';
+  }, [game.prizePool, game.prizeAmount]);
 
   return (
     <Link href={`/game/${game.gameId}`}>

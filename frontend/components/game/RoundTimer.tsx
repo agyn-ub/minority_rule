@@ -36,11 +36,20 @@ const formatTimeRemaining = (deadlineDate: Date, now: Date): { text: string; isE
     nextUpdateInterval = 300000;
   }
   
-  return {
-    text: formatDistanceToNow(deadlineDate, { addSuffix: true }),
-    isExpired: false,
-    nextUpdateInterval
-  };
+  try {
+    return {
+      text: formatDistanceToNow(deadlineDate, { addSuffix: true }),
+      isExpired: false,
+      nextUpdateInterval
+    };
+  } catch (error) {
+    console.error('Error formatting distance to now:', error);
+    return {
+      text: 'Time remaining',
+      isExpired: false,
+      nextUpdateInterval: 60000
+    };
+  }
 };
 
 const RoundTimer = React.memo(function RoundTimer({ deadline }: RoundTimerProps) {
@@ -50,6 +59,12 @@ const RoundTimer = React.memo(function RoundTimer({ deadline }: RoundTimerProps)
   const lastUpdateRef = useRef<number>(0);
 
   const updateTimer = useCallback(() => {
+    if (!deadline || deadline === '0.0') {
+      setTimeRemaining('No deadline set');
+      setIsExpired(false);
+      return;
+    }
+    
     const deadlineDate = new Date(parseFloat(deadline) * 1000);
     const now = new Date();
     

@@ -1,6 +1,6 @@
 import { FlowConfig } from '@onflow/react-sdk';
 
-export const TESTNET_CONTRACT_ADDRESS = '0x73c003cd6de60fd4';
+export const TESTNET_CONTRACT_ADDRESS = '0xb69240f6be3e34ca';
 
 export const flowConfig: FlowConfig = {
   'app.detail.title': 'Minority Rule Game',

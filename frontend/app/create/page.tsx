@@ -13,7 +13,7 @@ export default function CreateGamePage() {
   const { user } = useFlowUser();
   const [questionText, setQuestionText] = useState('');
   const [entryFee, setEntryFee] = useState('10.0');
-  const [roundDuration, setRoundDuration] = useState('3600'); // 1 hour in seconds
+  const [gameId, setGameId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,11 +36,6 @@ export default function CreateGamePage() {
       return;
     }
 
-    const duration = parseFloat(roundDuration);
-    if (isNaN(duration) || duration <= 0) {
-      setError('Please enter a valid round duration');
-      return;
-    }
 
     setIsSubmitting(true);
     setError(null);
@@ -50,8 +45,7 @@ export default function CreateGamePage() {
         cadence: CREATE_GAME,
         args: (arg: any, t: any) => [
           arg(questionText, t.String),
-          arg(fee.toFixed(8), t.UFix64),
-          arg(duration.toFixed(1), t.UFix64)
+          arg(fee.toFixed(8), t.UFix64)
         ],
         proposer: fcl.authz,
         payer: fcl.authz,
@@ -65,7 +59,16 @@ export default function CreateGamePage() {
       const result = await fcl.tx(transactionId).onceSealed();
       console.log('Transaction sealed:', result);
       
-      router.push('/');
+      // Extract game ID from events if available
+      const gameCreatedEvent = result.events.find((e: any) => e.type.includes('GameCreated'));
+      if (gameCreatedEvent) {
+        const extractedGameId = gameCreatedEvent.data.gameId;
+        setGameId(extractedGameId);
+        // Redirect to game settings page
+        router.push(`/game/${extractedGameId}/settings`);
+      } else {
+        router.push('/');
+      }
     } catch (err: any) {
       console.error('Transaction failed:', err);
       setError(err.message || 'Failed to create game');
@@ -133,34 +136,15 @@ export default function CreateGamePage() {
                 </p>
               </div>
 
-              <div>
-                <label htmlFor="duration" className="block text-sm font-medium text-gray-700">
-                  Round Duration (seconds)
-                </label>
-                <input
-                  type="number"
-                  id="duration"
-                  value={roundDuration}
-                  onChange={(e) => setRoundDuration(e.target.value)}
-                  step="60"
-                  min="60"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-                  required
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  Time limit for each voting round (3600 = 1 hour)
-                </p>
-              </div>
-
               <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                <h3 className="font-semibold text-blue-900 mb-2">Total Cost:</h3>
+                <h3 className="font-semibold text-blue-900 mb-2">Game Info:</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Entry Fee: {entryFee} FLOW</li>
-                  <li>• Scheduling Fund: 1.0 FLOW</li>
-                  <li className="font-semibold">• Total: {(parseFloat(entryFee) + 1.0).toFixed(1)} FLOW</li>
+                  <li>• Entry Fee: {entryFee} FLOW per player</li>
+                  <li>• Creator Cost: {entryFee} FLOW (you don't join automatically)</li>
+                  <li>• Fee Structure: 3% total (2% platform, 1% storage)</li>
                 </ul>
                 <p className="mt-2 text-xs text-blue-700">
-                  The scheduling fund is used to automatically process rounds
+                  After creating, you'll set commit and reveal deadlines
                 </p>
               </div>
 

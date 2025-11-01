@@ -1,7 +1,13 @@
 export enum GameState {
-  VotingOpen = 0,
-  ProcessingRound = 1,
-  Completed = 2,
+  SetCommitDeadline = 0,
+  SetRevealDeadline = 1,
+  CommitPhase = 2,
+  RevealPhase = 3,
+  ProcessingRound = 4,
+  Completed = 5,
+  
+  // Legacy aliases for backwards compatibility
+  VotingOpen = 2, // maps to CommitPhase
 }
 
 export interface VoteRecord {
@@ -15,10 +21,10 @@ export interface Game {
   questionText: string;
   entryFee: string;
   creator: string;
-  roundDuration: string;
+  roundDuration?: string; // Optional as it may not be in all game versions
   state: GameState;
   currentRound: number;
-  roundDeadline: string;
+  roundDeadline?: string; // Optional deadline field
   totalPlayers: number;
   players: string[];
   playerVoteHistory: Record<string, VoteRecord[]>;
@@ -29,6 +35,18 @@ export interface Game {
   winners: string[];
   prizeAmount?: string;
   roundResults: Record<number, boolean>; // round -> winning vote (true=YES, false=NO)
+  
+  // Enhanced fields from GetGameInfo script
+  stateName?: string;
+  commitCount?: number;
+  revealCount?: number;
+  prizePool?: string;
+  prizesDistributed?: boolean;
+  commitDeadline?: string;
+  commitDeadlineFormatted?: string;
+  revealDeadline?: string;
+  revealDeadlineFormatted?: string;
+  timeRemainingInPhase?: string;
 }
 
 export interface RoundResult {

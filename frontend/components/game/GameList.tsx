@@ -1,27 +1,67 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useGames } from '@/hooks/useGames';
 import { GameCard } from './GameCard';
+import { GamesPagination } from './GamesPagination';
 import { GameState, Game } from '@/types/game';
+import { useFlowUser } from '@/hooks/useFlowUser';
 
-export function GameList() {
-  const { games, loading, error } = useGames();
+interface GameListProps {
+  filter?: 'available' | 'created' | 'joined';
+}
 
-  // Sort games by gameId in descending order (newest first)
-  const sortedGames = useMemo(() => {
-    return [...games].sort((a, b) => {
+export function GameList({ filter }: GameListProps) {
+  const [currentPage, setCurrentPage] = useState<number | undefined>(undefined);
+  const { games, loading, error, pagination } = useGames({
+    maxGames: 20, // Show 20 games per page
+    startId: currentPage,
+    descending: true
+  });
+  const { user } = useFlowUser();
+
+  // Filter and sort games based on the filter prop
+  const filteredGames = useMemo(() => {
+    let filtered = [...games];
+    
+    if (filter && user) {
+      switch (filter) {
+        case 'available':
+          // Games that are accepting new players (Round 1, commit phase)
+          filtered = games.filter(g => 
+            (g.state === GameState.CommitPhase || g.stateName === 'commitPhase') && 
+            g.currentRound === 1 && 
+            !g.players.includes(user.addr)
+          );
+          break;
+        case 'created':
+          // Games created by current user
+          filtered = games.filter(g => g.creator === user.addr);
+          break;
+        case 'joined':
+          // Games where user is a participant
+          filtered = games.filter(g => g.players.includes(user.addr));
+          break;
+      }
+    }
+    
+    // Sort by gameId in descending order (newest first)
+    return filtered.sort((a, b) => {
       const gameIdA = parseInt(a.gameId);
       const gameIdB = parseInt(b.gameId);
-      return gameIdB - gameIdA; // Descending order
+      return gameIdB - gameIdA;
     });
-  }, [games]);
+  }, [games, filter, user]);
 
   const { activeGames, completedGames } = useMemo(() => {
-    const active = sortedGames.filter(g => g.state !== GameState.Completed);
-    const completed = sortedGames.filter(g => g.state === GameState.Completed);
+    const active = filteredGames.filter(g => 
+      g.state !== GameState.Completed && g.stateName !== 'completed'
+    );
+    const completed = filteredGames.filter(g => 
+      g.state === GameState.Completed || g.stateName === 'completed'
+    );
     return { activeGames: active, completedGames: completed };
-  }, [sortedGames]);
+  }, [filteredGames]);
 
   if (loading) {
     return (
@@ -39,13 +79,32 @@ export function GameList() {
     );
   }
 
-  if (games.length === 0) {
+  if (filteredGames.length === 0) {
+    const emptyMessage = filter 
+      ? `No ${filter} games found.`
+      : 'No games found. Create the first one!';
+    
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="text-gray-500">No games found. Create the first one!</div>
+        <div className="text-gray-500">{emptyMessage}</div>
       </div>
     );
   }
+
+  const handleNextPage = () => {
+    if (pagination.hasMore && pagination.nextStartId !== undefined) {
+      setCurrentPage(pagination.nextStartId);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    // For previous page, we need to calculate the previous startId
+    // This is simplified - in a real app you'd track page history
+    if (currentPage !== undefined) {
+      const newStartId = currentPage + pagination.limit;
+      setCurrentPage(newStartId);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -70,6 +129,14 @@ export function GameList() {
           </div>
         </div>
       )}
+
+      {/* Pagination */}
+      <GamesPagination
+        pagination={pagination}
+        onNextPage={pagination.hasMore ? handleNextPage : undefined}
+        onPreviousPage={currentPage !== undefined ? handlePreviousPage : undefined}
+        loading={loading}
+      />
     </div>
   );
 }

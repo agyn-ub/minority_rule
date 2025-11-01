@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as fcl from '@onflow/fcl';
 import * as t from '@onflow/types';
-import { GET_ALL_GAMES } from '@/lib/flow/cadence/scripts/GetAllGames';
+import { GET_ALL_ACTIVE_GAMES } from '@/lib/flow/cadence/scripts/GetAllGames';
 import { TESTNET_CONTRACT_ADDRESS } from '@/lib/flow/config';
 import { Game, GameState } from '@/types/game';
 
@@ -34,32 +34,61 @@ const needsPolling = (games: Game[]): boolean => {
   );
 };
 
-export function useGames(maxGames: number = 100) {
+interface PaginationInfo {
+  startId?: number;
+  limit: number;
+  descending: boolean;
+  hasMore: boolean;
+  nextStartId?: number;
+  returnedCount: number;
+}
+
+interface UseGamesOptions {
+  maxGames?: number;
+  startId?: number;
+  descending?: boolean;
+}
+
+export function useGames(options: UseGamesOptions = {}) {
+  const { maxGames = 50, startId, descending = true } = options;
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    limit: maxGames,
+    descending,
+    hasMore: false,
+    returnedCount: 0
+  });
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchRef = useRef<number>(0);
 
-  const parseGameData = useCallback((game: any): Game => ({
-    gameId: game.gameId,
-    questionText: game.questionText,
-    entryFee: game.entryFee,
-    creator: game.creator,
-    roundDuration: game.roundDuration,
-    state: Number(game.state),
-    currentRound: Number(game.currentRound),
-    roundDeadline: game.roundDeadline,
-    totalPlayers: Number(game.totalPlayers),
-    players: game.players || [],
-    playerVoteHistory: game.playerVoteHistory || {},
-    currentRoundYesVotes: Number(game.currentRoundYesVotes || 0),
-    currentRoundNoVotes: Number(game.currentRoundNoVotes || 0),
-    currentRoundTotalVotes: Number(game.currentRoundTotalVotes || 0),
-    remainingPlayers: game.remainingPlayers || [],
-    winners: game.winners || [],
-    prizeAmount: game.prizeAmount
-  }), []);
+  const parseGameData = useCallback((game: any): Game => {
+    const currentRoundYesVotes = Number(game.currentYesVotes || game.currentRoundYesVotes || 0);
+    const currentRoundNoVotes = Number(game.currentNoVotes || game.currentRoundNoVotes || 0);
+    const currentRoundTotalVotes = currentRoundYesVotes + currentRoundNoVotes;
+    
+    return {
+      gameId: game.gameId,
+      questionText: game.questionText,
+      entryFee: game.entryFee,
+      creator: game.creator,
+      roundDuration: game.roundDuration || 3600, // Default fallback
+      state: Number(game.state),
+      currentRound: Number(game.currentRound),
+      roundDeadline: game.roundDeadline,
+      totalPlayers: Number(game.totalPlayers),
+      players: game.players || [],
+      playerVoteHistory: game.playerVoteHistory || {},
+      currentRoundYesVotes,
+      currentRoundNoVotes,
+      currentRoundTotalVotes,
+      remainingPlayers: game.remainingPlayers || [],
+      winners: game.winners || [],
+      prizeAmount: game.prizePool || game.prizeAmount,
+      roundResults: game.roundResults || {}
+    };
+  }, []);
 
   const fetchGames = useCallback(async (force = false) => {
     // Prevent too frequent requests (minimum 2 seconds between fetches)
@@ -79,15 +108,28 @@ export function useGames(maxGames: number = 100) {
       }
       
       const result = await fcl.query({
-        cadence: GET_ALL_GAMES,
+        cadence: GET_ALL_ACTIVE_GAMES,
         args: (arg: any, t: any) => [
-          arg(TESTNET_CONTRACT_ADDRESS, t.Address),
-          arg(maxGames.toString(), t.UInt64)
+          arg(maxGames.toString(), t.UInt64),
+          startId ? arg(startId.toString(), t.UInt64) : arg(null, t.Optional(t.UInt64)),
+          arg(descending, t.Bool)
         ]
       });
 
-      if (result) {
-        const formattedGames = (result as any[]).map(parseGameData);
+      if (result && result.allGames) {
+        const formattedGames = (result.allGames as any[]).map(parseGameData);
+        
+        // Update pagination info
+        if (result.pagination) {
+          setPagination({
+            startId: result.pagination.startId,
+            limit: result.pagination.limit,
+            descending: result.pagination.descending,
+            hasMore: result.pagination.hasMore,
+            nextStartId: result.pagination.nextStartId,
+            returnedCount: result.pagination.returnedCount
+          });
+        }
         
         // Only update state if data actually changed
         setGames(prevGames => {
@@ -103,7 +145,7 @@ export function useGames(maxGames: number = 100) {
     } finally {
       setLoading(false);
     }
-  }, [maxGames, games.length, parseGameData]);
+  }, [maxGames, startId, descending, games.length, parseGameData]);
 
   // Setup intelligent polling based on active games
   const setupPolling = useCallback(() => {
@@ -128,7 +170,7 @@ export function useGames(maxGames: number = 100) {
     }, 100);
     
     return () => clearTimeout(timer);
-  }, [maxGames]);
+  }, [maxGames, startId, descending]);
 
   useEffect(() => {
     setupPolling();
@@ -139,5 +181,27 @@ export function useGames(maxGames: number = 100) {
     };
   }, [setupPolling]);
 
-  return { games, loading, error, refetch: () => fetchGames(true) };
+  // Add pagination functions
+  const loadMore = useCallback(() => {
+    if (pagination.hasMore && pagination.nextStartId !== undefined) {
+      // For "load more" functionality, we'd need to append to existing games
+      // For now, we'll just fetch the next page
+      fetchGames(true);
+    }
+  }, [pagination, fetchGames]);
+
+  const goToPage = useCallback((newStartId: number) => {
+    // This would typically be handled by parent component updating the startId prop
+    fetchGames(true);
+  }, [fetchGames]);
+
+  return { 
+    games, 
+    loading, 
+    error, 
+    pagination,
+    refetch: () => fetchGames(true),
+    loadMore,
+    goToPage
+  };
 }

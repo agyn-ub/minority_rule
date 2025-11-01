@@ -79,8 +79,20 @@ export function useGame(gameId: string) {
       currentRoundTotalVotes,
       remainingPlayers: gameData.remainingPlayers || [],
       winners: gameData.winners || [],
-      prizeAmount: gameData.prizeAmount,
-      roundResults: gameData.roundResults || {}
+      prizeAmount: gameData.prizeAmount || gameData.prizePool,
+      roundResults: gameData.roundResults || {},
+      
+      // Enhanced fields from the new script
+      stateName: gameData.stateName,
+      commitCount: Number(gameData.commitCount || 0),
+      revealCount: Number(gameData.revealCount || 0),
+      prizePool: gameData.prizePool,
+      prizesDistributed: Boolean(gameData.prizesDistributed),
+      commitDeadline: gameData.commitDeadline,
+      commitDeadlineFormatted: gameData.commitDeadlineFormatted,
+      revealDeadline: gameData.revealDeadline,
+      revealDeadlineFormatted: gameData.revealDeadlineFormatted,
+      timeRemainingInPhase: gameData.timeRemainingInPhase
     };
   }, []);
 
@@ -100,8 +112,7 @@ export function useGame(gameId: string) {
       const result = await fcl.query({
         cadence: GET_GAME_INFO,
         args: (arg: any, t: any) => [
-          arg(gameId, t.UInt64),
-          arg(TESTNET_CONTRACT_ADDRESS, t.Address)
+          arg(gameId, t.UInt64)
         ]
       });
 

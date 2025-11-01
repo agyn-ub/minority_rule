@@ -1,0 +1,5 @@
+now in the folder frontend we need to implement wep app. logic is this way.(game creator flow) 1 an user connect. 2 can create a game. 3 game creator can go game commit settings page. in this page user can set                      │
+│   scheduleCommitDeadline(it is for forte) and SetCommitDeadline(it is for users to see time) for both of them one time picker. time can be picked by minutes. when sending to smartcontract coverted to seconds. 4 when the status of    │
+│   the game "revealPhase" game creator can set scheduleRevealDeadline(it is for forte) and SetRevealDeadline(it is for users to see time) for both of them one time picker. time can be picked by minutes. 5 if there are winners or      │
+│   winner game stops and users can see winners. (players flow) 1 in the dashborad can choose a game. 2 join the game. 3  commit the vote (use const { sha3_256 } = require('js-sha3'); ). 4 when game state is "revealPhase" the user     │
+│   reveal. 5 if user win, label user, if lost eliminated. also user can see own history.   make every point separate page I mean this 1. 2. 3. 4. it is easy to test and develop.       
