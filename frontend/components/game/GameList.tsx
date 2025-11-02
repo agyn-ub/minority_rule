@@ -12,26 +12,33 @@ interface GameListProps {
   filter?: 'available' | 'created' | 'joined';
 }
 
+interface PageInfo {
+  startId: number;
+  firstGameId?: number;
+  lastGameId?: number;
+  gameIds: number[];
+}
+
 export function GameList({ filter }: GameListProps) {
   const [currentStartId, setCurrentStartId] = useState<number>(1);
-  const [pageHistory, setPageHistory] = useState<number[]>([1]);
+  const [pageHistory, setPageHistory] = useState<PageInfo[]>([{ startId: 1, gameIds: [] }]);
   const { user } = useFlowUser();
 
   // Reset pagination when filter changes
   useEffect(() => {
     setCurrentStartId(1);
-    setPageHistory([1]);
+    setPageHistory([{ startId: 1, gameIds: [] }]);
   }, [filter]);
   
   // Use different hooks based on filter
   const availableGamesData = useAvailableGames({
-    limit: 10,
+    limit: 5,
     startId: currentStartId,
     descending: false
   });
   
   const allGamesData = useGames({
-    maxGames: 20,
+    maxGames: 5,
     startId: currentStartId,
     descending: true
   });
@@ -40,6 +47,32 @@ export function GameList({ filter }: GameListProps) {
   const { games, loading, error, pagination } = filter === 'available' 
     ? availableGamesData 
     : allGamesData;
+
+  // Update current page info when games change (for available games only)
+  useEffect(() => {
+    if (filter === 'available' && games.length > 0) {
+      const gameIds = games.map(g => parseInt(g.gameId));
+      const firstGameId = Math.min(...gameIds);
+      const lastGameId = Math.max(...gameIds);
+      
+      // Update the current page in history with actual game IDs
+      setPageHistory(prev => {
+        const newHistory = [...prev];
+        const currentPageIndex = newHistory.findIndex(p => p.startId === currentStartId);
+        
+        if (currentPageIndex >= 0) {
+          newHistory[currentPageIndex] = {
+            startId: currentStartId,
+            firstGameId,
+            lastGameId,
+            gameIds
+          };
+        }
+        
+        return newHistory;
+      });
+    }
+  }, [games, currentStartId, filter]);
 
   // Filter and sort games based on the filter prop
   const filteredGames = useMemo(() => {
@@ -75,28 +108,42 @@ export function GameList({ filter }: GameListProps) {
 
   const handleNextPage = () => {
     if (filter === 'available' && pagination.hasNext && pagination.nextStartId !== undefined) {
-      // For available games, use smart contract's next/previous logic
-      setPageHistory(prev => [...prev, currentStartId]);
+      // For available games, add new page to history and navigate forward
+      const newPageInfo: PageInfo = {
+        startId: pagination.nextStartId,
+        gameIds: []
+      };
+      setPageHistory(prev => [...prev, newPageInfo]);
       setCurrentStartId(pagination.nextStartId);
     } else if (filter !== 'available' && pagination.nextStartId !== undefined) {
       // For other filters, use old logic
-      setPageHistory(prev => [...prev, currentStartId]);
+      const newPageInfo: PageInfo = {
+        startId: pagination.nextStartId,
+        gameIds: []
+      };
+      setPageHistory(prev => [...prev, newPageInfo]);
       setCurrentStartId(pagination.nextStartId);
     }
   };
 
   const handlePreviousPage = () => {
-    if (filter === 'available' && pagination.hasPrevious && pagination.previousStartId !== undefined) {
-      // For available games, use smart contract's previous logic
-      setPageHistory(prev => [...prev, currentStartId]);
-      setCurrentStartId(pagination.previousStartId);
+    if (filter === 'available' && pageHistory.length > 1) {
+      // For available games, use stored page history instead of smart contract's previousStartId
+      const newHistory = [...pageHistory];
+      newHistory.pop(); // Remove current page
+      const previousPage = newHistory[newHistory.length - 1];
+      setPageHistory(newHistory);
+      
+      // Navigate to the first game ID of the previous page, or fallback to startId
+      const targetStartId = previousPage.firstGameId || previousPage.startId;
+      setCurrentStartId(targetStartId);
     } else if (filter !== 'available' && pageHistory.length > 1) {
       // For other filters, use history-based logic
       const newHistory = [...pageHistory];
       newHistory.pop(); // Remove current page
-      const previousStartId = newHistory[newHistory.length - 1];
+      const previousPage = newHistory[newHistory.length - 1];
       setPageHistory(newHistory);
-      setCurrentStartId(previousStartId);
+      setCurrentStartId(previousPage.startId);
     }
   };
 
@@ -146,9 +193,7 @@ export function GameList({ filter }: GameListProps) {
               : (pagination.nextStartId !== undefined ? handleNextPage : undefined)
           }
           onPreviousPage={
-            filter === 'available'
-              ? (pagination.hasPrevious ? handlePreviousPage : undefined)
-              : (pageHistory.length > 1 ? handlePreviousPage : undefined)
+            pageHistory.length > 1 ? handlePreviousPage : undefined
           }
           loading={loading}
         />
@@ -156,10 +201,12 @@ export function GameList({ filter }: GameListProps) {
         {/* Debug info in development */}
         {process.env.NODE_ENV === 'development' && (
           <div className="text-xs text-gray-400 text-center">
-            Debug: startId={currentStartId}, history=[{pageHistory.join(', ')}], 
+            Debug: startId={currentStartId}, 
+            historyPages={pageHistory.length}, 
+            currentPageGames=[{pageHistory.find(p => p.startId === currentStartId)?.gameIds.join(', ') || 'none'}],
             hasNext={filter === 'available' ? pagination.hasNext : 'N/A'}, 
             hasPrevious={filter === 'available' ? pagination.hasPrevious : 'N/A'},
-            nextId={pagination.nextStartId}, prevId={pagination.previousStartId}
+            nextId={pagination.nextStartId}, contractPrevId={pagination.previousStartId}
           </div>
         )}
       </div>
@@ -199,9 +246,7 @@ export function GameList({ filter }: GameListProps) {
             : (pagination.nextStartId !== undefined ? handleNextPage : undefined)
         }
         onPreviousPage={
-          filter === 'available'
-            ? (pagination.hasPrevious ? handlePreviousPage : undefined)
-            : (pageHistory.length > 1 ? handlePreviousPage : undefined)
+          pageHistory.length > 1 ? handlePreviousPage : undefined
         }
         loading={loading}
       />

@@ -6,9 +6,13 @@ interface PaginationInfo {
   startId?: number;
   limit: number;
   descending: boolean;
-  hasMore: boolean;
+  hasMore?: boolean; // Legacy property for backwards compatibility
+  hasNext?: boolean; // New property
+  hasPrevious?: boolean; // New property
   nextStartId?: number;
+  previousStartId?: number;
   returnedCount: number;
+  totalGames?: number;
 }
 
 interface GamesPaginationProps {
@@ -24,9 +28,14 @@ export function GamesPagination({
   onNextPage, 
   loading = false 
 }: GamesPaginationProps) {
-  const { returnedCount, limit, hasMore, descending } = pagination;
+  const { returnedCount, limit, hasMore, hasNext, descending } = pagination;
+  
+  // Use new hasNext property if available, fallback to legacy hasMore
+  const hasMoreGames = hasNext !== undefined ? hasNext : hasMore;
 
-  if (returnedCount === 0) {
+  // Don't hide pagination when there are no results - user might need to navigate back
+  // Only hide if we truly have no pagination capability
+  if (returnedCount === 0 && !onPreviousPage && !onNextPage) {
     return null;
   }
 
@@ -34,8 +43,14 @@ export function GamesPagination({
     <div className="flex items-center justify-between bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
       <div className="flex flex-1 justify-between items-center">
         <div className="text-sm text-gray-700">
-          Showing <span className="font-medium">{returnedCount}</span> games
-          {returnedCount === limit && " (per page)"}
+          {returnedCount > 0 ? (
+            <>
+              Showing <span className="font-medium">{returnedCount}</span> games
+              {returnedCount === limit && " (per page)"}
+            </>
+          ) : (
+            "No games found on this page"
+          )}
         </div>
         
         <div className="flex space-x-2">
@@ -55,9 +70,9 @@ export function GamesPagination({
           {/* Next Page Button */}
           <button
             onClick={onNextPage}
-            disabled={loading || !hasMore || !onNextPage}
+            disabled={loading || !hasMoreGames || !onNextPage}
             className={`relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              loading || !hasMore || !onNextPage
+              loading || !hasMoreGames || !onNextPage
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
             }`}

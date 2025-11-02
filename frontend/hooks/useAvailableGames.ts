@@ -45,7 +45,7 @@ interface UseAvailableGamesOptions {
 }
 
 export function useAvailableGames(options: UseAvailableGamesOptions = {}) {
-  const { limit = 10, startId = 1, descending = false } = options;
+  const { limit = 5, startId = 1, descending = false } = options;
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
