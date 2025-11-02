@@ -11,7 +11,7 @@ import { Game, GameState } from '@/types/game';
 const isGameDataEqual = (a: Game | null, b: Game | null): boolean => {
   if (a === b) return true;
   if (!a || !b) return false;
-  
+
   return (
     a.gameId === b.gameId &&
     a.questionText === b.questionText &&
@@ -37,7 +37,7 @@ const isGameDataEqual = (a: Game | null, b: Game | null): boolean => {
 // Get polling interval based on game state
 const getPollingInterval = (gameState: GameState | undefined): number => {
   if (!gameState) return 0; // No polling if no game state
-  
+
   switch (gameState) {
     case GameState.VotingOpen:
       return 3000; // 3 seconds for active voting
@@ -61,16 +61,14 @@ export function useGame(gameId: string) {
     const currentRoundYesVotes = Number(gameData.currentYesVotes || gameData.currentRoundYesVotes || 0);
     const currentRoundNoVotes = Number(gameData.currentNoVotes || gameData.currentRoundNoVotes || 0);
     const currentRoundTotalVotes = currentRoundYesVotes + currentRoundNoVotes;
-    
+
     return {
       gameId: gameData.gameId,
       questionText: gameData.questionText,
       entryFee: gameData.entryFee,
       creator: gameData.creator,
-      roundDuration: gameData.roundDuration,
       state: Number(gameData.state),
       currentRound: Number(gameData.currentRound),
-      roundDeadline: gameData.roundDeadline,
       totalPlayers: Number(gameData.totalPlayers),
       players: gameData.players || [],
       playerVoteHistory: gameData.playerVoteHistory || {},
@@ -81,7 +79,7 @@ export function useGame(gameId: string) {
       winners: gameData.winners || [],
       prizeAmount: gameData.prizeAmount || gameData.prizePool,
       roundResults: gameData.roundResults || {},
-      
+
       // Enhanced fields from the new script
       stateName: gameData.stateName,
       commitCount: Number(gameData.commitCount || 0),
@@ -98,17 +96,17 @@ export function useGame(gameId: string) {
 
   const fetchGame = useCallback(async (force = false) => {
     if (!gameId) return;
-    
+
     // Prevent too frequent requests (minimum 1 second between fetches)
     const now = Date.now();
     if (!force && now - lastFetchRef.current < 1000) {
       return;
     }
     lastFetchRef.current = now;
-    
+
     try {
       if (!game) setLoading(true); // Only show loading on initial fetch
-      
+
       const result = await fcl.query({
         cadence: GET_GAME_INFO,
         args: (arg: any, t: any) => [
@@ -130,9 +128,9 @@ export function useGame(gameId: string) {
             remainingPlayers: result.remainingPlayers
           });
         }
-        
+
         const newGame = parseGameData(result);
-        
+
         // Debug parsed data for Game 19
         if (gameId === '19') {
           console.log('🔍 Game 19 Parsed Data:', {
@@ -144,7 +142,7 @@ export function useGame(gameId: string) {
             remainingPlayers: newGame.remainingPlayers
           });
         }
-        
+
         // Only update state if data actually changed
         setGame(prevGame => {
           if (isGameDataEqual(prevGame, newGame)) {
@@ -169,7 +167,7 @@ export function useGame(gameId: string) {
     }
 
     const pollingInterval = getPollingInterval(game?.state);
-    
+
     if (pollingInterval > 0) {
       intervalRef.current = setInterval(() => {
         fetchGame();

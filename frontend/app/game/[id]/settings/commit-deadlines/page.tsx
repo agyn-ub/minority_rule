@@ -14,9 +14,10 @@ export default function CommitDeadlinesPage() {
   const router = useRouter();
   const { user } = useFlowUser();
   const gameId = params.id as string;
-  const { game, loading, error } = useGame(gameId);
-  
+  const { game, loading, error, refetch } = useGame(gameId);
+
   const [commitMinutes, setCommitMinutes] = useState(15);
+  const [commitMinutesInput, setCommitMinutesInput] = useState<string>('15');
   const [isSettingCommit, setIsSettingCommit] = useState(false);
   const [isSchedulingCommit, setIsSchedulingCommit] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -24,6 +25,18 @@ export default function CommitDeadlinesPage() {
 
   const isCreator = user?.addr && game?.creator === user.addr;
   const gameState = game?.state;
+
+  // Debug: Log game data to see deadline values
+  useEffect(() => {
+    if (game) {
+      console.log('Commit Deadlines Page - Game data:', {
+        gameId: game.gameId,
+        commitDeadline: game.commitDeadline,
+        commitDeadlineFormatted: game.commitDeadlineFormatted,
+        hasCommitDeadline: game.commitDeadline && Number(game.commitDeadline) > 0
+      });
+    }
+  }, [game]);
 
   useEffect(() => {
     if (!loading && (!game || !isCreator)) {
@@ -33,13 +46,18 @@ export default function CommitDeadlinesPage() {
 
   const handleSetCommitDeadline = async () => {
     if (!gameId) return;
-    
+
+    // Parse input value
+    const minutes = parseInt(commitMinutesInput) || 15;
+    setCommitMinutes(minutes);
+    setCommitMinutesInput(minutes.toString());
+
     setIsSettingCommit(true);
     setSettingsError(null);
-    
+
     try {
-      const durationSeconds = commitMinutes * 60;
-      
+      const durationSeconds = minutes * 60;
+
       const transactionId = await fcl.mutate({
         cadence: SET_COMMIT_DEADLINE,
         args: (arg: any, t: any) => [
@@ -53,7 +71,9 @@ export default function CommitDeadlinesPage() {
       });
 
       await fcl.tx(transactionId).onceSealed();
-      setSuccessMessage(`Commit deadline set to ${commitMinutes} minutes from now`);
+      setSuccessMessage(`Commit deadline set to ${minutes} minutes from now`);
+      // Transaction is sealed, refetch immediately
+      refetch();
     } catch (err: any) {
       setSettingsError(`Failed to set commit deadline: ${err.message}`);
     } finally {
@@ -63,13 +83,18 @@ export default function CommitDeadlinesPage() {
 
   const handleScheduleCommitDeadline = async () => {
     if (!gameId) return;
-    
+
+    // Parse input value
+    const minutes = parseInt(commitMinutesInput) || 15;
+    setCommitMinutes(minutes);
+    setCommitMinutesInput(minutes.toString());
+
     setIsSchedulingCommit(true);
     setSettingsError(null);
-    
+
     try {
-      const delaySeconds = commitMinutes * 60;
-      
+      const delaySeconds = minutes * 60;
+
       const transactionId = await fcl.mutate({
         cadence: SCHEDULE_COMMIT_DEADLINE,
         args: (arg: any, t: any) => [
@@ -83,7 +108,9 @@ export default function CommitDeadlinesPage() {
       });
 
       await fcl.tx(transactionId).onceSealed();
-      setSuccessMessage(`Scheduled automatic transition to reveal phase in ${commitMinutes} minutes`);
+      setSuccessMessage(`Scheduled automatic transition to reveal phase in ${minutes} minutes`);
+      // Transaction is sealed, refetch immediately
+      refetch();
     } catch (err: any) {
       setSettingsError(`Failed to schedule commit deadline: ${err.message}`);
     } finally {
@@ -123,7 +150,7 @@ export default function CommitDeadlinesPage() {
             <Link href={`/game/${gameId}/settings`} className="text-xl font-bold text-gray-900">
               ← Back to Settings
             </Link>
-            <Link 
+            <Link
               href={`/game/${gameId}`}
               className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
@@ -147,17 +174,16 @@ export default function CommitDeadlinesPage() {
               <span className="font-medium">Entry Fee:</span> {game.entryFee} FLOW
             </div>
             <div>
-              <span className="font-medium">Current State:</span> 
-              <span className={`ml-2 px-2 py-1 rounded text-xs ${
-                gameState === 0 ? 'bg-yellow-100 text-yellow-800' :
+              <span className="font-medium">Current State:</span>
+              <span className={`ml-2 px-2 py-1 rounded text-xs ${gameState === 0 ? 'bg-yellow-100 text-yellow-800' :
                 gameState === 1 ? 'bg-blue-100 text-blue-800' :
-                gameState === 2 ? 'bg-purple-100 text-purple-800' :
-                'bg-green-100 text-green-800'
-              }`}>
+                  gameState === 2 ? 'bg-purple-100 text-purple-800' :
+                    'bg-green-100 text-green-800'
+                }`}>
                 {gameState === 0 ? 'Commit Phase' :
-                 gameState === 1 ? 'Reveal Phase' :
-                 gameState === 2 ? 'Processing' :
-                 'Completed'}
+                  gameState === 1 ? 'Reveal Phase' :
+                    gameState === 2 ? 'Processing' :
+                      'Completed'}
               </span>
             </div>
           </div>
@@ -175,69 +201,157 @@ export default function CommitDeadlinesPage() {
           <p className="text-gray-600 mb-6">
             Set deadlines for the commit phase. Players need time to join and submit their vote commitments.
           </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold mb-3">User Information</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Set visible deadline for players to see when commit phase ends
-              </p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Commit Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    value={commitMinutes}
-                    onChange={(e) => setCommitMinutes(parseInt(e.target.value) || 15)}
-                    min="1"
-                    max="1440"
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                
-                <button
-                  onClick={handleSetCommitDeadline}
-                  disabled={isSettingCommit || gameState !== 0}
-                  className="w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
-                >
-                  {isSettingCommit ? 'Setting...' : 'Set Commit Deadline'}
-                </button>
-              </div>
-            </div>
 
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Automatic Scheduling (Forte)</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Schedule automatic transition to reveal phase
-              </p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Auto-trigger in (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    value={commitMinutes}
-                    onChange={(e) => setCommitMinutes(parseInt(e.target.value) || 15)}
-                    min="1"
-                    max="1440"
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                
-                <button
-                  onClick={handleScheduleCommitDeadline}
-                  disabled={isSchedulingCommit || gameState !== 0}
-                  className="w-full py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 transition-colors"
-                >
-                  {isSchedulingCommit ? 'Scheduling...' : 'Schedule Auto-Transition'}
-                </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            {/* Debug info */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="col-span-2 mb-4 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                <strong>Debug:</strong> commitDeadline={String(game.commitDeadline)}, 
+                hasDeadline={Boolean(game.commitDeadline && Number(game.commitDeadline) > 0)}
               </div>
-            </div>
+            )}
+
+            {game.commitDeadline && Number(game.commitDeadline) > 0 ? (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Current Commit Deadline</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Commit deadline is already set for this game
+                </p>
+
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Deadline:</span>
+                    <span className="ml-2 text-sm text-gray-900">
+                      {game.commitDeadlineFormatted || new Date(Number(game.commitDeadline) * 1000).toLocaleString()}
+                    </span>
+                  </div>
+                  {game.timeRemainingInPhase && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Time Remaining:</span>
+                      <span className="ml-2 text-sm text-gray-900">
+                        {game.timeRemainingInPhase}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">User Information</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Set visible deadline for players to see when commit phase ends
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Commit Duration (minutes)
+                    </label>
+                    <input
+                      type="text"
+                      value={commitMinutesInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // Only allow numbers (old school way - no letters)
+                        if (val === '' || /^\d+$/.test(val)) {
+                          setCommitMinutesInput(val);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const num = parseInt(e.target.value) || 15;
+                        setCommitMinutes(num);
+                        setCommitMinutesInput(num.toString());
+                      }}
+                      min="1"
+                      max="1440"
+                      className="w-full p-2 border rounded-md"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleSetCommitDeadline}
+                    disabled={isSettingCommit || gameState !== 0}
+                    className="w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
+                  >
+                    {isSettingCommit ? 'Setting...' : 'Set Commit Deadline'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {game.commitDeadline && Number(game.commitDeadline) > 0 ? (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Automatic Scheduling Status</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Automatic transition to reveal phase is scheduled
+                </p>
+
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Scheduled for:</span>
+                    <span className="ml-2 text-sm text-gray-900">
+                      {game.commitDeadlineFormatted || new Date(Number(game.commitDeadline) * 1000).toLocaleString()}
+                    </span>
+                  </div>
+                  {game.timeRemainingInPhase && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Time until transition:</span>
+                      <span className="ml-2 text-sm text-gray-900">
+                        {game.timeRemainingInPhase}
+                      </span>
+                    </div>
+                  )}
+                  <div className="mt-4 pt-4 border-t">
+                    <p className="text-xs text-gray-500">
+                      The reveal phase will automatically start when the commit deadline is reached.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Automatic Scheduling (Forte)</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Schedule automatic transition to reveal phase
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Auto-trigger in (minutes)
+                    </label>
+                    <input
+                      type="text"
+                      value={commitMinutesInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // Only allow numbers (old school way - no letters)
+                        if (val === '' || /^\d+$/.test(val)) {
+                          setCommitMinutesInput(val);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const num = parseInt(e.target.value) || 15;
+                        setCommitMinutes(num);
+                        setCommitMinutesInput(num.toString());
+                      }}
+                      min="1"
+                      max="1440"
+                      className="w-full p-2 border rounded-md"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleScheduleCommitDeadline}
+                    disabled={isSchedulingCommit || gameState !== 0}
+                    className="w-full py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 transition-colors"
+                  >
+                    {isSchedulingCommit ? 'Scheduling...' : 'Schedule Auto-Transition'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -249,7 +363,18 @@ export default function CommitDeadlinesPage() {
 
         {successMessage && (
           <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
-            <p className="text-green-800">{successMessage}</p>
+            <div className="flex justify-between items-center">
+              <p className="text-green-800">{successMessage}</p>
+              <button
+                onClick={() => {
+                  refetch();
+                  setSuccessMessage(null);
+                }}
+                className="text-green-600 hover:text-green-800 text-sm font-medium"
+              >
+                Refresh Page
+              </button>
+            </div>
           </div>
         )}
 

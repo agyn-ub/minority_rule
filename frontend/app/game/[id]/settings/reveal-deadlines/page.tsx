@@ -14,9 +14,10 @@ export default function RevealDeadlinesPage() {
   const router = useRouter();
   const { user } = useFlowUser();
   const gameId = params.id as string;
-  const { game, loading, error } = useGame(gameId);
+  const { game, loading, error, refetch } = useGame(gameId);
   
   const [revealMinutes, setRevealMinutes] = useState(10);
+  const [revealMinutesInput, setRevealMinutesInput] = useState<string>('10');
   const [isSettingReveal, setIsSettingReveal] = useState(false);
   const [isSchedulingReveal, setIsSchedulingReveal] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -33,12 +34,17 @@ export default function RevealDeadlinesPage() {
 
   const handleSetRevealDeadline = async () => {
     if (!gameId) return;
+
+    // Parse input value
+    const minutes = parseInt(revealMinutesInput) || 10;
+    setRevealMinutes(minutes);
+    setRevealMinutesInput(minutes.toString());
     
     setIsSettingReveal(true);
     setSettingsError(null);
     
     try {
-      const durationSeconds = revealMinutes * 60;
+      const durationSeconds = minutes * 60;
       
       const transactionId = await fcl.mutate({
         cadence: SET_REVEAL_DEADLINE,
@@ -53,7 +59,9 @@ export default function RevealDeadlinesPage() {
       });
 
       await fcl.tx(transactionId).onceSealed();
-      setSuccessMessage(`Reveal deadline set to ${revealMinutes} minutes from now`);
+      setSuccessMessage(`Reveal deadline set to ${minutes} minutes from now`);
+      // Transaction is sealed, refetch immediately
+      refetch();
     } catch (err: any) {
       setSettingsError(`Failed to set reveal deadline: ${err.message}`);
     } finally {
@@ -63,12 +71,17 @@ export default function RevealDeadlinesPage() {
 
   const handleScheduleRevealDeadline = async () => {
     if (!gameId) return;
+
+    // Parse input value
+    const minutes = parseInt(revealMinutesInput) || 10;
+    setRevealMinutes(minutes);
+    setRevealMinutesInput(minutes.toString());
     
     setIsSchedulingReveal(true);
     setSettingsError(null);
     
     try {
-      const delaySeconds = revealMinutes * 60;
+      const delaySeconds = minutes * 60;
       
       const transactionId = await fcl.mutate({
         cadence: SCHEDULE_REVEAL_DEADLINE,
@@ -83,7 +96,9 @@ export default function RevealDeadlinesPage() {
       });
 
       await fcl.tx(transactionId).onceSealed();
-      setSuccessMessage(`Scheduled automatic round processing in ${revealMinutes} minutes`);
+      setSuccessMessage(`Scheduled automatic round processing in ${minutes} minutes`);
+      // Transaction is sealed, refetch immediately
+      refetch();
     } catch (err: any) {
       setSettingsError(`Failed to schedule reveal deadline: ${err.message}`);
     } finally {
@@ -177,67 +192,147 @@ export default function RevealDeadlinesPage() {
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold mb-3">User Information</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Set visible deadline for players to see when reveal phase ends
-              </p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Reveal Duration (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    value={revealMinutes}
-                    onChange={(e) => setRevealMinutes(parseInt(e.target.value) || 10)}
-                    min="1"
-                    max="1440"
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                
-                <button
-                  onClick={handleSetRevealDeadline}
-                  disabled={isSettingReveal || gameState !== 1}
-                  className="w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
-                >
-                  {isSettingReveal ? 'Setting...' : 'Set Reveal Deadline'}
-                </button>
-              </div>
-            </div>
+            
+            {game.revealDeadline && Number(game.revealDeadline) > 0 ? (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Current Reveal Deadline</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Reveal deadline is already set for this game
+                </p>
 
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Automatic Scheduling (Forte)</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Schedule automatic round processing
-              </p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Auto-process in (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    value={revealMinutes}
-                    onChange={(e) => setRevealMinutes(parseInt(e.target.value) || 10)}
-                    min="1"
-                    max="1440"
-                    className="w-full p-2 border rounded-md"
-                  />
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Deadline:</span>
+                    <span className="ml-2 text-sm text-gray-900">
+                      {game.revealDeadlineFormatted || new Date(Number(game.revealDeadline) * 1000).toLocaleString()}
+                    </span>
+                  </div>
+                  {game.timeRemainingInPhase && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Time Remaining:</span>
+                      <span className="ml-2 text-sm text-gray-900">
+                        {game.timeRemainingInPhase}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                
-                <button
-                  onClick={handleScheduleRevealDeadline}
-                  disabled={isSchedulingReveal || gameState !== 1}
-                  className="w-full py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 transition-colors"
-                >
-                  {isSchedulingReveal ? 'Scheduling...' : 'Schedule Auto-Processing'}
-                </button>
               </div>
-            </div>
+            ) : (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">User Information</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Set visible deadline for players to see when reveal phase ends
+                </p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Reveal Duration (minutes)
+                    </label>
+                    <input
+                      type="text"
+                      value={revealMinutesInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // Only allow numbers (old school way - no letters)
+                        if (val === '' || /^\d+$/.test(val)) {
+                          setRevealMinutesInput(val);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const num = parseInt(e.target.value) || 10;
+                        setRevealMinutes(num);
+                        setRevealMinutesInput(num.toString());
+                      }}
+                      min="1"
+                      max="1440"
+                      className="w-full p-2 border rounded-md"
+                    />
+                  </div>
+                  
+                  <button
+                    onClick={handleSetRevealDeadline}
+                    disabled={isSettingReveal || gameState !== 1}
+                    className="w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
+                  >
+                    {isSettingReveal ? 'Setting...' : 'Set Reveal Deadline'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {game.revealDeadline && Number(game.revealDeadline) > 0 ? (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Automatic Scheduling Status</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Automatic round processing is scheduled
+                </p>
+
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Scheduled for:</span>
+                    <span className="ml-2 text-sm text-gray-900">
+                      {game.revealDeadlineFormatted || new Date(Number(game.revealDeadline) * 1000).toLocaleString()}
+                    </span>
+                  </div>
+                  {game.timeRemainingInPhase && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Time until processing:</span>
+                      <span className="ml-2 text-sm text-gray-900">
+                        {game.timeRemainingInPhase}
+                      </span>
+                    </div>
+                  )}
+                  <div className="mt-4 pt-4 border-t">
+                    <p className="text-xs text-gray-500">
+                      Round processing will automatically occur when the reveal deadline is reached.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Automatic Scheduling (Forte)</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Schedule automatic round processing
+                </p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Auto-process in (minutes)
+                    </label>
+                    <input
+                      type="text"
+                      value={revealMinutesInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // Only allow numbers (old school way - no letters)
+                        if (val === '' || /^\d+$/.test(val)) {
+                          setRevealMinutesInput(val);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const num = parseInt(e.target.value) || 10;
+                        setRevealMinutes(num);
+                        setRevealMinutesInput(num.toString());
+                      }}
+                      min="1"
+                      max="1440"
+                      className="w-full p-2 border rounded-md"
+                    />
+                  </div>
+                  
+                  <button
+                    onClick={handleScheduleRevealDeadline}
+                    disabled={isSchedulingReveal || gameState !== 1}
+                    className="w-full py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 transition-colors"
+                  >
+                    {isSchedulingReveal ? 'Scheduling...' : 'Schedule Auto-Processing'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

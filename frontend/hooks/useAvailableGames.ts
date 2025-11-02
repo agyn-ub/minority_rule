@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as fcl from '@onflow/fcl';
 import * as t from '@onflow/types';
-import { GET_ALL_ACTIVE_GAMES } from '@/lib/flow/cadence/scripts/GetAllGames';
-import { TESTNET_CONTRACT_ADDRESS } from '@/lib/flow/config';
+import { GET_GAMES_PAGE } from '@/lib/flow/cadence/scripts/GetGamesPage';
 import { Game, GameState } from '@/types/game';
+import { useFlowUser } from './useFlowUser';
 
 // Deep equality check for games list
 const areGamesEqual = (a: Game[], b: Game[]): boolean => {
@@ -26,47 +26,39 @@ const areGamesEqual = (a: Game[], b: Game[]): boolean => {
   });
 };
 
-// Determine if games list needs active polling
-const needsPolling = (games: Game[]): boolean => {
-  return games.some(game => 
-    game.state === GameState.VotingOpen || 
-    game.state === GameState.ProcessingRound
-  );
-};
-
 interface PaginationInfo {
   startId?: number;
   limit: number;
   descending: boolean;
-  hasMore?: boolean; // Keep for backwards compatibility
-  hasNext?: boolean; // New property for consistency
-  hasPrevious?: boolean; // New property for consistency
+  hasNext: boolean;
+  hasPrevious: boolean;
   nextStartId?: number;
-  previousStartId?: number; // New property for consistency
+  previousStartId?: number;
   returnedCount: number;
-  totalGames?: number; // New property for consistency
+  totalGames: number;
 }
 
-interface UseGamesOptions {
-  maxGames?: number;
+interface UseAvailableGamesOptions {
+  limit?: number;
   startId?: number;
   descending?: boolean;
 }
 
-export function useGames(options: UseGamesOptions = {}) {
-  const { maxGames = 50, startId, descending = true } = options;
+export function useAvailableGames(options: UseAvailableGamesOptions = {}) {
+  const { limit = 10, startId = 1, descending = false } = options;
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [pagination, setPagination] = useState<PaginationInfo>({
-    limit: maxGames,
+    startId,
+    limit,
     descending,
-    hasMore: false,
     hasNext: false,
     hasPrevious: false,
     returnedCount: 0,
     totalGames: 0
   });
+  const { user } = useFlowUser();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchRef = useRef<number>(0);
 
@@ -80,7 +72,7 @@ export function useGames(options: UseGamesOptions = {}) {
       questionText: game.questionText,
       entryFee: game.entryFee,
       creator: game.creator,
-      roundDuration: game.roundDuration || 3600, // Default fallback
+      roundDuration: game.roundDuration || 3600,
       state: Number(game.state),
       currentRound: Number(game.currentRound),
       roundDeadline: game.roundDeadline,
@@ -93,20 +85,32 @@ export function useGames(options: UseGamesOptions = {}) {
       remainingPlayers: game.remainingPlayers || [],
       winners: game.winners || [],
       prizeAmount: game.prizePool || game.prizeAmount,
-      roundResults: game.roundResults || {}
+      roundResults: game.roundResults || {},
+      
+      // Enhanced fields
+      stateName: game.stateName,
+      commitCount: Number(game.commitCount || 0),
+      revealCount: Number(game.revealCount || 0),
+      prizePool: game.prizePool,
+      prizesDistributed: Boolean(game.prizesDistributed),
+      commitDeadline: game.commitDeadline,
+      commitDeadlineFormatted: game.commitDeadlineFormatted,
+      revealDeadline: game.revealDeadline,
+      revealDeadlineFormatted: game.revealDeadlineFormatted,
+      timeRemainingInPhase: game.timeRemainingInPhase
     };
   }, []);
 
-  const fetchGames = useCallback(async (force = false) => {
-    // Prevent too frequent requests (minimum 2 seconds between fetches)
+  const fetchAvailableGames = useCallback(async (force = false) => {
+    // Prevent too frequent requests (minimum 3 seconds between fetches)
     const now = Date.now();
-    if (!force && now - lastFetchRef.current < 2000) {
+    if (!force && now - lastFetchRef.current < 3000) {
       return;
     }
     lastFetchRef.current = now;
 
     try {
-      if (games.length === 0) setLoading(true); // Only show loading on initial fetch
+      if (games.length === 0) setLoading(true);
       
       // Ensure FCL is configured
       const apiConfig = fcl.config().get('accessNode.api');
@@ -115,69 +119,87 @@ export function useGames(options: UseGamesOptions = {}) {
       }
       
       const result = await fcl.query({
-        cadence: GET_ALL_ACTIVE_GAMES,
+        cadence: GET_GAMES_PAGE,
         args: (arg: any, t: any) => [
-          arg(maxGames.toString(), t.UInt64),
-          startId ? arg(startId.toString(), t.UInt64) : arg(null, t.Optional(t.UInt64)),
+          arg(startId.toString(), t.UInt64),
+          arg(limit.toString(), t.UInt64),
           arg(descending, t.Bool)
         ]
       });
 
-      if (result && result.allGames) {
-        const formattedGames = (result.allGames as any[]).map(parseGameData);
+      if (result && result.games && result.pagination) {
+        const gamesList = result.games as any[];
+        const paginationData = result.pagination;
         
-        // Update pagination info
-        if (result.pagination) {
-          setPagination({
-            startId: result.pagination.startId,
-            limit: result.pagination.limit,
-            descending: result.pagination.descending,
-            hasMore: result.pagination.hasMore,
-            nextStartId: result.pagination.nextStartId,
-            returnedCount: result.pagination.returnedCount
-          });
-        }
+        const formattedGames = gamesList.map(parseGameData);
+        
+        // Filter out games where user is already a player (if user is connected)
+        const availableGames = user 
+          ? formattedGames.filter(g => !g.players.includes(user.addr))
+          : formattedGames;
+        
+        // Update pagination info from contract response
+        setPagination({
+          startId: Number(paginationData.startId),
+          limit: Number(paginationData.limit),
+          descending: Boolean(paginationData.descending),
+          hasNext: Boolean(paginationData.hasNext),
+          hasPrevious: Boolean(paginationData.hasPrevious),
+          nextStartId: paginationData.nextStartId ? Number(paginationData.nextStartId) : undefined,
+          previousStartId: paginationData.previousStartId ? Number(paginationData.previousStartId) : undefined,
+          returnedCount: Number(paginationData.returnedCount),
+          totalGames: Number(paginationData.totalGames)
+        });
         
         // Only update state if data actually changed
         setGames(prevGames => {
-          if (areGamesEqual(prevGames, formattedGames)) {
-            return prevGames; // Return same reference to prevent re-renders
+          if (areGamesEqual(prevGames, availableGames)) {
+            return prevGames;
           }
-          return formattedGames;
+          return availableGames;
         });
+      } else {
+        setGames([]);
+        // Set default pagination when no results
+        setPagination(prev => ({
+          ...prev,
+          startId,
+          returnedCount: 0,
+          hasNext: false,
+          hasPrevious: false,
+          nextStartId: undefined,
+          previousStartId: undefined
+        }));
       }
     } catch (err) {
-      console.error('Error fetching games:', err);
+      console.error('Error fetching available games:', err);
       setError(err as Error);
     } finally {
       setLoading(false);
     }
-  }, [maxGames, startId, descending, games.length, parseGameData]);
+  }, [startId, limit, descending, games.length, parseGameData, user]);
 
-  // Setup intelligent polling based on active games
+  // Setup polling for available games (less frequent since they change less often)
   const setupPolling = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
 
-    // Only poll if there are active games that need updates
-    if (needsPolling(games)) {
-      // Poll every 10 seconds for games list (less frequent than individual games)
-      intervalRef.current = setInterval(() => {
-        fetchGames();
-      }, 10000);
-    }
-  }, [games, fetchGames]);
+    // Poll every 15 seconds for available games
+    intervalRef.current = setInterval(() => {
+      fetchAvailableGames();
+    }, 15000);
+  }, [fetchAvailableGames]);
 
   useEffect(() => {
     // Small delay to ensure FCL configuration is loaded
     const timer = setTimeout(() => {
-      fetchGames(true); // Force initial fetch
+      fetchAvailableGames(true);
     }, 100);
     
     return () => clearTimeout(timer);
-  }, [maxGames, startId, descending]);
+  }, [startId, limit, descending]);
 
   useEffect(() => {
     setupPolling();
@@ -188,27 +210,11 @@ export function useGames(options: UseGamesOptions = {}) {
     };
   }, [setupPolling]);
 
-  // Add pagination functions
-  const loadMore = useCallback(() => {
-    if (pagination.hasMore && pagination.nextStartId !== undefined) {
-      // For "load more" functionality, we'd need to append to existing games
-      // For now, we'll just fetch the next page
-      fetchGames(true);
-    }
-  }, [pagination, fetchGames]);
-
-  const goToPage = useCallback((newStartId: number) => {
-    // This would typically be handled by parent component updating the startId prop
-    fetchGames(true);
-  }, [fetchGames]);
-
   return { 
     games, 
     loading, 
     error, 
     pagination,
-    refetch: () => fetchGames(true),
-    loadMore,
-    goToPage
+    refetch: () => fetchAvailableGames(true)
   };
 }

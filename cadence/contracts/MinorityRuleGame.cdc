@@ -646,6 +646,13 @@ access(all) contract MinorityRuleGame {
             entryFee: UFix64,
             creator: Address
         ): UInt64
+        
+        // Pagination methods
+        access(all) fun getGamesPage(startId: UInt64, limit: UInt64, descending: Bool): {String: AnyStruct}
+        access(all) fun getGamesByCreator(creator: Address, limit: UInt64?): [UInt64]
+        access(all) fun getGamesWithPlayer(player: Address, limit: UInt64?): [UInt64]
+        access(all) fun getTotalGamesCount(): UInt64
+        access(all) fun getRecentGames(limit: UInt64): [{String: AnyStruct}]
     }
     
     // Game Manager resource
@@ -673,6 +680,251 @@ access(all) contract MinorityRuleGame {
         
         access(all) fun borrowGame(gameId: UInt64): &Game? {
             return &self.games[gameId]
+        }
+        
+        // Get total number of games created
+        access(all) fun getTotalGamesCount(): UInt64 {
+            return MinorityRuleGame.nextGameId - 1
+        }
+        
+        // Get paginated games with full pagination metadata
+        // Only returns games in commitPhase (state 0) and first round (round 1)
+        access(all) fun getGamesPage(startId: UInt64, limit: UInt64, descending: Bool): {String: AnyStruct} {
+            var gamesList: [{String: AnyStruct}] = []
+            var gamesCollected: UInt64 = 0
+            let maxGameId = MinorityRuleGame.nextGameId - 1
+            
+            // Initialize pagination info
+            var hasNext = false
+            var hasPrevious = false
+            var nextStartId: UInt64? = nil
+            var previousStartId: UInt64? = nil
+            var firstGameId: UInt64? = nil
+            var lastGameId: UInt64? = nil
+            
+            if maxGameId == 0 {
+                return {
+                    "games": gamesList,
+                    "pagination": {
+                        "startId": startId,
+                        "limit": limit,
+                        "descending": descending,
+                        "hasNext": false,
+                        "hasPrevious": false,
+                        "nextStartId": nil,
+                        "previousStartId": nil,
+                        "returnedCount": UInt64(0),
+                        "totalGames": UInt64(0)
+                    }
+                }
+            }
+            
+            var gameId: UInt64 = startId
+            var scannedGameIds: [UInt64] = []
+            
+            if descending {
+                // Descending: Start from startId and go backwards
+                while gameId >= 1 && gamesCollected < limit {
+                    scannedGameIds.append(gameId)
+                    if let gameRef = &self.games[gameId] as &Game? {
+                        let gameInfo = gameRef.getGameInfo()
+                        let state = gameInfo["state"] as! UInt8
+                        let currentRound = gameInfo["currentRound"] as! UInt8
+                        
+                        // Only include games in commitPhase (state 0) and first round (round 1)
+                        if state == 0 && currentRound == 1 {
+                            gamesList.append(gameInfo)
+                            gamesCollected = gamesCollected + 1
+                            
+                            // Track first and last game IDs for pagination
+                            if firstGameId == nil {
+                                firstGameId = gameId
+                            }
+                            lastGameId = gameId
+                        }
+                    }
+                    gameId = gameId - 1
+                }
+                
+                // Check if there are more games before the last scanned game
+                if gameId >= 1 {
+                    var checkId = gameId
+                    while checkId >= 1 {
+                        if let gameRef = &self.games[checkId] as &Game? {
+                            let gameInfo = gameRef.getGameInfo()
+                            let state = gameInfo["state"] as! UInt8
+                            let currentRound = gameInfo["currentRound"] as! UInt8
+                            if state == 0 && currentRound == 1 {
+                                hasNext = true
+                                nextStartId = checkId
+                                break
+                            }
+                        }
+                        checkId = checkId - 1
+                    }
+                }
+                
+                // Check if there are more games after the first scanned game
+                if let firstId = firstGameId {
+                    var checkId = firstId + 1
+                    while checkId <= maxGameId {
+                        if let gameRef = &self.games[checkId] as &Game? {
+                            let gameInfo = gameRef.getGameInfo()
+                            let state = gameInfo["state"] as! UInt8
+                            let currentRound = gameInfo["currentRound"] as! UInt8
+                            if state == 0 && currentRound == 1 {
+                                hasPrevious = true
+                                previousStartId = checkId
+                                break
+                            }
+                        }
+                        checkId = checkId + 1
+                    }
+                }
+                
+            } else {
+                // Ascending: Start from startId and go forwards
+                while gameId <= maxGameId && gamesCollected < limit {
+                    scannedGameIds.append(gameId)
+                    if let gameRef = &self.games[gameId] as &Game? {
+                        let gameInfo = gameRef.getGameInfo()
+                        let state = gameInfo["state"] as! UInt8
+                        let currentRound = gameInfo["currentRound"] as! UInt8
+                        
+                        // Only include games in commitPhase (state 0) and first round (round 1)
+                        if state == 0 && currentRound == 1 {
+                            gamesList.append(gameInfo)
+                            gamesCollected = gamesCollected + 1
+                            
+                            // Track first and last game IDs for pagination
+                            if firstGameId == nil {
+                                firstGameId = gameId
+                            }
+                            lastGameId = gameId
+                        }
+                    }
+                    gameId = gameId + 1
+                }
+                
+                // Check if there are more games after the last scanned game
+                if gameId <= maxGameId {
+                    var checkId = gameId
+                    while checkId <= maxGameId {
+                        if let gameRef = &self.games[checkId] as &Game? {
+                            let gameInfo = gameRef.getGameInfo()
+                            let state = gameInfo["state"] as! UInt8
+                            let currentRound = gameInfo["currentRound"] as! UInt8
+                            if state == 0 && currentRound == 1 {
+                                hasNext = true
+                                nextStartId = checkId
+                                break
+                            }
+                        }
+                        checkId = checkId + 1
+                    }
+                }
+                
+                // Check if there are more games before the first scanned game
+                if let firstId = firstGameId {
+                    var checkId = firstId - 1
+                    while checkId >= 1 {
+                        if let gameRef = &self.games[checkId] as &Game? {
+                            let gameInfo = gameRef.getGameInfo()
+                            let state = gameInfo["state"] as! UInt8
+                            let currentRound = gameInfo["currentRound"] as! UInt8
+                            if state == 0 && currentRound == 1 {
+                                hasPrevious = true
+                                previousStartId = checkId
+                                break
+                            }
+                        }
+                        checkId = checkId - 1
+                    }
+                }
+            }
+            
+            return {
+                "games": gamesList,
+                "pagination": {
+                    "startId": startId,
+                    "limit": limit,
+                    "descending": descending,
+                    "hasNext": hasNext,
+                    "hasPrevious": hasPrevious,
+                    "nextStartId": nextStartId,
+                    "previousStartId": previousStartId,
+                    "returnedCount": gamesCollected,
+                    "totalGames": maxGameId
+                }
+            }
+        }
+        
+        // Get games created by specific user
+        access(all) fun getGamesByCreator(creator: Address, limit: UInt64?): [UInt64] {
+            var creatorGames: [UInt64] = []
+            let maxGames = limit ?? UInt64.max
+            var collected: UInt64 = 0
+            let maxGameId = MinorityRuleGame.nextGameId - 1
+            
+            // Iterate through all games (newest first)
+            var gameId = maxGameId
+            while gameId >= 1 && collected < maxGames {
+                if let gameRef = &self.games[gameId] as &Game? {
+                    if gameRef.creator == creator {
+                        creatorGames.append(gameId)
+                        collected = collected + 1
+                    }
+                }
+                gameId = gameId - 1
+            }
+            
+            return creatorGames
+        }
+        
+        // Get games where player participated
+        access(all) fun getGamesWithPlayer(player: Address, limit: UInt64?): [UInt64] {
+            var playerGames: [UInt64] = []
+            let maxGames = limit ?? UInt64.max
+            var collected: UInt64 = 0
+            let maxGameId = MinorityRuleGame.nextGameId - 1
+            
+            // Iterate through all games (newest first)
+            var gameId = maxGameId
+            while gameId >= 1 && collected < maxGames {
+                if let gameRef = &self.games[gameId] as &Game? {
+                    if gameRef.players.contains(player) {
+                        playerGames.append(gameId)
+                        collected = collected + 1
+                    }
+                }
+                gameId = gameId - 1
+            }
+            
+            return playerGames
+        }
+        
+        // Get recent games (most efficient for dashboard)
+        access(all) fun getRecentGames(limit: UInt64): [{String: AnyStruct}] {
+            var gamesList: [{String: AnyStruct}] = []
+            var gamesCollected: UInt64 = 0
+            let maxGameId = MinorityRuleGame.nextGameId - 1
+            
+            if maxGameId == 0 {
+                return gamesList
+            }
+            
+            // Start from the most recent game and go backwards
+            var gameId = maxGameId
+            while gameId >= 1 && gamesCollected < limit {
+                if let gameRef = &self.games[gameId] as &Game? {
+                    let gameInfo = gameRef.getGameInfo()
+                    gamesList.append(gameInfo)
+                    gamesCollected = gamesCollected + 1
+                }
+                gameId = gameId - 1
+            }
+            
+            return gamesList
         }
     }
     
