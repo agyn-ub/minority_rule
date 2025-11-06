@@ -28,6 +28,7 @@ access(all) contract MinorityRuleGame {
     access(all) var storageFeePercentage: UFix64  // Fee kept in contract (1%)
     access(all) let platformFeeRecipient: Address
     access(self) var contractStorageVault: @{FungibleToken.Vault}  // Vault for storage fees
+    access(self) var userGameHistory: {Address: [UInt64]}  // Maps user address to array of game IDs they've joined
     
     // Storage paths
     access(all) let GameStoragePath: StoragePath
@@ -198,6 +199,12 @@ access(all) contract MinorityRuleGame {
             // Store player in array
             self.players.append(player)
             self.playerVoteHistory[player] = []
+            
+            // Add game to user's history
+            if MinorityRuleGame.userGameHistory[player] == nil {
+                MinorityRuleGame.userGameHistory[player] = []
+            }
+            MinorityRuleGame.userGameHistory[player]!.append(self.gameId)
             
             emit PlayerJoined(
                 gameId: self.gameId, 
@@ -653,6 +660,9 @@ access(all) contract MinorityRuleGame {
         access(all) fun getGamesWithPlayer(player: Address, limit: UInt64?): [UInt64]
         access(all) fun getTotalGamesCount(): UInt64
         access(all) fun getRecentGames(limit: UInt64): [{String: AnyStruct}]
+        
+        // User history methods
+        access(all) fun getUserGameHistory(player: Address): [UInt64]
     }
     
     // Game Manager resource
@@ -859,50 +869,6 @@ access(all) contract MinorityRuleGame {
             }
         }
         
-        // Get games created by specific user
-        access(all) fun getGamesByCreator(creator: Address, limit: UInt64?): [UInt64] {
-            var creatorGames: [UInt64] = []
-            let maxGames = limit ?? UInt64.max
-            var collected: UInt64 = 0
-            let maxGameId = MinorityRuleGame.nextGameId - 1
-            
-            // Iterate through all games (newest first)
-            var gameId = maxGameId
-            while gameId >= 1 && collected < maxGames {
-                if let gameRef = &self.games[gameId] as &Game? {
-                    if gameRef.creator == creator {
-                        creatorGames.append(gameId)
-                        collected = collected + 1
-                    }
-                }
-                gameId = gameId - 1
-            }
-            
-            return creatorGames
-        }
-        
-        // Get games where player participated
-        access(all) fun getGamesWithPlayer(player: Address, limit: UInt64?): [UInt64] {
-            var playerGames: [UInt64] = []
-            let maxGames = limit ?? UInt64.max
-            var collected: UInt64 = 0
-            let maxGameId = MinorityRuleGame.nextGameId - 1
-            
-            // Iterate through all games (newest first)
-            var gameId = maxGameId
-            while gameId >= 1 && collected < maxGames {
-                if let gameRef = &self.games[gameId] as &Game? {
-                    if gameRef.players.contains(player) {
-                        playerGames.append(gameId)
-                        collected = collected + 1
-                    }
-                }
-                gameId = gameId - 1
-            }
-            
-            return playerGames
-        }
-        
         // Get recent games (most efficient for dashboard)
         access(all) fun getRecentGames(limit: UInt64): [{String: AnyStruct}] {
             var gamesList: [{String: AnyStruct}] = []
@@ -926,6 +892,11 @@ access(all) contract MinorityRuleGame {
             
             return gamesList
         }
+        
+        // Get user's game history
+        access(all) fun getUserGameHistory(player: Address): [UInt64] {
+            return MinorityRuleGame.userGameHistory[player] ?? []
+        }
     }
     
     // Get contract account
@@ -940,6 +911,7 @@ access(all) contract MinorityRuleGame {
         self.storageFeePercentage = 0.01  // 1% stays in contract for storage
         self.platformFeeRecipient = platformFeeRecipient
         self.contractStorageVault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
+        self.userGameHistory = {}
         
         self.GameStoragePath = /storage/MinorityRuleGameManager
         self.GamePublicPath = /public/MinorityRuleGameManager

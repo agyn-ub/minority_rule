@@ -138,6 +138,18 @@ export function useAvailableGames(options: UseAvailableGamesOptions = {}) {
           ? formattedGames.filter(g => !g.players.includes(user.addr))
           : formattedGames;
         
+        // Debug logging
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🎮 Available games debug:', {
+            rawGamesCount: gamesList.length,
+            formattedGamesCount: formattedGames.length,
+            availableGamesCount: availableGames.length,
+            userAddress: user?.addr,
+            sampleGame: formattedGames[0],
+            pagination: paginationData
+          });
+        }
+        
         // Update pagination info from contract response
         setPagination({
           startId: Number(paginationData.startId),

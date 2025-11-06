@@ -50,10 +50,10 @@ export function GameList({ filter }: GameListProps) {
 
   // Update current page info when games change (for available games only)
   useEffect(() => {
-    if (filter === 'available' && games.length > 0) {
+    if (filter === 'available') {
       const gameIds = games.map(g => parseInt(g.gameId));
-      const firstGameId = Math.min(...gameIds);
-      const lastGameId = Math.max(...gameIds);
+      const firstGameId = gameIds.length > 0 ? Math.min(...gameIds) : undefined;
+      const lastGameId = gameIds.length > 0 ? Math.max(...gameIds) : undefined;
       
       // Update the current page in history with actual game IDs
       setPageHistory(prev => {
@@ -67,6 +67,14 @@ export function GameList({ filter }: GameListProps) {
             lastGameId,
             gameIds
           };
+        } else {
+          // Add new page if it doesn't exist
+          newHistory.push({
+            startId: currentStartId,
+            firstGameId,
+            lastGameId,
+            gameIds
+          });
         }
         
         return newHistory;
