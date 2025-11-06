@@ -656,10 +656,7 @@ access(all) contract MinorityRuleGame {
         
         // Pagination methods
         access(all) fun getGamesPage(startId: UInt64, limit: UInt64): {String: AnyStruct}
-        access(all) fun getGamesByCreator(creator: Address, limit: UInt64?): [UInt64]
-        access(all) fun getGamesWithPlayer(player: Address, limit: UInt64?): [UInt64]
         access(all) fun getTotalGamesCount(): UInt64
-        access(all) fun getRecentGames(limit: UInt64): [{String: AnyStruct}]
         
         // User history methods
         access(all) fun getUserGameHistory(player: Address): [UInt64]
