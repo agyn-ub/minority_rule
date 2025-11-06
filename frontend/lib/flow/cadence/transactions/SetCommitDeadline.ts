@@ -1,5 +1,5 @@
 export const SET_COMMIT_DEADLINE = `
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import MinorityRuleGame from "MinorityRuleGame"
 
 transaction(gameId: UInt64, durationSeconds: UFix64) {
     
@@ -8,7 +8,7 @@ transaction(gameId: UInt64, durationSeconds: UFix64) {
     
     prepare(signer: auth(Storage, Capabilities) &Account) {
         // Borrow the game manager from the contract account
-        self.gameManager = getAccount(0xb69240f6be3e34ca)
+        self.gameManager = getAccount(MinorityRuleGame.address)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         

@@ -1,5 +1,5 @@
 export const GET_GAMES_PAGE = `
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import MinorityRuleGame from "MinorityRuleGame"
 
 // Get a paginated list of games that are available for joining
 // Only returns games in commitPhase (state 0) and first round (round 1)
@@ -11,7 +11,7 @@ import MinorityRuleGame from 0xb69240f6be3e34ca
 access(all) fun main(startId: UInt64, limit: UInt64, descending: Bool): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0xb69240f6be3e34ca)
+    let contractAccount = getAccount(MinorityRuleGame.address)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount

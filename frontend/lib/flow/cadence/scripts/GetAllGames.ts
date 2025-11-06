@@ -1,11 +1,11 @@
 export const GET_ALL_ACTIVE_GAMES = `
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import MinorityRuleGame from "MinorityRuleGame"
 
 // Get list of games with pagination support
 access(all) fun main(maxGames: UInt64?, startId: UInt64?, descending: Bool?): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0xb69240f6be3e34ca)
+    let contractAccount = getAccount(MinorityRuleGame.address)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount
@@ -13,7 +13,7 @@ access(all) fun main(maxGames: UInt64?, startId: UInt64?, descending: Bool?): {S
         ?? panic("Could not borrow game manager from public path")
     
     // Get contract state to know how many games exist
-    let contractAccount2 = getAccount(0xb69240f6be3e34ca)
+    let contractAccount2 = getAccount(MinorityRuleGame.address)
     let nextGameId = MinorityRuleGame.nextGameId
     
     var gamesList: [{String: AnyStruct}] = []

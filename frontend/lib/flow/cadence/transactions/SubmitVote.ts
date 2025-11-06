@@ -1,5 +1,5 @@
 export const SUBMIT_VOTE = `
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import MinorityRuleGame from "MinorityRuleGame"
 
 transaction(gameId: UInt64, vote: Bool) {
     
@@ -9,7 +9,7 @@ transaction(gameId: UInt64, vote: Bool) {
     prepare(signer: auth(Storage) &Account) {
         self.player = signer.address
         
-        let contractAddress = Address(0xb69240f6be3e34ca)
+        let contractAddress = MinorityRuleGame.address
         
         // Borrow the game manager from public capability
         self.gameManager = getAccount(contractAddress)

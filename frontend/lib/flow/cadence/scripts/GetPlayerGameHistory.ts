@@ -1,11 +1,11 @@
 export const GET_PLAYER_GAME_HISTORY = `
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import MinorityRuleGame from "MinorityRuleGame"
 
 // Get games where a player participated - efficient for history page
 access(all) fun main(player: Address, limit: UInt64?): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0xb69240f6be3e34ca)
+    let contractAccount = getAccount(MinorityRuleGame.address)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount

@@ -5,10 +5,10 @@ import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
 // - startId: The game ID to start from (inclusive)
 // - limit: Maximum number of games to return
 // - descending: If true, iterate backwards from startId; if false, iterate forwards
-access(all) fun main(startId: UInt64, limit: UInt64, descending: Bool): [{String: AnyStruct}] {
+access(all) fun main(startId: UInt64, limit: UInt64): [{String: AnyStruct}] {
     
     // Get the contract account
-    let contractAccount = getAccount(0xb69240f6be3e34ca)
+    let contractAccount = getAccount(MinorityRuleGame.address)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount
@@ -16,5 +16,5 @@ access(all) fun main(startId: UInt64, limit: UInt64, descending: Bool): [{String
         ?? panic("Could not borrow game manager from public path")
     
     // Call the getGamesPage method
-    return gameManager.getGamesPage(startId: startId, limit: limit, descending: descending)
+    return gameManager.getGamesPage(startId: startId, limit: limit)
 }

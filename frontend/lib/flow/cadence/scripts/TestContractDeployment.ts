@@ -1,5 +1,5 @@
 export const TEST_CONTRACT_DEPLOYMENT = `
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import MinorityRuleGame from "MinorityRuleGame"
 
 access(all) fun main(): {String: AnyStruct} {
     let contractAddress = 0xb69240f6be3e34ca

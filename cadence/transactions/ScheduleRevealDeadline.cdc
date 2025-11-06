@@ -11,7 +11,7 @@ transaction(gameId: UInt64, delaySeconds: UFix64) {
     
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.signer = signer
-        self.contractAddress = 0xb69240f6be3e34ca  // TODO: Replace with actual contract address
+        self.contractAddress = MinorityRuleGame.address  // TODO: Replace with actual contract address
     }
     
     execute {

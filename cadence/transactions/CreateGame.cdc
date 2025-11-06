@@ -12,7 +12,7 @@ transaction(questionText: String, entryFee: UFix64) {
         self.creator = signer.address
         
         // Borrow the game manager from the contract account
-        self.gameManager = getAccount(0xb69240f6be3e34ca)
+        self.gameManager = getAccount(MinorityRuleGame.address)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         

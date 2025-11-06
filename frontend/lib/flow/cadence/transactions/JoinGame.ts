@@ -1,5 +1,5 @@
 export const JOIN_GAME = `
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import MinorityRuleGame from "MinorityRuleGame"
 import FungibleToken from 0x9a0766d93b6608b7
 import FlowToken from 0x7e60df042a9c0868
 
@@ -13,7 +13,7 @@ transaction(gameId: UInt64) {
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.player = signer.address
         
-        let contractAddress = Address(0xb69240f6be3e34ca)
+        let contractAddress = MinorityRuleGame.address
         
         // Borrow the game manager from public capability
         self.gameManager = getAccount(contractAddress)

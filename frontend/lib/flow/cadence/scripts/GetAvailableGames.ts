@@ -1,12 +1,12 @@
 export const GET_AVAILABLE_GAMES = `
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import MinorityRuleGame from "MinorityRuleGame"
 
 // Get all available games that players can interact with
 // Available games include: games in setup phase, commit phase, or reveal phase
 access(all) fun main(): [{String: AnyStruct}] {
     
     // Get the contract account
-    let contractAccount = getAccount(0xb69240f6be3e34ca)
+    let contractAccount = getAccount(MinorityRuleGame.address)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount
