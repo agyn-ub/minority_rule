@@ -1,8 +1,8 @@
-import FungibleToken from "FungibleToken"
-import FlowToken from "FlowToken"
-import FlowTransactionScheduler from "FlowTransactionScheduler"
-import EndCommitHandler from "EndCommitHandler"
-import MinorityRuleGame from "MinorityRuleGame"
+import "FungibleToken"
+import "FlowToken"
+import "FlowTransactionScheduler"
+import "EndCommitHandler"
+import "MinorityRuleGame"
 
 transaction(gameId: UInt64, delaySeconds: UFix64) {
     
@@ -11,7 +11,7 @@ transaction(gameId: UInt64, delaySeconds: UFix64) {
     
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.signer = signer
-        self.contractAddress = MinorityRuleGame.address  // TODO: Replace with actual contract address
+        self.contractAddress = 0xf63159eb10f911cd  // TODO: Replace with actual contract address
     }
     
     execute {

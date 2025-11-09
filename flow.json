@@ -194,7 +194,7 @@
 	},
 	"deployments": {
 		"testnet": {
-			"seven-account": [
+			"eight-account": [
 				"EndCommitHandler",
 				"EndRevealHandler",
 				{

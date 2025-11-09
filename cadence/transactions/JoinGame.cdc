@@ -1,6 +1,6 @@
-import MinorityRuleGame from "MinorityRuleGame"
-import FungibleToken from "FungibleToken"
-import FlowToken from "FlowToken"
+import "MinorityRuleGame"
+import "FungibleToken"
+import "FlowToken"
 
 transaction(gameId: UInt64) {
     
@@ -13,7 +13,7 @@ transaction(gameId: UInt64) {
         self.player = signer.address
         
         // Borrow the game manager from the contract account
-        self.gameManager = getAccount(MinorityRuleGame.address)
+        self.gameManager = getAccount(0xf63159eb10f911cd)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         

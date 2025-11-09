@@ -1,5 +1,5 @@
-import FungibleToken from "FungibleToken"
-import FlowToken from "FlowToken"
+import "FungibleToken"
+import "FlowToken"
 // ProcessRoundHandler will be used via account reference
 
 access(all) contract MinorityRuleGame {

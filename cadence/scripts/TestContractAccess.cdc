@@ -1,10 +1,10 @@
-import MinorityRuleGame from "../contracts/MinorityRuleGame.cdc"
+import "MinorityRuleGame"
 
 // Test if we can access the contract and get basic info
 access(all) fun main(): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(MinorityRuleGame.address)
+    let contractAccount = getAccount(0xf63159eb10f911cd)
     
     // Try to borrow the game manager from public path
     if let gameManager = contractAccount
