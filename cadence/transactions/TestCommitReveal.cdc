@@ -1,13 +1,13 @@
 import "MinorityRuleGame"
 
-transaction(gameId: UInt64, commitHash: String, vote: Bool, salt: String) {
+transaction(gameId: UInt64, commitHash: String, vote: Bool, salt: String, contractAddress: Address) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
     let game: &MinorityRuleGame.Game
     
     prepare(signer: auth(Storage, Capabilities) &Account) {
         // Borrow the game manager from the contract account
-        self.gameManager = getAccount(0xf63159eb10f911cd)
+        self.gameManager = getAccount(contractAddress)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         

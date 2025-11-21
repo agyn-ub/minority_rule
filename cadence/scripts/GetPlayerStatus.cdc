@@ -1,10 +1,10 @@
 import "MinorityRuleGame"
 
 // Get specific player's status and participation in a game
-access(all) fun main(gameId: UInt64, playerAddress: Address): {String: AnyStruct} {
+access(all) fun main(gameId: UInt64, playerAddress: Address, contractAddress: Address): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0xf63159eb10f911cd)
+    let contractAccount = getAccount(contractAddress)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount

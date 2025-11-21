@@ -1,5 +1,5 @@
 export const SUBMIT_VOTE = `
-import MinorityRuleGame from "MinorityRuleGame"
+import MinorityRuleGame from 0xMinorityRuleGame
 
 transaction(gameId: UInt64, vote: Bool) {
     
@@ -9,10 +9,10 @@ transaction(gameId: UInt64, vote: Bool) {
     prepare(signer: auth(Storage) &Account) {
         self.player = signer.address
         
-        let contractAddress = MinorityRuleGame.address
+        let contractAddress = 0xMinorityRuleGame
         
         // Borrow the game manager from public capability
-        self.gameManager = getAccount(contractAddress)
+        self.gameManager = getAccount(0xMinorityRuleGame)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
     }

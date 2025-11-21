@@ -1,8 +1,8 @@
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import "MinorityRuleGame"
 
-access(all) fun main(gameId: UInt64, commitHash: String, vote: Bool, salt: String): {String: String} {
+access(all) fun main(gameId: UInt64, commitHash: String, vote: Bool, salt: String, contractAddress: Address): {String: String} {
     // Get the game manager from the contract account
-    let gameManager = getAccount(0xf63159eb10f911cd)
+    let gameManager = getAccount(contractAddress)
         .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
         ?? panic("Could not borrow game manager from public capability")
     

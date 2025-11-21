@@ -1,10 +1,10 @@
-import MinorityRuleGame from 0xb69240f6be3e34ca
+import "MinorityRuleGame"
 
 // Test script for the updated getGamesPage method
-access(all) fun main(startId: UInt64, limit: UInt64, descending: Bool): {String: AnyStruct} {
+access(all) fun main(startId: UInt64, limit: UInt64, descending: Bool, contractAddress: Address): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0xf63159eb10f911cd)
+    let contractAccount = getAccount(contractAddress)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount
@@ -12,5 +12,5 @@ access(all) fun main(startId: UInt64, limit: UInt64, descending: Bool): {String:
         ?? panic("Could not borrow game manager from public path")
     
     // Call the getGamesPage method (now with built-in filtering and full pagination)
-    return gameManager.getGamesPage(startId: startId, limit: limit, descending: descending)
+    return gameManager.getGamesPage(startId: startId, limit: limit)
 }

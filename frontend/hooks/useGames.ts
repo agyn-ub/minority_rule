@@ -117,9 +117,8 @@ export function useGames(options: UseGamesOptions = {}) {
       const result = await fcl.query({
         cadence: GET_ALL_ACTIVE_GAMES,
         args: (arg: any, t: any) => [
-          arg(maxGames.toString(), t.UInt64),
-          startId ? arg(startId.toString(), t.UInt64) : arg(null, t.Optional(t.UInt64)),
-          arg(descending, t.Bool)
+          startId ? arg(startId.toString(), t.UInt64) : arg("1", t.UInt64),
+          arg(maxGames.toString(), t.UInt64)
         ]
       });
 

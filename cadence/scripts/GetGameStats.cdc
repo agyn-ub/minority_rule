@@ -1,10 +1,10 @@
 import "MinorityRuleGame"
 
 // Get aggregated statistics across all games for analytics and monitoring
-access(all) fun main(gameId: UInt64): {String: AnyStruct} {
+access(all) fun main(gameId: UInt64, contractAddress: Address): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0xf63159eb10f911cd)
+    let contractAccount = getAccount(contractAddress)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount

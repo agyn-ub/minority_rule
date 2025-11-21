@@ -87,7 +87,8 @@ export default function RevealDeadlinesPage() {
         cadence: SCHEDULE_REVEAL_DEADLINE,
         args: (arg: any, t: any) => [
           arg(gameId, t.UInt64),
-          arg(delaySeconds.toFixed(1), t.UFix64)
+          arg(delaySeconds.toFixed(1), t.UFix64),
+          arg("0xf63159eb10f911cd", t.Address)
         ],
         proposer: fcl.authz,
         payer: fcl.authz,

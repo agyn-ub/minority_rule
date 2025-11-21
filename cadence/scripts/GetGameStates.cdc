@@ -1,10 +1,10 @@
 import "MinorityRuleGame"
 
 // Check the states and rounds of all games for debugging
-access(all) fun main(): [{String: AnyStruct}] {
+access(all) fun main(contractAddress: Address): [{String: AnyStruct}] {
     
     // Get the contract account
-    let contractAccount = getAccount(0xf63159eb10f911cd)
+    let contractAccount = getAccount(contractAddress)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount

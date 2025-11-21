@@ -1,10 +1,10 @@
 export const GET_PLAYER_STATUS = `
-import MinorityRuleGame from "MinorityRuleGame"
+import MinorityRuleGame from 0xMinorityRuleGame
 
 access(all) fun main(gameId: UInt64, playerAddress: Address): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(MinorityRuleGame.address)
+    let contractAccount = getAccount(0xMinorityRuleGame)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount

@@ -47,6 +47,12 @@ export interface Game {
   revealDeadline?: string;
   revealDeadlineFormatted?: string;
   timeRemainingInPhase?: string;
+  
+  // User-specific history fields
+  userVoteHistory?: VoteRecord[];
+  userStillInGame?: boolean;
+  userIsWinner?: boolean;
+  userTotalVotes?: number;
 }
 
 export interface RoundResult {

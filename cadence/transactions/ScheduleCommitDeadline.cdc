@@ -4,7 +4,7 @@ import "FlowTransactionScheduler"
 import "EndCommitHandler"
 import "MinorityRuleGame"
 
-transaction(gameId: UInt64, delaySeconds: UFix64) {
+transaction(gameId: UInt64, delaySeconds: UFix64, contractAddress: Address) {
     
     let signer: auth(Storage, Capabilities) &Account
     let contractAddress: Address

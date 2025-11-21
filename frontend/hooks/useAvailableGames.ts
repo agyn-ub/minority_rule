@@ -122,8 +122,7 @@ export function useAvailableGames(options: UseAvailableGamesOptions = {}) {
         cadence: GET_GAMES_PAGE,
         args: (arg: any, t: any) => [
           arg(startId.toString(), t.UInt64),
-          arg(limit.toString(), t.UInt64),
-          arg(descending, t.Bool)
+          arg(limit.toString(), t.UInt64)
         ]
       });
 

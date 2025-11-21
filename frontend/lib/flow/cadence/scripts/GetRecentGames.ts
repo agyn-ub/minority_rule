@@ -1,11 +1,11 @@
 export const GET_RECENT_GAMES = `
-import MinorityRuleGame from "MinorityRuleGame"
+import MinorityRuleGame from 0xMinorityRuleGame
 
 // Get recent games - most efficient for dashboard
-access(all) fun main(limit: UInt64): {String: AnyStruct} {
+access(all) fun main(): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(MinorityRuleGame.address)
+    let contractAccount = getAccount(0xMinorityRuleGame)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount

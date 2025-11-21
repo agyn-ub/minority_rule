@@ -1,7 +1,7 @@
 import "FlowTransactionScheduler"
 
 // Get the status of a scheduled transaction
-access(all) fun main(transactionId: UInt64): {String: AnyStruct} {
+access(all) fun main(transactionId: UInt64, contractAddress: Address): {String: AnyStruct} {
     
     // Get the transaction status
     let status = FlowTransactionScheduler.getStatus(id: transactionId)

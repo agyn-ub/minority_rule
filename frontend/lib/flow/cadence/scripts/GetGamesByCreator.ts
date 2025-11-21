@@ -1,32 +1,41 @@
 export const GET_GAMES_BY_CREATOR = `
-import MinorityRuleGame from "MinorityRuleGame"
+import MinorityRuleGame from 0xMinorityRuleGame
 
 // Get games created by a specific user - efficient for "My Games" tab
-access(all) fun main(creator: Address, limit: UInt64?): {String: AnyStruct} {
+access(all) fun main(creator: Address, limit: UInt64): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(MinorityRuleGame.address)
+    let contractAccount = getAccount(0xMinorityRuleGame)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount
         .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
         ?? panic("Could not borrow game manager from public path")
     
-    // Get game IDs created by this user
-    let gameIds = gameManager.getGamesByCreator(creator: creator, limit: limit)
+    // Get all games via pagination and filter by creator
+    let allGames = gameManager.getGamesPage(startId: 1, limit: limit)
+    let games = allGames["games"] as! [{String: AnyStruct}]
+    
+    // Filter games by creator
+    var creatorGames: [UInt64] = []
+    for gameData in games {
+        let gameCreator = gameData["creator"] as! Address
+        if gameCreator == creator {
+            let gameId = gameData["gameId"] as! UInt64
+            creatorGames.append(gameId)
+        }
+    }
     
     // Get detailed information for each game
     var gamesList: [{String: AnyStruct}] = []
     
-    for gameId in gameIds {
+    for gameId in creatorGames {
         if let game = gameManager.borrowGame(gameId: gameId) {
             let gameInfo = game.getGameInfo()
-            let phaseInfo = game.getCurrentPhaseInfo()
+            let phaseInfo = game.getPhaseInfo()
             
-            // State name mapping
-            let stateNames = ["setCommitDeadline", "setRevealDeadline", "commitPhase", "revealPhase", "processingRound", "completed"]
-            let stateRawValue = gameInfo["state"] as! UInt8
-            let stateName = stateNames[stateRawValue]
+            // Get state name from phase info
+            let stateName = phaseInfo["stateName"] as! String
             
             let gameData: {String: AnyStruct} = {
                 "gameId": gameInfo["gameId"]!,
@@ -44,10 +53,10 @@ access(all) fun main(creator: Address, limit: UInt64?): {String: AnyStruct} {
                 "commitCount": gameInfo["commitCount"]!,
                 "revealCount": gameInfo["revealCount"]!,
                 "commitDeadline": gameInfo["commitDeadline"]!,
-                "commitDeadlineFormatted": game.getCommitDeadlineFormatted(),
+                "commitDeadlineFormatted": phaseInfo["commitDeadlineFormatted"]!,
                 "revealDeadline": gameInfo["revealDeadline"]!,
-                "revealDeadlineFormatted": game.getRevealDeadlineFormatted(),
-                "timeRemainingInPhase": game.getTimeRemainingInPhase()
+                "revealDeadlineFormatted": phaseInfo["revealDeadlineFormatted"]!,
+                "timeRemainingInPhase": phaseInfo["timeRemaining"]!
             }
             
             gamesList.append(gameData)

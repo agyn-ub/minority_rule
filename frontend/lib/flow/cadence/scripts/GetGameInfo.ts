@@ -1,11 +1,11 @@
 export const GET_GAME_INFO = `
-import MinorityRuleGame from "MinorityRuleGame"
+import MinorityRuleGame from 0xMinorityRuleGame
 
 // Get comprehensive information about a specific game
 access(all) fun main(gameId: UInt64): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(MinorityRuleGame.address)
+    let contractAccount = getAccount(0xMinorityRuleGame)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount

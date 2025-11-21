@@ -1,9 +1,9 @@
 export const TEST_CONTRACT_DEPLOYMENT = `
-import MinorityRuleGame from "MinorityRuleGame"
+import MinorityRuleGame from 0xMinorityRuleGame
 
 access(all) fun main(): {String: AnyStruct} {
     let contractAddress = 0xb69240f6be3e34ca
-    let contractAccount = getAccount(contractAddress)
+    let contractAccount = getAccount(0xMinorityRuleGame)
     
     // Check if the contract account exists
     let result: {String: AnyStruct} = {

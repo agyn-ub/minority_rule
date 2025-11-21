@@ -80,6 +80,9 @@ flow transactions send cadence/transactions/ProcessRound.cdc \
 # Get game info
 flow scripts execute cadence/scripts/GetGameInfo.cdc <gameId> --network emulator
 
+flow scripts execute cadence/scripts/GetGameInfo.cdc <gameId> --network emulator
+
+
 # Check player status in game
 flow scripts execute cadence/scripts/GetPlayerVotingToken.cdc <playerAddress> <gameId> --network emulator
 ```

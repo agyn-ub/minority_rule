@@ -1,14 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { GameList } from '@/components/game/GameList';
 import { WalletConnect } from '@/components/flow/WalletConnect';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import Link from 'next/link';
 
 export default function Home() {
   const { user } = useFlowUser();
-  const [activeTab, setActiveTab] = useState<'available' | 'created' | 'joined'>('available');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -44,82 +41,68 @@ export default function Home() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {user ? (
-          <>
-            {/* Tab Navigation */}
-            <div className="flex justify-center mb-8">
-              <div className="bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
-                <button
-                  onClick={() => setActiveTab('available')}
-                  className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                    activeTab === 'available' 
-                      ? 'bg-blue-600 text-white shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  Available Games
-                </button>
-                <button
-                  onClick={() => setActiveTab('created')}
-                  className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                    activeTab === 'created' 
-                      ? 'bg-blue-600 text-white shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  My Games
-                </button>
-                <button
-                  onClick={() => setActiveTab('joined')}
-                  className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                    activeTab === 'joined' 
-                      ? 'bg-blue-600 text-white shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  Joined Games
-                </button>
-              </div>
+          <div className="text-center py-8">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Welcome back, {user.addr.slice(0, 8)}...
+            </h2>
+            <p className="text-lg text-gray-600 mb-12">
+              What would you like to do today?
+            </p>
+
+            {/* Navigation Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              {/* Available Games Card */}
+              <Link href="/games/available" className="group">
+                <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 group-hover:border-blue-300">
+                  <div className="text-blue-600 text-4xl mb-4">🎮</div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                    Browse Available Games
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    Discover new games you can join. Vote with the minority to survive and win prizes!
+                  </p>
+                  <div className="text-blue-600 group-hover:text-blue-700 font-medium">
+                    Explore Games →
+                  </div>
+                </div>
+              </Link>
+
+              {/* Joined Games Card */}
+              <Link href="/games/joined" className="group">
+                <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 group-hover:border-green-300">
+                  <div className="text-green-600 text-4xl mb-4">📊</div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                    My Joined Games
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    View all the games you've participated in. Check your progress and game history.
+                  </p>
+                  <div className="text-green-600 group-hover:text-green-700 font-medium">
+                    View My Games →
+                  </div>
+                </div>
+              </Link>
             </div>
 
-            {/* Tab Content */}
-            <div>
-              {activeTab === 'available' && (
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">
-                    Available Games
-                  </h2>
-                  <p className="text-gray-600 mb-6 text-center">
-                    Join any game that's accepting players
-                  </p>
-                  <GameList filter="available" />
-                </div>
-              )}
-              
-              {activeTab === 'created' && (
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">
-                    Games I Created
-                  </h2>
-                  <p className="text-gray-600 mb-6 text-center">
-                    Manage your games and set deadlines
-                  </p>
-                  <GameList filter="created" />
-                </div>
-              )}
-              
-              {activeTab === 'joined' && (
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">
-                    Games I Joined
-                  </h2>
-                  <p className="text-gray-600 mb-6 text-center">
-                    Games where you're participating as a player
-                  </p>
-                  <GameList filter="joined" />
-                </div>
-              )}
+            {/* Quick Actions */}
+            <div className="mt-12 pt-8 border-t border-gray-200">
+              <p className="text-gray-500 mb-4">Quick Actions</p>
+              <div className="flex justify-center gap-4">
+                <Link
+                  href="/create"
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                >
+                  Create New Game
+                </Link>
+                <Link
+                  href="/history"
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Full Game History
+                </Link>
+              </div>
             </div>
-          </>
+          </div>
         ) : (
           <div className="text-center py-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">

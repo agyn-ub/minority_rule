@@ -1,10 +1,10 @@
 import "MinorityRuleGame"
 
 // Test if we can access the contract and get basic info
-access(all) fun main(): {String: AnyStruct} {
+access(all) fun main(contractAddress: Address): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0xf63159eb10f911cd)
+    let contractAccount = getAccount(contractAddress)
     
     // Try to borrow the game manager from public path
     if let gameManager = contractAccount

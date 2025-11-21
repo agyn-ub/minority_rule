@@ -2,17 +2,17 @@ export const SCHEDULE_REVEAL_DEADLINE = `
 import FungibleToken from 0x9a0766d93b6608b7
 import FlowToken from 0x7e60df042a9c0868
 import FlowTransactionScheduler from 0x8c5303eaa26202d6
-import EndRevealHandler from "EndRevealHandler"
-import MinorityRuleGame from "MinorityRuleGame"
+import EndRevealHandler from 0xf63159eb10f911cd
+import MinorityRuleGame from 0xMinorityRuleGame
 
-transaction(gameId: UInt64, delaySeconds: UFix64) {
+transaction(gameId: UInt64, delaySeconds: UFix64, contractAddress: Address) {
     
     let signer: auth(Storage, Capabilities) &Account
     let contractAddress: Address
     
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.signer = signer
-        self.contractAddress = MinorityRuleGame.address
+        self.contractAddress = 0xMinorityRuleGame
     }
     
     execute {

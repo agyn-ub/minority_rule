@@ -1,7 +1,7 @@
 export const CREATE_GAME = `
-import MinorityRuleGame from "MinorityRuleGame"
-import FungibleToken from 0x9a0766d93b6608b7
-import FlowToken from 0x7e60df042a9c0868
+import MinorityRuleGame from 0xMinorityRuleGame
+import FungibleToken from 0xFungibleToken
+import FlowToken from 0xFlowToken
 
 transaction(questionText: String, entryFee: UFix64) {
     
@@ -13,7 +13,7 @@ transaction(questionText: String, entryFee: UFix64) {
         self.creator = signer.address
         
         // Borrow the game manager from the contract account
-        self.gameManager = getAccount(MinorityRuleGame.address)
+        self.gameManager = getAccount(0xMinorityRuleGame)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         
