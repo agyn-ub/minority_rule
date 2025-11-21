@@ -2,6 +2,8 @@
 
 import { WalletConnect } from '@/components/flow/WalletConnect';
 import { useFlowUser } from '@/hooks/useFlowUser';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 
 export default function Home() {
@@ -19,18 +21,16 @@ export default function Home() {
             <div className="flex items-center gap-4">
               {user && (
                 <>
-                  <Link
-                    href="/create"
-                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                  >
-                    Create Game
-                  </Link>
-                  <Link
-                    href="/history"
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                  >
-                    My History
-                  </Link>
+                  <Button asChild>
+                    <Link href="/create">
+                      Create Game
+                    </Link>
+                  </Button>
+                  <Button asChild variant="secondary">
+                    <Link href="/history">
+                      My History
+                    </Link>
+                  </Button>
                 </>
               )}
               <WalletConnect />
@@ -53,34 +53,42 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
               {/* Available Games Card */}
               <Link href="/games/available" className="group">
-                <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 group-hover:border-blue-300">
-                  <div className="text-blue-600 text-4xl mb-4">🎮</div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                    Browse Available Games
-                  </h3>
-                  <p className="text-gray-600 mb-6">
-                    Discover new games you can join. Vote with the minority to survive and win prizes!
-                  </p>
-                  <div className="text-blue-600 group-hover:text-blue-700 font-medium">
-                    Explore Games →
-                  </div>
-                </div>
+                <Card className="hover:shadow-lg transition-all duration-200 group-hover:border-blue-300">
+                  <CardHeader>
+                    <div className="text-blue-600 text-4xl mb-4">🎮</div>
+                    <CardTitle className="text-xl">
+                      Browse Available Games
+                    </CardTitle>
+                    <CardDescription>
+                      Discover new games you can join. Vote with the minority to survive and win prizes!
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-blue-600 group-hover:text-blue-700 font-medium">
+                      Explore Games →
+                    </div>
+                  </CardContent>
+                </Card>
               </Link>
 
               {/* Joined Games Card */}
               <Link href="/games/joined" className="group">
-                <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 group-hover:border-green-300">
-                  <div className="text-green-600 text-4xl mb-4">📊</div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3">
-                    My Joined Games
-                  </h3>
-                  <p className="text-gray-600 mb-6">
-                    View all the games you've participated in. Check your progress and game history.
-                  </p>
-                  <div className="text-green-600 group-hover:text-green-700 font-medium">
-                    View My Games →
-                  </div>
-                </div>
+                <Card className="hover:shadow-lg transition-all duration-200 group-hover:border-green-300">
+                  <CardHeader>
+                    <div className="text-green-600 text-4xl mb-4">📊</div>
+                    <CardTitle className="text-xl">
+                      My Joined Games
+                    </CardTitle>
+                    <CardDescription>
+                      View all the games you've participated in. Check your progress and game history.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-green-600 group-hover:text-green-700 font-medium">
+                      View My Games →
+                    </div>
+                  </CardContent>
+                </Card>
               </Link>
             </div>
 
@@ -88,18 +96,16 @@ export default function Home() {
             <div className="mt-12 pt-8 border-t border-gray-200">
               <p className="text-gray-500 mb-4">Quick Actions</p>
               <div className="flex justify-center gap-4">
-                <Link
-                  href="/create"
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                >
-                  Create New Game
-                </Link>
-                <Link
-                  href="/history"
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                >
-                  Full Game History
-                </Link>
+                <Button asChild size="lg">
+                  <Link href="/create">
+                    Create New Game
+                  </Link>
+                </Button>
+                <Button asChild variant="secondary" size="lg">
+                  <Link href="/history">
+                    Full Game History
+                  </Link>
+                </Button>
               </div>
             </div>
           </div>
@@ -112,15 +118,19 @@ export default function Home() {
               A strategic voting game where only the minority survives each round. 
               Connect your wallet to start creating and joining games!
             </p>
-            <div className="bg-white rounded-lg p-8 max-w-md mx-auto shadow-sm border">
-              <h3 className="text-xl font-semibold mb-4">How to Play:</h3>
-              <ul className="text-left text-gray-600 space-y-2">
-                <li>• Join a game and commit your vote (hidden)</li>
-                <li>• When time's up, reveal your actual vote</li>
-                <li>• Only minority voters advance to next round</li>
-                <li>• Last 1-2 players split the prize pool!</li>
-              </ul>
-            </div>
+            <Card className="max-w-md mx-auto">
+              <CardHeader>
+                <CardTitle className="text-xl">How to Play:</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="text-left text-muted-foreground space-y-2">
+                  <li>• Join a game and commit your vote (hidden)</li>
+                  <li>• When time's up, reveal your actual vote</li>
+                  <li>• Only minority voters advance to next round</li>
+                  <li>• Last 1-2 players split the prize pool!</li>
+                </ul>
+              </CardContent>
+            </Card>
           </div>
         )}
       </main>

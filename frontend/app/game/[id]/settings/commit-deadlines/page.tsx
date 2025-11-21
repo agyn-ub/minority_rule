@@ -7,6 +7,10 @@ import * as fcl from '@onflow/fcl';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import { useGame } from '@/hooks/useGame';
 import { SET_COMMIT_DEADLINE } from '@/lib/flow/cadence/transactions/SetCommitDeadline';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function CommitDeadlinesPage() {
   const params = useParams();
@@ -281,13 +285,13 @@ export default function CommitDeadlinesPage() {
                     />
                   </div>
 
-                  <button
+                  <Button
                     onClick={handleSetCommitDeadline}
                     disabled={isSettingCommit || gameState !== 0}
-                    className="w-full py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400 transition-colors"
+                    className="w-full"
                   >
                     {isSettingCommit ? 'Setting...' : 'Set Commit Deadline'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -299,13 +303,14 @@ export default function CommitDeadlinesPage() {
                   Manually transition to reveal phase when ready
                 </p>
 
-                <button
+                <Button
                   onClick={handleEndCommitPhase}
                   disabled={isEndingCommit || gameState !== 0}
-                  className="w-full py-2 px-4 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-400 transition-colors"
+                  className="w-full"
+                  variant="destructive"
                 >
                   {isEndingCommit ? 'Ending Commit Phase...' : 'End Commit Phase Now'}
-                </button>
+                </Button>
 
                 <div className="mt-4 pt-4 border-t">
                   <p className="text-xs text-gray-500">
@@ -320,13 +325,14 @@ export default function CommitDeadlinesPage() {
                   Manually end commit phase and start reveal phase
                 </p>
 
-                <button
+                <Button
                   onClick={handleEndCommitPhase}
                   disabled={isEndingCommit || gameState !== 0}
-                  className="w-full py-2 px-4 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-400 transition-colors"
+                  className="w-full"
+                  variant="destructive"
                 >
                   {isEndingCommit ? 'Ending Commit Phase...' : 'End Commit Phase Now'}
-                </button>
+                </Button>
                 
                 <p className="text-xs text-gray-500 mt-2">
                   This will immediately transition to the reveal phase
