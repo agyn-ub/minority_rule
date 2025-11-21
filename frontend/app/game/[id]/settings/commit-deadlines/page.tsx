@@ -7,7 +7,6 @@ import * as fcl from '@onflow/fcl';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import { useGame } from '@/hooks/useGame';
 import { SET_COMMIT_DEADLINE } from '@/lib/flow/cadence/transactions/SetCommitDeadline';
-import { SCHEDULE_COMMIT_DEADLINE } from '@/lib/flow/cadence/transactions/ScheduleCommitDeadline';
 
 export default function CommitDeadlinesPage() {
   const params = useParams();
@@ -19,7 +18,7 @@ export default function CommitDeadlinesPage() {
   const [commitMinutes, setCommitMinutes] = useState(15);
   const [commitMinutesInput, setCommitMinutesInput] = useState<string>('15');
   const [isSettingCommit, setIsSettingCommit] = useState(false);
-  const [isSchedulingCommit, setIsSchedulingCommit] = useState(false);
+  const [isEndingCommit, setIsEndingCommit] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -81,25 +80,38 @@ export default function CommitDeadlinesPage() {
     }
   };
 
-  const handleScheduleCommitDeadline = async () => {
+  const handleEndCommitPhase = async () => {
     if (!gameId) return;
 
-    // Parse input value
-    const minutes = parseInt(commitMinutesInput) || 15;
-    setCommitMinutes(minutes);
-    setCommitMinutesInput(minutes.toString());
-
-    setIsSchedulingCommit(true);
+    setIsEndingCommit(true);
     setSettingsError(null);
 
     try {
-      const delaySeconds = minutes * 60;
+      const END_COMMIT_PHASE = `
+        import "MinorityRuleGame"
+
+        transaction(gameId: UInt64, contractAddress: Address) {
+          prepare(signer: auth(Storage, Capabilities) &Account) {
+            let gameManager = getAccount(contractAddress)
+              .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+              ?? panic("Could not borrow game manager from public capability")
+            
+            let game = gameManager.borrowGame(gameId: gameId)
+              ?? panic("Game not found")
+            
+            game.endCommitPhase()
+          }
+          
+          execute {
+            log("Commit phase ended for game ".concat(gameId.toString()))
+          }
+        }
+      `;
 
       const transactionId = await fcl.mutate({
-        cadence: SCHEDULE_COMMIT_DEADLINE,
+        cadence: END_COMMIT_PHASE,
         args: (arg: any, t: any) => [
           arg(gameId, t.UInt64),
-          arg(delaySeconds.toFixed(1), t.UFix64),
           arg("0xf63159eb10f911cd", t.Address)
         ],
         proposer: fcl.authz,
@@ -109,13 +121,12 @@ export default function CommitDeadlinesPage() {
       });
 
       await fcl.tx(transactionId).onceSealed();
-      setSuccessMessage(`Scheduled automatic transition to reveal phase in ${minutes} minutes`);
-      // Transaction is sealed, refetch immediately
+      setSuccessMessage(`Commit phase ended - reveal phase started`);
       refetch();
     } catch (err: any) {
-      setSettingsError(`Failed to schedule commit deadline: ${err.message}`);
+      setSettingsError(`Failed to end commit phase: ${err.message}`);
     } finally {
-      setIsSchedulingCommit(false);
+      setIsEndingCommit(false);
     }
   };
 
@@ -283,74 +294,43 @@ export default function CommitDeadlinesPage() {
 
             {game.commitDeadline && Number(game.commitDeadline) > 0 ? (
               <div className="border rounded-lg p-4">
-                <h3 className="font-semibold mb-3">Automatic Scheduling Status</h3>
+                <h3 className="font-semibold mb-3">Manual Phase Control</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Automatic transition to reveal phase is scheduled
+                  Manually transition to reveal phase when ready
                 </p>
 
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Scheduled for:</span>
-                    <span className="ml-2 text-sm text-gray-900">
-                      {game.commitDeadlineFormatted || new Date(Number(game.commitDeadline) * 1000).toLocaleString()}
-                    </span>
-                  </div>
-                  {game.timeRemainingInPhase && (
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Time until transition:</span>
-                      <span className="ml-2 text-sm text-gray-900">
-                        {game.timeRemainingInPhase}
-                      </span>
-                    </div>
-                  )}
-                  <div className="mt-4 pt-4 border-t">
-                    <p className="text-xs text-gray-500">
-                      The reveal phase will automatically start when the commit deadline is reached.
-                    </p>
-                  </div>
+                <button
+                  onClick={handleEndCommitPhase}
+                  disabled={isEndingCommit || gameState !== 0}
+                  className="w-full py-2 px-4 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-400 transition-colors"
+                >
+                  {isEndingCommit ? 'Ending Commit Phase...' : 'End Commit Phase Now'}
+                </button>
+
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-xs text-gray-500">
+                    This will immediately transition to the reveal phase for manual control.
+                  </p>
                 </div>
               </div>
             ) : (
               <div className="border rounded-lg p-4">
-                <h3 className="font-semibold mb-3">Automatic Scheduling (Forte)</h3>
+                <h3 className="font-semibold mb-3">Manual Phase Control</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Schedule automatic transition to reveal phase
+                  Manually end commit phase and start reveal phase
                 </p>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Auto-trigger in (minutes)
-                    </label>
-                    <input
-                      type="text"
-                      value={commitMinutesInput}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        // Only allow numbers (old school way - no letters)
-                        if (val === '' || /^\d+$/.test(val)) {
-                          setCommitMinutesInput(val);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const num = parseInt(e.target.value) || 15;
-                        setCommitMinutes(num);
-                        setCommitMinutesInput(num.toString());
-                      }}
-                      min="1"
-                      max="1440"
-                      className="w-full p-2 border rounded-md"
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleScheduleCommitDeadline}
-                    disabled={isSchedulingCommit || gameState !== 0}
-                    className="w-full py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 transition-colors"
-                  >
-                    {isSchedulingCommit ? 'Scheduling...' : 'Schedule Auto-Transition'}
-                  </button>
-                </div>
+                <button
+                  onClick={handleEndCommitPhase}
+                  disabled={isEndingCommit || gameState !== 0}
+                  className="w-full py-2 px-4 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-400 transition-colors"
+                >
+                  {isEndingCommit ? 'Ending Commit Phase...' : 'End Commit Phase Now'}
+                </button>
+                
+                <p className="text-xs text-gray-500 mt-2">
+                  This will immediately transition to the reveal phase
+                </p>
               </div>
             )}
           </div>

@@ -27,7 +27,7 @@ transaction(questionText: String, entryFee: UFix64, contractAddress: Address) {
     execute {
         log("Game created with ID: ".concat(self.gameId.toString()))
         log("Creator: ".concat(self.creator.toString()))
-        log("Game state: setCommitDeadline - Creator must schedule deadlines via Forte before players can join")
-        log("Next step: Call ScheduleCommitDeadline transaction")
+        log("Game is now ready - players can join and vote")
+        log("Manual processing: Use EndCommitPhase and ProcessRound transactions when needed")
     }
 }

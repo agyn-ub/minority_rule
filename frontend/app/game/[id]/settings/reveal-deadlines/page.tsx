@@ -7,7 +7,6 @@ import * as fcl from '@onflow/fcl';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import { useGame } from '@/hooks/useGame';
 import { SET_REVEAL_DEADLINE } from '@/lib/flow/cadence/transactions/SetRevealDeadline';
-import { SCHEDULE_REVEAL_DEADLINE } from '@/lib/flow/cadence/transactions/ScheduleRevealDeadline';
 
 export default function RevealDeadlinesPage() {
   const params = useParams();
@@ -19,7 +18,7 @@ export default function RevealDeadlinesPage() {
   const [revealMinutes, setRevealMinutes] = useState(10);
   const [revealMinutesInput, setRevealMinutesInput] = useState<string>('10');
   const [isSettingReveal, setIsSettingReveal] = useState(false);
-  const [isSchedulingReveal, setIsSchedulingReveal] = useState(false);
+  const [isProcessingRound, setIsProcessingRound] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -69,25 +68,38 @@ export default function RevealDeadlinesPage() {
     }
   };
 
-  const handleScheduleRevealDeadline = async () => {
+  const handleProcessRound = async () => {
     if (!gameId) return;
 
-    // Parse input value
-    const minutes = parseInt(revealMinutesInput) || 10;
-    setRevealMinutes(minutes);
-    setRevealMinutesInput(minutes.toString());
-    
-    setIsSchedulingReveal(true);
+    setIsProcessingRound(true);
     setSettingsError(null);
     
     try {
-      const delaySeconds = minutes * 60;
+      const PROCESS_ROUND = `
+        import "MinorityRuleGame"
+
+        transaction(gameId: UInt64, contractAddress: Address) {
+          prepare(signer: auth(Storage, Capabilities) &Account) {
+            let gameManager = getAccount(contractAddress)
+              .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+              ?? panic("Could not borrow game manager from public capability")
+            
+            let game = gameManager.borrowGame(gameId: gameId)
+              ?? panic("Game not found")
+            
+            game.processRound()
+          }
+          
+          execute {
+            log("Round processed for game ".concat(gameId.toString()))
+          }
+        }
+      `;
       
       const transactionId = await fcl.mutate({
-        cadence: SCHEDULE_REVEAL_DEADLINE,
+        cadence: PROCESS_ROUND,
         args: (arg: any, t: any) => [
           arg(gameId, t.UInt64),
-          arg(delaySeconds.toFixed(1), t.UFix64),
           arg("0xf63159eb10f911cd", t.Address)
         ],
         proposer: fcl.authz,
@@ -97,13 +109,12 @@ export default function RevealDeadlinesPage() {
       });
 
       await fcl.tx(transactionId).onceSealed();
-      setSuccessMessage(`Scheduled automatic round processing in ${minutes} minutes`);
-      // Transaction is sealed, refetch immediately
+      setSuccessMessage(`Round processed successfully`);
       refetch();
     } catch (err: any) {
-      setSettingsError(`Failed to schedule reveal deadline: ${err.message}`);
+      setSettingsError(`Failed to process round: ${err.message}`);
     } finally {
-      setIsSchedulingReveal(false);
+      setIsProcessingRound(false);
     }
   };
 
@@ -264,7 +275,7 @@ export default function RevealDeadlinesPage() {
 
             {game.revealDeadline && Number(game.revealDeadline) > 0 ? (
               <div className="border rounded-lg p-4">
-                <h3 className="font-semibold mb-3">Automatic Scheduling Status</h3>
+                <h3 className="font-semibold mb-3">Manual Round Processing</h3>
                 <p className="text-sm text-gray-600 mb-4">
                   Automatic round processing is scheduled
                 </p>
@@ -293,9 +304,9 @@ export default function RevealDeadlinesPage() {
               </div>
             ) : (
               <div className="border rounded-lg p-4">
-                <h3 className="font-semibold mb-3">Automatic Scheduling (Forte)</h3>
+                <h3 className="font-semibold mb-3">Manual Round Processing</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Schedule automatic round processing
+                  Manually process the round when ready
                 </p>
                 
                 <div className="space-y-4">
@@ -325,11 +336,11 @@ export default function RevealDeadlinesPage() {
                   </div>
                   
                   <button
-                    onClick={handleScheduleRevealDeadline}
-                    disabled={isSchedulingReveal || gameState !== 1}
-                    className="w-full py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 transition-colors"
+                    onClick={handleProcessRound}
+                    disabled={isProcessingRound || gameState !== 1}
+                    className="w-full py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400 transition-colors"
                   >
-                    {isSchedulingReveal ? 'Scheduling...' : 'Schedule Auto-Processing'}
+                    {isProcessingRound ? 'Processing...' : 'Process Round Now'}
                   </button>
                 </div>
               </div>
