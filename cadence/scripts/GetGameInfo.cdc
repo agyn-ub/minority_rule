@@ -53,9 +53,7 @@ access(all) fun main(gameId: UInt64, contractAddress: Address): {String: AnyStru
         
         // Timing info
         "commitDeadline": gameInfo["commitDeadline"]!,
-        "commitDeadlineFormatted": game.getCommitDeadlineFormatted(),
         "revealDeadline": gameInfo["revealDeadline"]!,
-        "revealDeadlineFormatted": game.getRevealDeadlineFormatted(),
         "timeRemainingInPhase": game.getTimeRemainingInPhase(),
         
         // Historical data

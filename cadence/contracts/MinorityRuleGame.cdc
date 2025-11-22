@@ -184,10 +184,10 @@ access(all) contract MinorityRuleGame {
         // Player joins the game
         access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}) {
             pre {
-                self.currentRound == 1: "Can only join during Round 1"
-                self.state == GameState.commitPhase: "Game is not accepting new players"
-                payment.balance == self.entryFee: "Incorrect entry fee amount"
-                !self.players.contains(player): "Player already joined"
+                self.currentRound == 1: "Can only join during Round 1 (currently round ".concat(self.currentRound.toString()).concat(")")
+                self.state == GameState.commitPhase: "Game must be in commitPhase to join (currently state ".concat(self.state.rawValue.toString()).concat(" - set commit deadline first)")
+                payment.balance == self.entryFee: "Payment amount ".concat(payment.balance.toString()).concat(" does not match entry fee ").concat(self.entryFee.toString())
+                !self.players.contains(player): "Player ".concat(player.toString()).concat(" has already joined this game")
             }
             
             self.prizeVault.deposit(from: <- payment)
@@ -349,13 +349,14 @@ access(all) contract MinorityRuleGame {
 
         access(all) fun setCommitDeadline(durationSeconds: UFix64) {
             pre {
-                self.state == GameState.commitPhase: "Game must be in commit phase"
+                self.state == GameState.zeroPhase: "Game must be in commit phase"
                 durationSeconds > 0.0: "Duration must be positive"
             }
             
             let deadline = getCurrentBlock().timestamp + durationSeconds
             self.commitDeadline = deadline
-
+            self.state = GameState.commitPhase
+            
             emit CommitDeadlineSet(
                 gameId: self.gameId,
                 round: self.currentRound,
@@ -366,11 +367,12 @@ access(all) contract MinorityRuleGame {
         
         access(all) fun setRevealDeadline(durationSeconds: UFix64) {
             pre {
-                self.state == GameState.commitPhase || self.state == GameState.revealPhase: "Game must be in commit phase"
+                self.state == GameState.commitPhase: "Game must be in commit phase"
                 durationSeconds > 0.0: "Duration must be positive"
+                self.commitDeadline < getCurrentBlock().timestamp: "Commit deadline must be passed"
             }
             
-            let deadline = self.commitDeadline + durationSeconds
+            let deadline = getCurrentBlock().timestamp + durationSeconds
             self.revealDeadline = deadline
             self.state = GameState.revealPhase
 
@@ -379,20 +381,6 @@ access(all) contract MinorityRuleGame {
                 round: self.currentRound,
                 duration: durationSeconds,
                 deadline: deadline
-            )
-        }
-        
-        // Manually end commit phase and transition to reveal phase
-        access(all) fun endCommitPhase() {
-            pre {
-                self.state == GameState.commitPhase: "Game must be in commit phase"
-            }
-            
-            self.state = GameState.revealPhase
-            
-            emit RevealPhaseStarted(
-                gameId: self.gameId,
-                round: self.currentRound
             )
         }
         
@@ -428,6 +416,7 @@ access(all) contract MinorityRuleGame {
         access(all) fun processRound() {
             pre {
                 self.state == GameState.revealPhase: "Must be in reveal phase to process round"
+                self.revealDeadline < getCurrentBlock().timestamp: "Reveal deadline must be passed"
             }
             
             self.state = GameState.processingRound
@@ -520,45 +509,6 @@ access(all) contract MinorityRuleGame {
             }
         }
         
-        // Format Unix timestamp to human-readable date string
-        access(all) fun formatTimestamp(_ timestamp: UFix64): String {
-            if timestamp == 0.0 {
-                return "Not set"
-            }
-            
-            // Convert UFix64 timestamp to basic date components
-            let totalSeconds = UInt64(timestamp)
-            let totalMinutes = totalSeconds / 60
-            let totalHours = totalMinutes / 60
-            let totalDays = totalHours / 24
-            
-            // Approximate calculation for demonstration
-            // In production, you'd want a more sophisticated date library
-            let year = 1970 + Int(totalDays / 365)
-            let dayOfYear = totalDays % 365
-            let month = (dayOfYear / 30) + 1  // Rough approximation
-            let day = (dayOfYear % 30) + 1
-            let hour = totalHours % 24
-            let minute = totalMinutes % 60
-            let second = totalSeconds % 60
-            
-            return year.toString().concat("/")
-                .concat(month.toString()).concat("/")
-                .concat(day.toString()).concat(" ")
-                .concat(hour.toString()).concat(":")
-                .concat(minute.toString()).concat(":")
-                .concat(second.toString()).concat(" UTC")
-        }
-        
-        // Get commit deadline in human-readable format
-        access(all) fun getCommitDeadlineFormatted(): String {
-            return self.formatTimestamp(self.commitDeadline)
-        }
-        
-        // Get reveal deadline in human-readable format  
-        access(all) fun getRevealDeadlineFormatted(): String {
-            return self.formatTimestamp(self.revealDeadline)
-        }
         
         // Get time remaining in current phase as human-readable string
         access(all) fun getTimeRemainingInPhase(): String {
@@ -599,16 +549,14 @@ access(all) contract MinorityRuleGame {
             }
         }
         
-        // Get complete phase information with formatted times
+        // Get complete phase information
         access(all) fun getPhaseInfo(): {String: AnyStruct} {
             return {
                 "state": self.state.rawValue,
                 "stateName": self.state,
                 "round": self.currentRound,
                 "commitDeadline": self.commitDeadline,
-                "commitDeadlineFormatted": self.getCommitDeadlineFormatted(),
                 "revealDeadline": self.revealDeadline,
-                "revealDeadlineFormatted": self.getRevealDeadlineFormatted(),
                 "timeRemaining": self.getTimeRemainingInPhase(),
                 "currentCommitDuration": self.currentCommitDuration,
                 "currentRevealDuration": self.currentRevealDuration
