@@ -18,11 +18,9 @@ The contract stores ALL player data on-chain after careful consideration of trad
   - `remainingPlayers: [Address]` - Active players each round
 
 ### Fee Structure
-- **Total: 3%** of prize pool
-  - **2%** goes to platform recipient (profit)
-  - **1%** stays in contract storage vault (funds future storage needs)
-- Storage costs ~50 bytes per address, ~50 FLOW for 1M players
-- Platform fee easily covers storage even for massive games
+- **Total: 2%** of prize pool goes to platform recipient
+- Storage costs are negligible (~0.0007 FLOW per player)
+- Platform fee easily covers storage costs and profit
 
 ### Scheduling System
 Creator funds game operation:
@@ -157,10 +155,10 @@ enum GameState {
 5. Winners receive prizes automatically when game ends
 
 ### Handling Storage Costs
-Contract self-funds through 1% retention:
-- Each game contributes 1% to `contractStorageVault`
-- Covers all on-chain storage costs
-- No manual funding needed
+Storage costs are minimal and covered by platform fee:
+- Storage cost: ~0.0007 FLOW per player  
+- Platform's 2% fee easily covers storage plus profit
+- No separate storage fund needed
 
 ### Testing Round Processing
 Since scheduled transactions may not work in all environments:

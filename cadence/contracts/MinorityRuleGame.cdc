@@ -22,11 +22,8 @@ access(all) contract MinorityRuleGame {
 
     // Contract state
     access(all) var nextGameId: UInt64
-    access(all) var totalFeePercentage: UFix64  // Total fee (3%)
-    access(all) var platformFeePercentage: UFix64  // Fee for platform recipient (2%)
-    access(all) var storageFeePercentage: UFix64  // Fee kept in contract (1%)
+    access(all) var totalFeePercentage: UFix64  // Total fee (2%)
     access(all) let platformFeeRecipient: Address
-    access(self) var contractStorageVault: @{FungibleToken.Vault}  // Vault for storage fees
     access(self) var userGameHistory: {Address: [UInt64]}  // Maps user address to array of game IDs they've joined
     
     // Storage paths
@@ -37,6 +34,7 @@ access(all) contract MinorityRuleGame {
 
     // Game states
     access(all) enum GameState: UInt8 {
+        access(all) case zeroPhase
         access(all) case commitPhase
         access(all) case revealPhase
         access(all) case processingRound
@@ -140,7 +138,7 @@ access(all) contract MinorityRuleGame {
             self.entryFee = entryFee
             self.creator = creator
             
-            self.state = GameState.commitPhase
+            self.state = GameState.zeroPhase
             self.currentRound = 1
             self.totalPlayers = 0
             
@@ -300,49 +298,43 @@ access(all) contract MinorityRuleGame {
         access(self) fun endGame() {
             self.state = GameState.completed
             
-            // Calculate fees
+            // Check if there's a prize pool to distribute
             let totalPrize = self.prizeVault.balance
-            let platformFee = totalPrize * MinorityRuleGame.platformFeePercentage  // 2% for recipient
-            let storageFee = totalPrize * MinorityRuleGame.storageFeePercentage   // 1% for contract storage
+            var platformFee: UFix64 = 0.0
             
-            // Send platform fee to recipient (2%)
-            if platformFee > 0.0 {
+            if totalPrize > 0.0 {
+                // Calculate and send platform fee (2%)
+                platformFee = totalPrize * MinorityRuleGame.totalFeePercentage
                 let platformFeeVault <- self.prizeVault.withdraw(amount: platformFee)
                 let recipientVault = getAccount(MinorityRuleGame.platformFeeRecipient)
                     .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
                     ?? panic("Could not borrow platform fee recipient vault")
                 recipientVault.deposit(from: <- platformFeeVault)
-            }
-            
-            // Keep storage fee in contract (1%)
-            if storageFee > 0.0 {
-                let storageFeeVault <- self.prizeVault.withdraw(amount: storageFee)
-                MinorityRuleGame.contractStorageVault.deposit(from: <- storageFeeVault)
-            }
-            
-            // Distribute prizes to winners
-            let remainingPrize = self.prizeVault.balance
-            if self.winners.length > 0 {
-                let prizePerWinner = remainingPrize / UFix64(self.winners.length)
                 
-                for winner in self.winners {
-                    // Get winner's Flow vault capability
-                    let winnerVault = getAccount(winner)
-                        .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                // Distribute remaining prizes to winners
+                let remainingPrize = self.prizeVault.balance
+                if self.winners.length > 0 {
+                    let prizePerWinner = remainingPrize / UFix64(self.winners.length)
                     
-                    if winnerVault != nil {
-                        // Send prize to winner
-                        let winnerPrize <- self.prizeVault.withdraw(amount: prizePerWinner)
-                        winnerVault!.deposit(from: <- winnerPrize)
+                    for winner in self.winners {
+                        // Get winner's Flow vault capability
+                        let winnerVault = getAccount(winner)
+                            .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
                         
-                        emit PrizeDistributed(
-                            gameId: self.gameId,
-                            winner: winner,
-                            amount: prizePerWinner
-                        )
-                    } else {
-                        // If winner doesn't have a vault, log it (they can still claim later if needed)
-                        log("Warning: Winner ".concat(winner.toString()).concat(" doesn't have a Flow vault"))
+                        if winnerVault != nil {
+                            // Send prize to winner
+                            let winnerPrize <- self.prizeVault.withdraw(amount: prizePerWinner)
+                            winnerVault!.deposit(from: <- winnerPrize)
+                            
+                            emit PrizeDistributed(
+                                gameId: self.gameId,
+                                winner: winner,
+                                amount: prizePerWinner
+                            )
+                        } else {
+                            // If winner doesn't have a vault, log it (they can still claim later if needed)
+                            log("Warning: Winner ".concat(winner.toString()).concat(" doesn't have a Flow vault"))
+                        }
                     }
                 }
             }
@@ -350,8 +342,8 @@ access(all) contract MinorityRuleGame {
             emit GameCompleted(
                 gameId: self.gameId,
                 totalRounds: self.currentRound,
-                finalPrize: remainingPrize,
-                platformFee: platformFee + storageFee  // Total fees taken
+                finalPrize: self.prizeVault.balance,
+                platformFee: platformFee
             )
         }
 
@@ -374,18 +366,33 @@ access(all) contract MinorityRuleGame {
         
         access(all) fun setRevealDeadline(durationSeconds: UFix64) {
             pre {
-                self.state == GameState.commitPhase || self.state == GameState.revealPhase: "Game must be in commit phase or reveal phase"
+                self.state == GameState.commitPhase || self.state == GameState.revealPhase: "Game must be in commit phase"
                 durationSeconds > 0.0: "Duration must be positive"
             }
             
-            let deadline = getCurrentBlock().timestamp + durationSeconds
+            let deadline = self.commitDeadline + durationSeconds
             self.revealDeadline = deadline
+            self.state = GameState.revealPhase
 
             emit RevealDeadlineSet(
                 gameId: self.gameId,
                 round: self.currentRound,
                 duration: durationSeconds,
                 deadline: deadline
+            )
+        }
+        
+        // Manually end commit phase and transition to reveal phase
+        access(all) fun endCommitPhase() {
+            pre {
+                self.state == GameState.commitPhase: "Game must be in commit phase"
+            }
+            
+            self.state = GameState.revealPhase
+            
+            emit RevealPhaseStarted(
+                gameId: self.gameId,
+                round: self.currentRound
             )
         }
         
@@ -417,21 +424,7 @@ access(all) contract MinorityRuleGame {
             }
         }
 
-        // Start reveal phase. Must be called by forte scheduler when commit deadline is reached.
-        access(all) fun startRevealPhase() {
-            pre {
-                self.state == GameState.commitPhase: "Game must be in commit phase"
-            }
-            
-            self.state = GameState.revealPhase
-            
-            emit RevealPhaseStarted(
-                gameId: self.gameId,
-                round: self.currentRound
-            )
-        }
-
-        // Process the current round. Must be called by forte scheduler when reveal deadline is reached.
+        // Process the current round.
         access(all) fun processRound() {
             pre {
                 self.state == GameState.revealPhase: "Must be in reveal phase to process round"
@@ -492,14 +485,14 @@ access(all) contract MinorityRuleGame {
                 self.currentRevealDuration = nil
                 
                 // Start directly in commit phase for subsequent rounds
-                self.state = GameState.commitPhase
+                self.state = GameState.zeroPhase
                 
                 emit NewRoundStarted(
                     gameId: self.gameId,
                     round: self.currentRound
                 )
                 
-                log("Next round ready - creator must manually schedule via Forte")
+                log("Next round ready")
             }
         }
 
@@ -619,27 +612,6 @@ access(all) contract MinorityRuleGame {
                 "timeRemaining": self.getTimeRemainingInPhase(),
                 "currentCommitDuration": self.currentCommitDuration,
                 "currentRevealDuration": self.currentRevealDuration
-            }
-        }
-        
-        // Test function for debugging commit-reveal hash calculations
-        access(all) fun testCommitReveal(commitHash: String, vote: Bool, salt: String): {String: String} {
-            // Same calculation as submitReveal
-            let voteString = vote ? "true" : "false"
-            let combinedString = voteString.concat(salt)
-            let calculatedHash = String.encodeHex(HashAlgorithm.SHA3_256.hash(combinedString.utf8))
-            
-            return {
-                "expectedHash": commitHash,
-                "calculatedHash": calculatedHash,
-                "vote": voteString,
-                "salt": salt,
-                "combinedString": combinedString,
-                "matches": calculatedHash == commitHash ? "true" : "false",
-                "algorithm": "SHA3_256",
-                "voteStringLength": voteString.length.toString(),
-                "saltLength": salt.length.toString(),
-                "combinedLength": combinedString.length.toString()
             }
         }
     }
@@ -812,11 +784,8 @@ access(all) contract MinorityRuleGame {
     
     init(platformFeeRecipient: Address) {
         self.nextGameId = 1
-        self.totalFeePercentage = 0.03  // 3% total fee
-        self.platformFeePercentage = 0.02  // 2% goes to platform recipient
-        self.storageFeePercentage = 0.01  // 1% stays in contract for storage
+        self.totalFeePercentage = 0.02  // 2% platform fee
         self.platformFeeRecipient = platformFeeRecipient
-        self.contractStorageVault <- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>())
         self.userGameHistory = {}
         
         self.GameStoragePath = /storage/MinorityRuleGameManager

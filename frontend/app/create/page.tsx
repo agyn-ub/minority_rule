@@ -148,7 +148,7 @@ export default function CreateGamePage() {
                     <ul className="text-sm text-blue-800 space-y-1">
                       <li>• Entry Fee: {entryFee} FLOW per player</li>
                       <li>• Creator Cost: {entryFee} FLOW (you don't join automatically)</li>
-                      <li>• Fee Structure: 3% total (2% platform, 1% storage)</li>
+                      <li>• Fee Structure: 2% platform fee (reduced!)</li>
                     </ul>
                     <p className="mt-2 text-xs text-blue-700">
                       After creating, you'll be able to manually control game phases

@@ -1,22 +1,10 @@
 {
 	"contracts": {
-		"EndCommitHandler": {
-			"source": "./cadence/contracts/EndCommitHandler.cdc",
-			"aliases": {
-				"testnet": "f63159eb10f911cd"
-			}
-		},
-		"EndRevealHandler": {
-			"source": "./cadence/contracts/EndRevealHandler.cdc",
-			"aliases": {
-				"testnet": "f63159eb10f911cd"
-			}
-		},
 		"MinorityRuleGame": {
 			"source": "cadence/contracts/MinorityRuleGame.cdc",
 			"aliases": {
 				"testing": "0000000000000007",
-				"testnet": "f63159eb10f911cd"
+				"testnet": "206a0f93916f5d8f"
 			}
 		}
 	},
@@ -156,6 +144,13 @@
 				"location": "four-account.pkey"
 			}
 		},
+		"nine-account": {
+			"address": "206a0f93916f5d8f",
+			"key": {
+				"type": "file",
+				"location": "nine-account.pkey"
+			}
+		},
 		"one-account": {
 			"address": "73c003cd6de60fd4",
 			"key": {
@@ -194,14 +189,12 @@
 	},
 	"deployments": {
 		"testnet": {
-			"eight-account": [
-				"EndCommitHandler",
-				"EndRevealHandler",
+			"nine-account": [
 				{
 					"name": "MinorityRuleGame",
 					"args": [
 						{
-							"value": "0xf63159eb10f911cd",
+							"value": "0x206a0f93916f5d8f",
 							"type": "Address"
 						}
 					]

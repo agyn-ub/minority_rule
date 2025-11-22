@@ -19,7 +19,7 @@ access(all) fun main(gameId: UInt64, contractAddress: Address): {String: AnyStru
     let phaseInfo = game.getPhaseInfo()
     
     // Add state name mapping
-    let stateNames = ["commitPhase", "revealPhase", "processingRound", "completed"]
+    let stateNames = ["zeroPhase", "commitPhase", "revealPhase", "processingRound", "completed"]
     let stateRawValue = phaseInfo["state"] as! UInt8
     let stateName = stateNames[stateRawValue]
     
@@ -60,10 +60,12 @@ access(all) fun main(gameId: UInt64, contractAddress: Address): {String: AnyStru
 // Helper function to determine what action is needed next
 access(all) fun getNextAction(stateName: String): String {
     switch stateName {
+        case "zeroPhase":
+            return "Creator needs to set commit deadline to begin the game"
         case "commitPhase":
-            return "Players can submit commits, scheduled handler will trigger reveal phase"
+            return "Players can submit commits, manual EndCommitPhase required"
         case "revealPhase":
-            return "Players can reveal votes, scheduled handler will process round"
+            return "Players can reveal votes, manual ProcessRound required"
         case "processingRound":
             return "Processing in progress"
         case "completed":
