@@ -303,17 +303,20 @@ access(all) contract MinorityRuleGame {
             var platformFee: UFix64 = 0.0
             
             if totalPrize > 0.0 {
-                // Calculate and send platform fee (2%)
-                platformFee = totalPrize * MinorityRuleGame.totalFeePercentage
-                let platformFeeVault <- self.prizeVault.withdraw(amount: platformFee)
+                // Get platform fee recipient vault
                 let recipientVault = getAccount(MinorityRuleGame.platformFeeRecipient)
                     .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
                     ?? panic("Could not borrow platform fee recipient vault")
+                
+                // Calculate and send platform fee (2%)
+                platformFee = totalPrize * MinorityRuleGame.totalFeePercentage
+                let platformFeeVault <- self.prizeVault.withdraw(amount: platformFee)
                 recipientVault.deposit(from: <- platformFeeVault)
                 
-                // Distribute remaining prizes to winners
-                let remainingPrize = self.prizeVault.balance
+                // Handle prize distribution
                 if self.winners.length > 0 {
+                    // Normal case: distribute remaining prizes to winners
+                    let remainingPrize = self.prizeVault.balance
                     let prizePerWinner = remainingPrize / UFix64(self.winners.length)
                     
                     for winner in self.winners {
@@ -335,6 +338,14 @@ access(all) contract MinorityRuleGame {
                             // If winner doesn't have a vault, log it (they can still claim later if needed)
                             log("Warning: Winner ".concat(winner.toString()).concat(" doesn't have a Flow vault"))
                         }
+                    }
+                } else {
+                    // No winners case: platform gets all remaining money (penalty for failed game)
+                    let remainingPrize = self.prizeVault.balance
+                    if remainingPrize > 0.0 {
+                        let additionalFeeVault <- self.prizeVault.withdraw(amount: remainingPrize)
+                        recipientVault.deposit(from: <- additionalFeeVault)
+                        platformFee = platformFee + remainingPrize  // Update total platform fee for accurate logging
                     }
                 }
             }

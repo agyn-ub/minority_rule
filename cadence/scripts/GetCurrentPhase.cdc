@@ -37,9 +37,7 @@ access(all) fun main(gameId: UInt64, contractAddress: Address): {String: AnyStru
         // Timing information
         "currentTime": currentTime,
         "commitDeadline": phaseInfo["commitDeadline"]!,
-        "commitDeadlineFormatted": phaseInfo["commitDeadlineFormatted"]!,
         "revealDeadline": phaseInfo["revealDeadline"]!,
-        "revealDeadlineFormatted": phaseInfo["revealDeadlineFormatted"]!,
         "timeRemaining": phaseInfo["timeRemaining"]!,
         
         // Duration information
