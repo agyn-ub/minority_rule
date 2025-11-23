@@ -186,6 +186,7 @@ access(all) contract MinorityRuleGame {
             pre {
                 self.currentRound == 1: "Can only join during Round 1 (currently round ".concat(self.currentRound.toString()).concat(")")
                 self.state == GameState.commitPhase: "Game must be in commitPhase to join (currently state ".concat(self.state.rawValue.toString()).concat(" - set commit deadline first)")
+                self.commitDeadline == 0.0 || getCurrentBlock().timestamp <= self.commitDeadline: "Commit deadline has passed, cannot join game"
                 payment.balance == self.entryFee: "Payment amount ".concat(payment.balance.toString()).concat(" does not match entry fee ").concat(self.entryFee.toString())
                 !self.players.contains(player): "Player ".concat(player.toString()).concat(" has already joined this game")
             }
@@ -383,6 +384,15 @@ access(all) contract MinorityRuleGame {
                 self.commitDeadline < getCurrentBlock().timestamp: "Commit deadline must be passed"
             }
             
+            // Check if anyone committed - if not, end game gracefully
+            if self.currentRoundCommits.length == 0 {
+                // Nobody committed → End game with no winners
+                self.winners = []
+                self.endGame()
+                return
+            }
+            
+            // Normal reveal phase setup when commits exist
             let deadline = getCurrentBlock().timestamp + durationSeconds
             self.revealDeadline = deadline
             self.state = GameState.revealPhase
