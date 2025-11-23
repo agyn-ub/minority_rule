@@ -380,19 +380,11 @@ access(all) contract MinorityRuleGame {
         access(all) fun setRevealDeadline(durationSeconds: UFix64) {
             pre {
                 self.state == GameState.commitPhase: "Game must be in commit phase"
+                self.currentRoundCommits.length > 0: "Cannot transition to reveal phase - no commits submitted"
                 durationSeconds > 0.0: "Duration must be positive"
                 self.commitDeadline < getCurrentBlock().timestamp: "Commit deadline must be passed"
             }
             
-            // Check if anyone committed - if not, end game gracefully
-            if self.currentRoundCommits.length == 0 {
-                // Nobody committed → End game with no winners
-                self.winners = []
-                self.endGame()
-                return
-            }
-            
-            // Normal reveal phase setup when commits exist
             let deadline = getCurrentBlock().timestamp + durationSeconds
             self.revealDeadline = deadline
             self.state = GameState.revealPhase
@@ -437,7 +429,8 @@ access(all) contract MinorityRuleGame {
         access(all) fun processRound() {
             pre {
                 self.state == GameState.revealPhase: "Must be in reveal phase to process round"
-                self.revealDeadline < getCurrentBlock().timestamp: "Reveal deadline must be passed"
+                self.currentRoundReveals.length == self.remainingPlayers.length || 
+                self.revealDeadline < getCurrentBlock().timestamp: "All players must reveal or deadline must be passed"
             }
             
             self.state = GameState.processingRound
