@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import * as fcl from '@onflow/fcl';
 import * as t from '@onflow/types';
+import { processRoundTransaction } from '@/lib/flow/transactions';
 
 interface ProcessRoundButtonProps {
   gameId: string;
@@ -19,41 +20,8 @@ export function ProcessRoundButton({ gameId, currentRound, onSuccess }: ProcessR
     setError(null);
 
     try {
-      // Note: This uses a placeholder transaction since ProcessRound.cdc should be in the project
-      const transactionCode = `
-        import MinorityRuleGame from 0xMinorityRuleGame
-
-        transaction(gameId: UInt64) {
-            
-            let gameManager: &{MinorityRuleGame.GameManagerPublic}
-            
-            prepare(signer: auth(Storage) &Account) {
-                let contractAddress = Address(0xMinorityRuleGame)
-                
-                // Borrow the game manager from public capability
-                self.gameManager = getAccount(contractAddress)
-                    .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
-                    ?? panic("Could not borrow game manager from public capability")
-            }
-            
-            execute {
-                // Get the game
-                let game = self.gameManager.borrowGame(gameId: gameId)
-                    ?? panic("Game not found")
-                
-                // Process the round
-                game.processRound()
-                
-                log("Round processed for game ".concat(gameId.toString()))
-            }
-        }
-      `;
-
       const transactionId = await fcl.mutate({
-        cadence: transactionCode,
-        args: (arg: any, t: any) => [
-          arg(gameId, t.UInt64)
-        ],
+        ...processRoundTransaction(gameId),
         proposer: fcl.authz,
         payer: fcl.authz,
         authorizations: [fcl.authz],
@@ -92,7 +60,7 @@ export function ProcessRoundButton({ gameId, currentRound, onSuccess }: ProcessR
       </button>
       
       <p className="text-sm text-gray-600 text-center">
-        Manually trigger round processing if automatic processing fails
+        Process the round when deadline passes or all players have revealed their votes
       </p>
     </div>
   );

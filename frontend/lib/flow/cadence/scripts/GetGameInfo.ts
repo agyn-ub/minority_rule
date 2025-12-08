@@ -2,10 +2,10 @@ export const GET_GAME_INFO = `
 import MinorityRuleGame from 0xMinorityRuleGame
 
 // Get comprehensive information about a specific game
-access(all) fun main(gameId: UInt64): {String: AnyStruct} {
+access(all) fun main(gameId: UInt64, contractAddress: Address): {String: AnyStruct} {
     
     // Get the contract account
-    let contractAccount = getAccount(0xMinorityRuleGame)
+    let contractAccount = getAccount(contractAddress)
     
     // Borrow the game manager from public path
     let gameManager = contractAccount
@@ -20,7 +20,7 @@ access(all) fun main(gameId: UInt64): {String: AnyStruct} {
     let gameInfo = game.getGameInfo()
     
     // Add state name for better readability
-    let stateNames = ["setCommitDeadline", "setRevealDeadline", "commitPhase", "revealPhase", "processingRound", "completed"]
+    let stateNames = ["zeroPhase", "commitPhase", "revealPhase", "processingRound", "completed"]
     let stateRawValue = gameInfo["state"] as! UInt8
     
     // Enhanced game info with additional details
@@ -54,9 +54,7 @@ access(all) fun main(gameId: UInt64): {String: AnyStruct} {
         
         // Timing info
         "commitDeadline": gameInfo["commitDeadline"]!,
-        "commitDeadlineFormatted": game.getCommitDeadlineFormatted(),
         "revealDeadline": gameInfo["revealDeadline"]!,
-        "revealDeadlineFormatted": game.getRevealDeadlineFormatted(),
         "timeRemainingInPhase": game.getTimeRemainingInPhase(),
         
         // Historical data

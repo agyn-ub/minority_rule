@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as fcl from '@onflow/fcl';
 import * as t from '@onflow/types';
-import { CREATE_GAME } from '@/lib/flow/cadence/transactions/CreateGame';
+import { createGameTransaction } from '@/lib/flow/transactions';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,17 +40,14 @@ export default function CreateGamePage() {
       return;
     }
 
-
     setIsSubmitting(true);
     setError(null);
 
     try {
+      console.log('Creating game with:', { questionText, fee: fee.toFixed(8) });
+      
       const transactionId = await fcl.mutate({
-        cadence: CREATE_GAME,
-        args: (arg: any, t: any) => [
-          arg(questionText, t.String),
-          arg(fee.toFixed(8), t.UFix64)
-        ],
+        ...createGameTransaction(questionText, fee.toFixed(8)),
         proposer: fcl.authz,
         payer: fcl.authz,
         authorizations: [fcl.authz],
@@ -68,14 +65,31 @@ export default function CreateGamePage() {
       if (gameCreatedEvent) {
         const extractedGameId = gameCreatedEvent.data.gameId;
         setGameId(extractedGameId);
+        console.log('Game created successfully with ID:', extractedGameId);
         // Redirect to game settings page
         router.push(`/game/${extractedGameId}/settings`);
       } else {
+        console.warn('No GameCreated event found, redirecting to home');
         router.push('/');
       }
     } catch (err: any) {
       console.error('Transaction failed:', err);
-      setError(err.message || 'Failed to create game');
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to create game';
+      if (err.message) {
+        if (err.message.includes('network') || err.message.includes('connection')) {
+          errorMessage = 'Network connection error. Please check your connection and try again.';
+        } else if (err.message.includes('authorization') || err.message.includes('wallet')) {
+          errorMessage = 'Wallet authorization failed. Please check your wallet connection.';
+        } else if (err.message.includes('insufficient')) {
+          errorMessage = 'Insufficient funds. Please ensure you have enough FLOW tokens.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

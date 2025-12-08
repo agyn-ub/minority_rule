@@ -1,7 +1,7 @@
-export const SET_REVEAL_DEADLINE = `
+export const PROCESS_ROUND = `
 import MinorityRuleGame from 0xMinorityRuleGame
 
-transaction(gameId: UInt64, durationSeconds: UFix64, contractAddress: Address) {
+transaction(gameId: UInt64, contractAddress: Address) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
     let game: &MinorityRuleGame.Game
@@ -18,11 +18,10 @@ transaction(gameId: UInt64, durationSeconds: UFix64, contractAddress: Address) {
     }
     
     execute {
-        // Set reveal deadline for the game (duration in seconds from now)
-        self.game.setRevealDeadline(durationSeconds: durationSeconds)
+        // Process the current round
+        self.game.processRound()
         
-        log("Reveal deadline set for game ".concat(gameId.toString())
-            .concat(" to ").concat(durationSeconds.toString()).concat(" seconds from now"))
+        log("Round processed for game ".concat(gameId.toString()))
     }
 }
 `;

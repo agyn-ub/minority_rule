@@ -1,13 +1,9 @@
 export enum GameState {
-  SetCommitDeadline = 0,
-  SetRevealDeadline = 1,
-  CommitPhase = 2,
-  RevealPhase = 3,
-  ProcessingRound = 4,
-  Completed = 5,
-  
-  // Legacy aliases for backwards compatibility
-  VotingOpen = 2, // maps to CommitPhase
+  ZeroPhase = 0,      // Contract: zeroPhase - initial state, waiting for commit deadline
+  CommitPhase = 1,    // Contract: commitPhase - players can commit votes
+  RevealPhase = 2,    // Contract: revealPhase - players reveal their votes
+  ProcessingRound = 3, // Contract: processingRound - round being processed
+  Completed = 4,      // Contract: completed - game finished
 }
 
 export interface VoteRecord {

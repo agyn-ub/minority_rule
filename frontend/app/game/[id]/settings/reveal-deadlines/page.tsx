@@ -6,7 +6,7 @@ import Link from 'next/link';
 import * as fcl from '@onflow/fcl';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import { useGame } from '@/hooks/useGame';
-import { SET_REVEAL_DEADLINE } from '@/lib/flow/cadence/transactions/SetRevealDeadline';
+import { setRevealDeadlineTransaction } from '@/lib/flow/transactions';
 
 export default function RevealDeadlinesPage() {
   const params = useParams();
@@ -46,11 +46,7 @@ export default function RevealDeadlinesPage() {
       const durationSeconds = minutes * 60;
       
       const transactionId = await fcl.mutate({
-        cadence: SET_REVEAL_DEADLINE,
-        args: (arg: any, t: any) => [
-          arg(gameId, t.UInt64),
-          arg(durationSeconds.toFixed(1), t.UFix64)
-        ],
+        ...setRevealDeadlineTransaction(gameId, durationSeconds.toFixed(1)),
         proposer: fcl.authz,
         payer: fcl.authz,
         authorizations: [fcl.authz],
@@ -275,21 +271,21 @@ export default function RevealDeadlinesPage() {
 
             {game.revealDeadline && Number(game.revealDeadline) > 0 ? (
               <div className="border rounded-lg p-4">
-                <h3 className="font-semibold mb-3">Manual Round Processing</h3>
+                <h3 className="font-semibold mb-3">Round Processing</h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Automatic round processing is scheduled
+                  Deadline is set - round can be processed manually after deadline or when all players reveal
                 </p>
 
                 <div className="space-y-2">
                   <div>
-                    <span className="text-sm font-medium text-gray-700">Scheduled for:</span>
+                    <span className="text-sm font-medium text-gray-700">Deadline set for:</span>
                     <span className="ml-2 text-sm text-gray-900">
-                      {game.revealDeadlineFormatted || new Date(Number(game.revealDeadline) * 1000).toLocaleString()}
+                      {new Date(Number(game.revealDeadline) * 1000).toLocaleString()}
                     </span>
                   </div>
                   {game.timeRemainingInPhase && (
                     <div>
-                      <span className="text-sm font-medium text-gray-700">Time until processing:</span>
+                      <span className="text-sm font-medium text-gray-700">Time remaining:</span>
                       <span className="ml-2 text-sm text-gray-900">
                         {game.timeRemainingInPhase}
                       </span>
@@ -297,7 +293,7 @@ export default function RevealDeadlinesPage() {
                   )}
                   <div className="mt-4 pt-4 border-t">
                     <p className="text-xs text-gray-500">
-                      Round processing will automatically occur when the reveal deadline is reached.
+                      Round processing must be done manually after the deadline passes or when all players reveal.
                     </p>
                   </div>
                 </div>

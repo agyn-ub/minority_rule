@@ -56,11 +56,23 @@ if (!CONTRACT_ADDRESS) {
 }
 
 export const flowConfig: FlowConfig = {
+  // Required app details
   'app.detail.title': 'Minority Rule Game',
   'app.detail.icon': '/logo.png',
+  
+  // Network configuration (modern format)
+  'flow.network': NETWORK,
   'accessNode.api': CORE_ADDRESSES.accessNode,
   'discovery.wallet': CORE_ADDRESSES.discovery,
-  'flow.network': NETWORK,
+  
+  // WalletConnect configuration (required since FCL 1.11.0)
+  'walletconnect.projectId': process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '2a8b2a2c8b1d3e2f4g5h6i7j8k9l0m1n',
+  
+  // Transaction limits and timeouts
+  'fcl.limit': 1000,
+  'fcl.timeout': 30000, // 30 seconds timeout instead of default
+  
+  // Contract address aliases
   '0xMinorityRuleGame': CONTRACT_ADDRESS,
   '0xScheduledRoundHandler': CONTRACT_ADDRESS,
   '0xFungibleToken': CORE_ADDRESSES.FungibleToken,

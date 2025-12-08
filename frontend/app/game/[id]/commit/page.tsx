@@ -6,7 +6,7 @@ import Link from 'next/link';
 import * as fcl from '@onflow/fcl';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import { useGame } from '@/hooks/useGame';
-import { SUBMIT_COMMIT } from '@/lib/flow/cadence/transactions/SubmitCommit';
+import { submitCommitTransaction } from '@/lib/flow/transactions';
 import { GET_PLAYER_STATUS } from '@/lib/flow/cadence/scripts/GetPlayerStatus';
 import { generateCommitHash, generateSalt, storeVotingData } from '@/lib/utils/hashUtils';
 
@@ -53,7 +53,7 @@ export default function CommitVotePage() {
 
   // Check if user can commit
   const canCommit = () => {
-    return gameState === 0 && 
+    return gameState === 1 && 
            playerStatus?.hasJoined && 
            playerStatus?.isActive &&
            !commitSuccess;
@@ -62,7 +62,7 @@ export default function CommitVotePage() {
   // Redirect if not in commit phase or not eligible
   useEffect(() => {
     if (!loading && !loadingPlayerStatus && playerStatus && game) {
-      if (gameState !== 0) {
+      if (gameState !== 1) {
         router.push(`/game/${gameId}`);
       } else if (!playerStatus.hasJoined || !playerStatus.isActive) {
         router.push(`/game/${gameId}`);
@@ -89,11 +89,7 @@ export default function CommitVotePage() {
       
       // Submit commit transaction
       const transactionId = await fcl.mutate({
-        cadence: SUBMIT_COMMIT,
-        args: (arg: any, t: any) => [
-          arg(gameId, t.UInt64),
-          arg(commitHash, t.String)
-        ],
+        ...submitCommitTransaction(gameId, commitHash),
         proposer: fcl.authz,
         payer: fcl.authz,
         authorizations: [fcl.authz],

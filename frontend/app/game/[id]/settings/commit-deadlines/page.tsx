@@ -6,7 +6,7 @@ import Link from 'next/link';
 import * as fcl from '@onflow/fcl';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import { useGame } from '@/hooks/useGame';
-import { SET_COMMIT_DEADLINE } from '@/lib/flow/cadence/transactions/SetCommitDeadline';
+import { setCommitDeadlineTransaction } from '@/lib/flow/transactions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -62,11 +62,7 @@ export default function CommitDeadlinesPage() {
       const durationSeconds = minutes * 60;
 
       const transactionId = await fcl.mutate({
-        cadence: SET_COMMIT_DEADLINE,
-        args: (arg: any, t: any) => [
-          arg(gameId, t.UInt64),
-          arg(durationSeconds.toFixed(1), t.UFix64)
-        ],
+        ...setCommitDeadlineTransaction(gameId, durationSeconds.toFixed(1)),
         proposer: fcl.authz,
         payer: fcl.authz,
         authorizations: [fcl.authz],

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import * as fcl from '@onflow/fcl';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import { useGame } from '@/hooks/useGame';
-import { SUBMIT_REVEAL } from '@/lib/flow/cadence/transactions/SubmitReveal';
+import { submitRevealTransaction } from '@/lib/flow/transactions';
 import { GET_PLAYER_STATUS } from '@/lib/flow/cadence/scripts/GetPlayerStatus';
 import { getStoredVotingData, verifyVoteHash, clearVotingData } from '@/lib/utils/hashUtils';
 
@@ -81,7 +81,7 @@ export default function RevealVotePage() {
 
   // Check if user can reveal
   const canReveal = () => {
-    return gameState === 1 && 
+    return gameState === 2 && 
            playerStatus?.hasJoined && 
            playerStatus?.isActive &&
            !playerStatus?.hasRevealedThisRound &&
@@ -91,7 +91,7 @@ export default function RevealVotePage() {
   // Redirect if not in reveal phase or not eligible
   useEffect(() => {
     if (!loading && !loadingPlayerStatus && playerStatus && game) {
-      if (gameState !== 1) {
+      if (gameState !== 2) {
         router.push(`/game/${gameId}`);
       } else if (!playerStatus.hasJoined || !playerStatus.isActive) {
         router.push(`/game/${gameId}`);
@@ -132,12 +132,7 @@ export default function RevealVotePage() {
     
     try {
       const transactionId = await fcl.mutate({
-        cadence: SUBMIT_REVEAL,
-        args: (arg: any, t: any) => [
-          arg(gameId, t.UInt64),
-          arg(voteData.vote, t.Bool),
-          arg(voteData.salt, t.String)
-        ],
+        ...submitRevealTransaction(gameId, voteData.vote, voteData.salt),
         proposer: fcl.authz,
         payer: fcl.authz,
         authorizations: [fcl.authz],

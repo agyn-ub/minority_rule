@@ -6,7 +6,7 @@ import Link from 'next/link';
 import * as fcl from '@onflow/fcl';
 import { useFlowUser } from '@/hooks/useFlowUser';
 import { useGame } from '@/hooks/useGame';
-import { JOIN_GAME } from '@/lib/flow/cadence/transactions/JoinGame';
+import { joinGameTransaction } from '@/lib/flow/transactions';
 import { GET_PLAYER_STATUS } from '@/lib/flow/cadence/scripts/GetPlayerStatus';
 
 interface PlayerStatus {
@@ -71,10 +71,7 @@ export default function GameDetailsPage() {
     
     try {
       const transactionId = await fcl.mutate({
-        cadence: JOIN_GAME,
-        args: (arg: any, t: any) => [
-          arg(gameId, t.UInt64)
-        ],
+        ...joinGameTransaction(gameId),
         proposer: fcl.authz,
         payer: fcl.authz,
         authorizations: [fcl.authz],
@@ -106,8 +103,7 @@ export default function GameDetailsPage() {
     const stateName = game?.stateName;
     if (stateName) {
       switch (stateName) {
-        case 'setCommitDeadline': return { label: 'Setup: Setting Commit Deadline', color: 'bg-orange-100 text-orange-800' };
-        case 'setRevealDeadline': return { label: 'Setup: Setting Reveal Deadline', color: 'bg-orange-100 text-orange-800' };
+        case 'zeroPhase': return { label: 'Setup: Waiting for Commit Deadline', color: 'bg-orange-100 text-orange-800' };
         case 'commitPhase': return { label: 'Commit Phase', color: 'bg-yellow-100 text-yellow-800' };
         case 'revealPhase': return { label: 'Reveal Phase', color: 'bg-blue-100 text-blue-800' };
         case 'processingRound': return { label: 'Processing Round', color: 'bg-purple-100 text-purple-800' };
@@ -118,30 +114,29 @@ export default function GameDetailsPage() {
     
     // Fallback to numeric state
     switch (gameState) {
-      case 0: return { label: 'Setup: Commit Deadline', color: 'bg-orange-100 text-orange-800' };
-      case 1: return { label: 'Setup: Reveal Deadline', color: 'bg-orange-100 text-orange-800' };
-      case 2: return { label: 'Commit Phase', color: 'bg-yellow-100 text-yellow-800' };
-      case 3: return { label: 'Reveal Phase', color: 'bg-blue-100 text-blue-800' };
-      case 4: return { label: 'Processing Round', color: 'bg-purple-100 text-purple-800' };
-      case 5: return { label: 'Completed', color: 'bg-green-100 text-green-800' };
+      case 0: return { label: 'Setup: Waiting for Commit Deadline', color: 'bg-orange-100 text-orange-800' };
+      case 1: return { label: 'Commit Phase', color: 'bg-yellow-100 text-yellow-800' };
+      case 2: return { label: 'Reveal Phase', color: 'bg-blue-100 text-blue-800' };
+      case 3: return { label: 'Processing Round', color: 'bg-purple-100 text-purple-800' };
+      case 4: return { label: 'Completed', color: 'bg-green-100 text-green-800' };
       default: return { label: 'Unknown', color: 'bg-gray-100 text-gray-800' };
     }
   };
 
   const canJoinGame = () => {
-    return (gameState === 2 || game?.stateName === 'commitPhase') && 
+    return (gameState === 1 || game?.stateName === 'commitPhase') && 
            game?.currentRound === 1 && 
            !playerStatus?.hasJoined;
   };
 
   const canCommitVote = () => {
-    return (gameState === 2 || game?.stateName === 'commitPhase') && 
+    return (gameState === 1 || game?.stateName === 'commitPhase') && 
            playerStatus?.hasJoined && 
            playerStatus?.isActive;
   };
 
   const canRevealVote = () => {
-    return (gameState === 3 || game?.stateName === 'revealPhase') && 
+    return (gameState === 2 || game?.stateName === 'revealPhase') && 
            playerStatus?.hasJoined && 
            playerStatus?.isActive && 
            !playerStatus?.hasRevealedThisRound;
@@ -281,7 +276,7 @@ export default function GameDetailsPage() {
                 <span className="font-medium">Rounds Played:</span>
                 <span className="ml-2">{playerStatus.totalRoundsPlayed}</span>
               </div>
-              {gameState === 0 && (
+              {gameState === 1 && (
                 <>
                   <div>
                     <span className="font-medium">Commits This Round:</span>
@@ -289,7 +284,7 @@ export default function GameDetailsPage() {
                   </div>
                 </>
               )}
-              {gameState === 1 && (
+              {gameState === 2 && (
                 <>
                   <div>
                     <span className="font-medium">Reveals This Round:</span>
@@ -371,7 +366,7 @@ export default function GameDetailsPage() {
               )}
 
               {/* Game completed */}
-              {(gameState === 5 || game?.stateName === 'completed') && (
+              {(gameState === 4 || game?.stateName === 'completed') && (
                 <div className="bg-green-50 border border-green-200 rounded-md p-4">
                   <h3 className="font-semibold text-green-900 mb-2">Game Completed!</h3>
                   {playerStatus?.isWinner ? (
@@ -385,7 +380,7 @@ export default function GameDetailsPage() {
               )}
               
               {/* Game in setup phase */}
-              {(gameState === 0 || gameState === 1 || game?.stateName === 'setCommitDeadline' || game?.stateName === 'setRevealDeadline') && (
+              {(gameState === 0 || game?.stateName === 'zeroPhase') && (
                 <div className="bg-orange-50 border border-orange-200 rounded-md p-4">
                   <h3 className="font-semibold text-orange-900 mb-2">Game Setup in Progress</h3>
                   {isCreator ? (
@@ -401,18 +396,18 @@ export default function GameDetailsPage() {
               )}
 
               {/* Eliminated - highest priority */}
-              {playerStatus?.hasJoined && !playerStatus?.isActive && !(gameState === 5 || game?.stateName === 'completed') ? (
+              {playerStatus?.hasJoined && !playerStatus?.isActive && !(gameState === 4 || game?.stateName === 'completed') ? (
                 <div className="bg-red-50 border border-red-200 rounded-md p-4">
                   <p className="text-red-800">You have been eliminated from this game.</p>
                 </div>
               ) : /* Already participated - lower priority */
-              playerStatus?.hasJoined && !canCommitVote() && !canRevealVote() && !(gameState === 5 || game?.stateName === 'completed') ? (
+              playerStatus?.hasJoined && !canCommitVote() && !canRevealVote() && !(gameState === 4 || game?.stateName === 'completed') ? (
                 <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                   <p className="text-blue-800">
-                    {(gameState === 2 || game?.stateName === 'commitPhase') && 'You have already joined this game. Wait for commit phase actions.'}
-                    {(gameState === 3 || game?.stateName === 'revealPhase') && playerStatus.hasRevealedThisRound && 'You have revealed your vote. Wait for round processing.'}
-                    {(gameState === 3 || game?.stateName === 'revealPhase') && !playerStatus.hasRevealedThisRound && 'You can now reveal your vote!'}
-                    {(gameState === 4 || game?.stateName === 'processingRound') && 'Round is being processed. Please wait.'}
+                    {(gameState === 1 || game?.stateName === 'commitPhase') && 'You have already joined this game. Wait for commit phase actions.'}
+                    {(gameState === 2 || game?.stateName === 'revealPhase') && playerStatus.hasRevealedThisRound && 'You have revealed your vote. Wait for round processing.'}
+                    {(gameState === 2 || game?.stateName === 'revealPhase') && !playerStatus.hasRevealedThisRound && 'You can now reveal your vote!'}
+                    {(gameState === 3 || game?.stateName === 'processingRound') && 'Round is being processed. Please wait.'}
                   </p>
                 </div>
               ) : null}

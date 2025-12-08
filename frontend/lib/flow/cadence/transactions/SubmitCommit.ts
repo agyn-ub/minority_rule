@@ -1,7 +1,7 @@
 export const SUBMIT_COMMIT = `
 import MinorityRuleGame from 0xMinorityRuleGame
 
-transaction(gameId: UInt64, commitHash: String) {
+transaction(gameId: UInt64, commitHash: String, contractAddress: Address) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
     let game: &MinorityRuleGame.Game
@@ -11,7 +11,7 @@ transaction(gameId: UInt64, commitHash: String) {
         self.player = signer.address
         
         // Borrow the game manager from the contract account
-        self.gameManager = getAccount(0xMinorityRuleGame)
+        self.gameManager = getAccount(contractAddress)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         
