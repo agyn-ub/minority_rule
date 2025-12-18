@@ -172,6 +172,13 @@
 				"location": "six-account.pkey"
 			}
 		},
+		"ten-account": {
+			"address": "e9715103f4d3b3fc",
+			"key": {
+				"type": "file",
+				"location": "ten-account.pkey"
+			}
+		},
 		"three-account": {
 			"address": "fe89b379c3f4ac9b",
 			"key": {

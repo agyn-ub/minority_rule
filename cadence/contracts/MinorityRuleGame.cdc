@@ -7,7 +7,6 @@ access(all) contract MinorityRuleGame {
     access(all) event GameCreated(gameId: UInt64, entryFee: UFix64, creator: Address, questionText: String)
     access(all) event PlayerJoined(gameId: UInt64, player: Address, amount: UFix64, totalPlayers: UInt32)
     access(all) event GameStarted(gameId: UInt64, totalPlayers: UInt32)
-    access(all) event VoteSubmitted(gameId: UInt64, round: UInt8, player: Address, vote: Bool)
     access(all) event VoteCommitted(gameId: UInt64, round: UInt8, player: Address)
     access(all) event VoteRevealed(gameId: UInt64, round: UInt8, player: Address, vote: Bool)
     access(all) event CommitPhaseStarted(gameId: UInt64, round: UInt8, deadline: UFix64)
@@ -24,7 +23,6 @@ access(all) contract MinorityRuleGame {
     access(all) var nextGameId: UInt64
     access(all) var totalFeePercentage: UFix64  // Total fee (2%)
     access(all) let platformFeeRecipient: Address
-    access(self) var userGameHistory: {Address: [UInt64]}  // Maps user address to array of game IDs they've joined
     
     // Storage paths
     access(all) let GameStoragePath: StoragePath
@@ -181,6 +179,24 @@ access(all) contract MinorityRuleGame {
             )
         }
         
+        access(all) fun setCommitDeadline(durationSeconds: UFix64) {
+            pre {
+                self.state == GameState.zeroPhase: "Game must be in commit phase"
+                durationSeconds > 0.0: "Duration must be positive"
+            }
+            
+            let deadline = getCurrentBlock().timestamp + durationSeconds
+            self.commitDeadline = deadline
+            self.state = GameState.commitPhase
+            
+            emit CommitDeadlineSet(
+                gameId: self.gameId,
+                round: self.currentRound,
+                duration: durationSeconds,
+                deadline: deadline
+            )
+        }
+
         // Player joins the game
         access(all) fun joinGame(player: Address, payment: @{FungibleToken.Vault}) {
             pre {
@@ -197,12 +213,6 @@ access(all) contract MinorityRuleGame {
             // Store player in array
             self.players.append(player)
             self.playerVoteHistory[player] = []
-            
-            // Add game to user's history
-            if MinorityRuleGame.userGameHistory[player] == nil {
-                MinorityRuleGame.userGameHistory[player] = []
-            }
-            MinorityRuleGame.userGameHistory[player]!.append(self.gameId)
             
             emit PlayerJoined(
                 gameId: self.gameId, 
@@ -236,6 +246,28 @@ access(all) contract MinorityRuleGame {
                 player: player
             )
         }
+
+        // Set reveal deadline
+        access(all) fun setRevealDeadline(durationSeconds: UFix64) {
+            pre {
+                self.state == GameState.commitPhase: "Game must be in commit phase"
+                self.currentRoundCommits.length > 0: "Cannot transition to reveal phase - no commits submitted"
+                durationSeconds > 0.0: "Duration must be positive"
+                self.commitDeadline < getCurrentBlock().timestamp: "Commit deadline must be passed"
+            }
+            
+            let deadline = getCurrentBlock().timestamp + durationSeconds
+            self.revealDeadline = deadline
+            self.state = GameState.revealPhase
+
+            emit RevealDeadlineSet(
+                gameId: self.gameId,
+                round: self.currentRound,
+                duration: durationSeconds,
+                deadline: deadline
+            )
+        }
+        
         
         // Submit vote reveal (actual vote + salt for verification)
         access(all) fun submitReveal(player: Address, vote: Bool, salt: String) {
@@ -358,45 +390,7 @@ access(all) contract MinorityRuleGame {
                 platformFee: platformFee
             )
         }
-
-        access(all) fun setCommitDeadline(durationSeconds: UFix64) {
-            pre {
-                self.state == GameState.zeroPhase: "Game must be in commit phase"
-                durationSeconds > 0.0: "Duration must be positive"
-            }
-            
-            let deadline = getCurrentBlock().timestamp + durationSeconds
-            self.commitDeadline = deadline
-            self.state = GameState.commitPhase
-            
-            emit CommitDeadlineSet(
-                gameId: self.gameId,
-                round: self.currentRound,
-                duration: durationSeconds,
-                deadline: deadline
-            )
-        }
-        
-        access(all) fun setRevealDeadline(durationSeconds: UFix64) {
-            pre {
-                self.state == GameState.commitPhase: "Game must be in commit phase"
-                self.currentRoundCommits.length > 0: "Cannot transition to reveal phase - no commits submitted"
-                durationSeconds > 0.0: "Duration must be positive"
-                self.commitDeadline < getCurrentBlock().timestamp: "Commit deadline must be passed"
-            }
-            
-            let deadline = getCurrentBlock().timestamp + durationSeconds
-            self.revealDeadline = deadline
-            self.state = GameState.revealPhase
-
-            emit RevealDeadlineSet(
-                gameId: self.gameId,
-                round: self.currentRound,
-                duration: durationSeconds,
-                deadline: deadline
-            )
-        }
-        
+   
         // Get game info
         access(all) fun getGameInfo(): {String: AnyStruct} {
             return {
@@ -588,11 +582,7 @@ access(all) contract MinorityRuleGame {
         ): UInt64
         
         // Pagination methods
-        access(all) fun getGamesPage(startId: UInt64, limit: UInt64): {String: AnyStruct}
         access(all) fun getTotalGamesCount(): UInt64
-        
-        // User history methods
-        access(all) fun getUserGameHistory(player: Address): [UInt64]
     }
     
     // Game Manager resource
@@ -626,117 +616,6 @@ access(all) contract MinorityRuleGame {
         access(all) fun getTotalGamesCount(): UInt64 {
             return MinorityRuleGame.nextGameId - 1
         }
-        
-        // Get paginated games with full pagination metadata (descending order only)
-        // Only returns games in commitPhase (state 0) and first round (round 1)
-        access(all) fun getGamesPage(startId: UInt64, limit: UInt64): {String: AnyStruct} {
-            var gamesList: [{String: AnyStruct}] = []
-            var gamesCollected: UInt64 = 0
-            let maxGameId = MinorityRuleGame.nextGameId - 1
-            
-            // Initialize pagination info
-            var hasNext = false
-            var hasPrevious = false
-            var nextStartId: UInt64? = nil
-            var previousStartId: UInt64? = nil
-            var firstGameId: UInt64? = nil
-            var lastGameId: UInt64? = nil
-            
-            if maxGameId == 0 {
-                return {
-                    "games": gamesList,
-                    "pagination": {
-                        "startId": startId,
-                        "limit": limit,
-                        "hasNext": false,
-                        "hasPrevious": false,
-                        "nextStartId": nil,
-                        "previousStartId": nil,
-                        "returnedCount": 0 as UInt64,
-                        "totalGames": 0 as UInt64
-                    }
-                }
-            }
-            
-            var gameId: UInt64 = startId
-            
-            // Descending: Start from startId and go backwards
-            while gameId >= 1 && gamesCollected < limit {
-                if let gameRef = &self.games[gameId] as &Game? {
-                    let gameInfo = gameRef.getGameInfo()
-                    let state = gameInfo["state"] as! UInt8
-                    let currentRound = gameInfo["currentRound"] as! UInt8
-                    
-                    // Only include games in commitPhase (state 0) and first round (round 1)
-                    if state == 0 && currentRound == 1 {
-                        gamesList.append(gameInfo)
-                        gamesCollected = gamesCollected + 1
-                        
-                        // Track first and last game IDs for pagination
-                        if firstGameId == nil {
-                            firstGameId = gameId
-                        }
-                        lastGameId = gameId
-                    }
-                }
-                gameId = gameId - 1
-            }
-            
-            // Check if there are more games before the last scanned game
-            if gameId >= 1 {
-                var checkId = gameId
-                while checkId >= 1 {
-                    if let gameRef = &self.games[checkId] as &Game? {
-                        let gameInfo = gameRef.getGameInfo()
-                        let state = gameInfo["state"] as! UInt8
-                        let currentRound = gameInfo["currentRound"] as! UInt8
-                        if state == 0 && currentRound == 1 {
-                            hasNext = true
-                            nextStartId = checkId
-                            break
-                        }
-                    }
-                    checkId = checkId - 1
-                }
-            }
-            
-            // Check if there are more games after the first scanned game
-            if let firstId = firstGameId {
-                var checkId = firstId + 1
-                while checkId <= maxGameId {
-                    if let gameRef = &self.games[checkId] as &Game? {
-                        let gameInfo = gameRef.getGameInfo()
-                        let state = gameInfo["state"] as! UInt8
-                        let currentRound = gameInfo["currentRound"] as! UInt8
-                        if state == 0 && currentRound == 1 {
-                            hasPrevious = true
-                            previousStartId = checkId
-                            break
-                        }
-                    }
-                    checkId = checkId + 1
-                }
-            }
-            
-            return {
-                "games": gamesList,
-                "pagination": {
-                    "startId": startId,
-                    "limit": limit,
-                    "hasNext": hasNext,
-                    "hasPrevious": hasPrevious,
-                    "nextStartId": nextStartId,
-                    "previousStartId": previousStartId,
-                    "returnedCount": gamesCollected,
-                    "totalGames": maxGameId
-                }
-            }
-        }
-        
-        // Get user's game history
-        access(all) fun getUserGameHistory(player: Address): [UInt64] {
-            return MinorityRuleGame.userGameHistory[player] ?? []
-        }
     }
     
     // Get contract account
@@ -748,7 +627,6 @@ access(all) contract MinorityRuleGame {
         self.nextGameId = 1
         self.totalFeePercentage = 0.02  // 2% platform fee
         self.platformFeeRecipient = platformFeeRecipient
-        self.userGameHistory = {}
         
         self.GameStoragePath = /storage/MinorityRuleGameManager
         self.GamePublicPath = /public/MinorityRuleGameManager
