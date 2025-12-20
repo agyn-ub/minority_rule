@@ -120,3 +120,46 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Flow Profile Component Dropdown Fixes */
+@layer components {
+  /* Fix any dropdown that might be absolutely positioned */
+  .relative [role="menu"],
+  .relative [role="listbox"],
+  .relative div[style*="position: absolute"] {
+    right: 0;
+    left: auto;
+    @apply min-w-[240px] z-[100];
+    @apply bg-white border border-gray-200 rounded-lg shadow-lg;
+    @apply overflow-visible;
+    transform: translateX(0);
+  }
+  
+  /* Ensure Profile component container doesn't clip */
+  .relative {
+    @apply overflow-visible;
+  }
+  
+  /* General dropdown positioning fixes */
+  [data-onflow-profile-dropdown],
+  .flow-profile-dropdown,
+  div[data-testid*="profile"],
+  div[data-testid*="dropdown"] {
+    @apply absolute right-0 top-full mt-2 z-[100] min-w-[240px];
+    @apply bg-white border border-gray-200 rounded-lg shadow-lg;
+    @apply overflow-visible;
+  }
+  
+  /* Ensure dropdown content is properly sized */
+  [data-onflow-profile-dropdown] > div,
+  .flow-profile-dropdown > div {
+    @apply w-full;
+  }
+  
+  /* Style dropdown buttons properly */
+  [data-onflow-profile-dropdown] button,
+  .flow-profile-dropdown button {
+    @apply w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors;
+    @apply flex items-center gap-2;
+  }
+}

@@ -20,12 +20,12 @@ export function FlowProviderWrapper({ children }: FlowProviderWrapperProps) {
         flowNetwork: "testnet",
 
         // App metadata
-        appDetailTitle: "Flow React SDK Starter",
+        appDetailTitle: "Minority Rule Game",
         appDetailUrl:
           typeof window !== "undefined" ? window.location.origin : "",
         appDetailIcon: "https://avatars.githubusercontent.com/u/62387156?v=4",
         appDetailDescription:
-          "A Next.js starter template for Flow blockchain applications",
+          "A decentralized minority rule game on Flow blockchain",
 
         // Optional configuration
         computeLimit: 1000,
