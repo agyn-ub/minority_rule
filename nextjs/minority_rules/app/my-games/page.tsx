@@ -67,7 +67,7 @@ export default function MyGamesPage() {
       return {
         status: 'needs_deadline',
         text: 'Needs Deadline',
-        color: 'text-orange-600 bg-orange-50',
+        color: 'text-muted-foreground bg-muted',
         description: 'Set commit deadline to allow players to join'
       };
     }
@@ -79,7 +79,7 @@ export default function MyGamesPage() {
       return {
         status: 'completed',
         text: 'Completed',
-        color: 'text-gray-600 bg-gray-50',
+        color: 'text-muted-foreground bg-gray-50',
         description: 'Game has ended'
       };
     }
@@ -88,7 +88,7 @@ export default function MyGamesPage() {
       return {
         status: 'active',
         text: 'Active',
-        color: 'text-green-600 bg-green-50',
+        color: 'text-foreground bg-accent',
         description: 'Players can join and vote'
       };
     }
@@ -96,7 +96,7 @@ export default function MyGamesPage() {
     return {
       status: 'active',
       text: 'In Progress',
-      color: 'text-blue-600 bg-blue-50',
+      color: 'text-foreground bg-accent',
       description: 'Game is running'
     };
   };
@@ -121,17 +121,17 @@ export default function MyGamesPage() {
 
   if (!user?.loggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="bg-card rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+          <h1 className="text-2xl font-bold text-foreground mb-4">
             Connect Wallet Required
           </h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-muted-foreground mb-6">
             Please connect your Flow wallet to view your games.
           </p>
           <Link
             href="/"
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-center block"
+            className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-center block"
           >
             Go to Homepage
           </Link>
@@ -141,14 +141,14 @@ export default function MyGamesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
             My Games
           </h1>
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             Manage and monitor your created Minority Rule games
           </p>
         </div>
@@ -156,7 +156,7 @@ export default function MyGamesPage() {
         {/* Action Bar */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between">
           {/* Filter Tabs */}
-          <div className="flex space-x-1 bg-white rounded-lg p-1 shadow-sm">
+          <div className="flex space-x-1 bg-card rounded-lg p-1 shadow-sm">
             {[
               { key: 'all', label: 'All Games' },
               { key: 'needs_deadline', label: 'Needs Setup' },
@@ -168,8 +168,8 @@ export default function MyGamesPage() {
                 onClick={() => setFilter(tab.key as any)}
                 className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-colors ${
                   filter === tab.key
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {tab.label}
@@ -180,7 +180,7 @@ export default function MyGamesPage() {
           {/* Create New Game Button */}
           <Link
             href="/create"
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium text-center"
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium text-center"
           >
             Create New Game
           </Link>
@@ -189,15 +189,15 @@ export default function MyGamesPage() {
         {/* Loading State */}
         {loading && (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-600">Loading your games...</p>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+            <p className="mt-2 text-muted-foreground">Loading your games...</p>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-700">{error}</p>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+            <p className="text-destructive">{error}</p>
           </div>
         )}
 
@@ -209,23 +209,23 @@ export default function MyGamesPage() {
                 <div className="mb-4">
                   {games.length === 0 ? (
                     <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No games created yet</h3>
-                      <p className="text-gray-600 mb-6">
+                      <h3 className="text-lg font-medium text-foreground mb-2">No games created yet</h3>
+                      <p className="text-muted-foreground mb-6">
                         Create your first Minority Rule game to get started
                       </p>
                       <Link
                         href="/create"
-                        className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                        className="inline-block bg-primary text-primary-foreground px-6 py-3 rounded-lg hover:bg-primary/90 transition-colors font-medium"
                       >
                         Create Your First Game
                       </Link>
                     </div>
                   ) : (
                     <div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      <h3 className="text-lg font-medium text-foreground mb-2">
                         No {filter === 'all' ? '' : filter.replace('_', ' ')} games found
                       </h3>
-                      <p className="text-gray-600">
+                      <p className="text-muted-foreground">
                         Try changing the filter or create a new game
                       </p>
                     </div>
@@ -238,39 +238,39 @@ export default function MyGamesPage() {
                   const statusInfo = getGameStatus(game);
 
                   return (
-                    <div key={game.game_id} className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
+                    <div key={game.game_id} className="bg-card rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
                       {/* Status Badge */}
                       <div className="flex items-center justify-between mb-4">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
                           {statusInfo.text}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-muted-foreground">
                           Game #{game.game_id}
                         </span>
                       </div>
 
                       {/* Question */}
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3 line-clamp-2">
+                      <h3 className="text-lg font-semibold text-foreground mb-3 line-clamp-2">
                         {game.question_text}
                       </h3>
 
                       {/* Game Details */}
                       <div className="space-y-2 mb-4">
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Entry Fee:</span>
+                          <span className="text-muted-foreground">Entry Fee:</span>
                           <span className="font-medium">{game.entry_fee} FLOW</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Players:</span>
+                          <span className="text-muted-foreground">Players:</span>
                           <span className="font-medium">{game.total_players}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Round:</span>
+                          <span className="text-muted-foreground">Round:</span>
                           <span className="font-medium">{game.current_round}</span>
                         </div>
                         {game.commit_deadline && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-600">Deadline:</span>
+                            <span className="text-muted-foreground">Deadline:</span>
                             <span className="font-medium text-xs">
                               {new Date(game.commit_deadline).toLocaleDateString()}
                             </span>
@@ -279,7 +279,7 @@ export default function MyGamesPage() {
                       </div>
 
                       {/* Status Description */}
-                      <p className="text-xs text-gray-500 mb-4">
+                      <p className="text-xs text-muted-foreground mb-4">
                         {statusInfo.description}
                       </p>
 
@@ -287,22 +287,14 @@ export default function MyGamesPage() {
                       <div className="flex gap-2">
                         <Link
                           href={`/my-games/${game.game_id}`}
-                          className="flex-1 bg-blue-600 text-white py-2 px-3 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium text-center"
+                          className="w-full bg-blue-600 text-white py-2 px-3 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium text-center"
                         >
                           Manage
                         </Link>
-                        {statusInfo.status === 'needs_deadline' && (
-                          <Link
-                            href={`/my-games/${game.game_id}?action=set-deadline`}
-                            className="flex-1 bg-orange-600 text-white py-2 px-3 rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium text-center"
-                          >
-                            Set Deadline
-                          </Link>
-                        )}
                       </div>
 
                       {/* Created Date */}
-                      <p className="text-xs text-gray-500 mt-3 text-center">
+                      <p className="text-xs text-muted-foreground mt-3 text-center">
                         Created {new Date(game.created_at).toLocaleDateString()}
                       </p>
                     </div>
@@ -315,30 +307,30 @@ export default function MyGamesPage() {
 
         {/* Stats Summary */}
         {!loading && !error && games.length > 0 && (
-          <div className="mt-12 bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Your Game Statistics</h3>
+          <div className="mt-12 bg-card rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">Your Game Statistics</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
                 <p className="text-2xl font-bold text-blue-600">{games.length}</p>
-                <p className="text-sm text-gray-600">Total Games</p>
+                <p className="text-sm text-muted-foreground">Total Games</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-green-600">
                   {games.filter(g => getGameStatus(g).status === 'active').length}
                 </p>
-                <p className="text-sm text-gray-600">Active Games</p>
+                <p className="text-sm text-muted-foreground">Active Games</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-orange-600">
+                <p className="text-2xl font-bold text-muted-foreground">
                   {games.filter(g => getGameStatus(g).status === 'needs_deadline').length}
                 </p>
-                <p className="text-sm text-gray-600">Need Setup</p>
+                <p className="text-sm text-muted-foreground">Need Setup</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-600">
+                <p className="text-2xl font-bold text-muted-foreground">
                   {games.filter(g => getGameStatus(g).status === 'completed').length}
                 </p>
-                <p className="text-sm text-gray-600">Completed</p>
+                <p className="text-sm text-muted-foreground">Completed</p>
               </div>
             </div>
           </div>

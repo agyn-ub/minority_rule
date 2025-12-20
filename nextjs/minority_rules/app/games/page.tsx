@@ -69,13 +69,13 @@ export default function BrowseGamesPage() {
   const formatGameState = (state: string) => {
     switch (state) {
       case 'commit_phase':
-        return { text: 'Voting Open', color: 'text-green-600 bg-green-50' };
+        return { text: 'Voting Open', color: 'text-foreground bg-accent' };
       case 'reveal_phase':
-        return { text: 'Revealing', color: 'text-blue-600 bg-blue-50' };
+        return { text: 'Revealing', color: 'text-foreground bg-accent' };
       case 'completed':
-        return { text: 'Completed', color: 'text-gray-600 bg-gray-50' };
+        return { text: 'Completed', color: 'text-muted-foreground bg-gray-50' };
       default:
-        return { text: 'Unknown', color: 'text-gray-600 bg-gray-50' };
+        return { text: 'Unknown', color: 'text-muted-foreground bg-gray-50' };
     }
   };
 
@@ -87,17 +87,17 @@ export default function BrowseGamesPage() {
 
   if (!user?.loggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="bg-card rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+          <h1 className="text-2xl font-bold text-foreground mb-4">
             Connect Wallet Required
           </h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-muted-foreground mb-6">
             Please connect your Flow wallet to browse games.
           </p>
           <Link
             href="/"
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-center block"
+            className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-center block"
           >
             Go to Homepage
           </Link>
@@ -107,21 +107,21 @@ export default function BrowseGamesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
             Browse Games
           </h1>
-          <p className="text-gray-600">
+          <p className="text-muted-foreground">
             Discover and join Minority Rule games on Flow blockchain
           </p>
         </div>
 
         {/* Filter Tabs */}
         <div className="mb-6">
-          <div className="flex space-x-1 bg-white rounded-lg p-1 shadow-sm">
+          <div className="flex space-x-1 bg-card rounded-lg p-1 shadow-sm">
             {[
               { key: 'all', label: 'All Games' },
               { key: 'active', label: 'Active Games' },
@@ -132,8 +132,8 @@ export default function BrowseGamesPage() {
                 onClick={() => setFilter(tab.key as any)}
                 className={`px-4 py-2 rounded-md font-medium text-sm transition-colors ${
                   filter === tab.key
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {tab.label}
@@ -145,15 +145,15 @@ export default function BrowseGamesPage() {
         {/* Loading State */}
         {loading && (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-600">Loading games...</p>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+            <p className="mt-2 text-muted-foreground">Loading games...</p>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-700">{error}</p>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+            <p className="text-destructive">{error}</p>
           </div>
         )}
 
@@ -162,12 +162,12 @@ export default function BrowseGamesPage() {
           <>
             {filteredGames.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-gray-600 mb-4">
+                <p className="text-muted-foreground mb-4">
                   {filter === 'all' ? 'No games found' : `No ${filter} games found`}
                 </p>
                 <Link
                   href="/create"
-                  className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  className="inline-block bg-primary text-primary-foreground px-6 py-2 rounded-lg hover:bg-primary/90 transition-colors"
                 >
                   Create First Game
                 </Link>
@@ -179,69 +179,54 @@ export default function BrowseGamesPage() {
                   const isActive = game.game_state === 'commit_phase' || game.game_state === 'reveal_phase';
 
                   return (
-                    <div key={game.game_id} className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
+                    <div key={game.game_id} className="bg-card rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
                       {/* Game State Badge */}
                       <div className="flex items-center justify-between mb-4">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${stateInfo.color}`}>
                           {stateInfo.text}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-muted-foreground">
                           Game #{game.game_id}
                         </span>
                       </div>
 
                       {/* Question */}
-                      <h3 className="text-lg font-semibold text-gray-900 mb-3 line-clamp-2">
+                      <h3 className="text-lg font-semibold text-foreground mb-3 line-clamp-2">
                         {game.question_text}
                       </h3>
 
                       {/* Game Details */}
                       <div className="space-y-2 mb-4">
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Entry Fee:</span>
+                          <span className="text-muted-foreground">Entry Fee:</span>
                           <span className="font-medium">{game.entry_fee} FLOW</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Players:</span>
+                          <span className="text-muted-foreground">Players:</span>
                           <span className="font-medium">{game.total_players}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Round:</span>
+                          <span className="text-muted-foreground">Round:</span>
                           <span className="font-medium">{game.current_round}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Creator:</span>
+                          <span className="text-muted-foreground">Creator:</span>
                           <span className="font-mono text-xs">{formatAddress(game.creator_address)}</span>
                         </div>
                       </div>
 
                       {/* Actions */}
                       <div className="flex gap-2">
-                        {isActive ? (
-                          <button
-                            className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                            onClick={() => {
-                              // TODO: Implement join game
-                              alert('Join game functionality coming soon!');
-                            }}
-                          >
-                            Join Game
-                          </button>
-                        ) : (
-                          <button
-                            className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
-                            onClick={() => {
-                              // TODO: Implement view details
-                              alert('View details functionality coming soon!');
-                            }}
-                          >
-                            View Details
-                          </button>
-                        )}
+                        <Link
+                          href={`/games/${game.game_id}`}
+                          className="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium text-center"
+                        >
+                          {isActive ? 'Join Game' : 'View Details'}
+                        </Link>
                       </div>
 
                       {/* Created Date */}
-                      <p className="text-xs text-gray-500 mt-3 text-center">
+                      <p className="text-xs text-muted-foreground mt-3 text-center">
                         Created {new Date(game.created_at).toLocaleDateString()}
                       </p>
                     </div>
@@ -257,7 +242,7 @@ export default function BrowseGamesPage() {
           <div className="text-center mt-12">
             <Link
               href="/create"
-              className="inline-block bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium"
+              className="inline-block bg-primary text-primary-foreground px-8 py-3 rounded-lg hover:bg-primary/90 transition-colors font-medium"
             >
               Create New Game
             </Link>
@@ -268,7 +253,7 @@ export default function BrowseGamesPage() {
         <div className="mt-8 text-center">
           <Link
             href="/"
-            className="text-blue-600 hover:text-blue-700 text-sm"
+            className="text-primary hover:text-primary/80 text-sm"
           >
             ← Back to Home
           </Link>

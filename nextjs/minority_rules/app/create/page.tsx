@@ -103,17 +103,17 @@ export default function CreateGamePage() {
 
   if (!user?.loggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="bg-card rounded-lg shadow-lg p-8 max-w-md w-full mx-4 border border-border">
+          <h1 className="text-2xl font-bold text-foreground mb-4">
             Connect Wallet Required
           </h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-muted-foreground mb-6">
             Please connect your Flow wallet to create a new game.
           </p>
           <Link
             href="/"
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-center block"
+            className="w-full bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-center block"
           >
             Go to Homepage
           </Link>
@@ -124,21 +124,21 @@ export default function CreateGamePage() {
 
   if (createdGameId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
-          <h1 className="text-2xl font-bold text-green-900 mb-4">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="bg-card rounded-lg shadow-lg p-8 max-w-md w-full mx-4 border border-border">
+          <h1 className="text-2xl font-bold text-foreground mb-4">
             🎉 Game Created!
           </h1>
           
           {!deadlineSet ? (
             <>
-              <p className="text-gray-600 mb-4">
+              <p className="text-muted-foreground mb-4">
                 Your game has been created! Now set the commit deadline to allow players to start voting.
               </p>
               
               {/* Deadline Setting Form */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <h3 className="text-sm font-medium text-blue-900 mb-4">
+              <div className="bg-muted border border-border rounded-lg p-4 mb-6">
+                <h3 className="text-sm font-medium text-foreground mb-4">
                   ⏰ Set Commit Deadline
                 </h3>
                 
@@ -159,13 +159,13 @@ export default function CreateGamePage() {
             </>
           ) : (
             <>
-              <p className="text-gray-600 mb-4">
+              <p className="text-muted-foreground mb-4">
                 Your game has been successfully created and configured! Players can now join and vote.
               </p>
               
               {/* Completion status */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                <h3 className="text-sm font-medium text-green-900 mb-2">
+              <div className="bg-accent border border-border rounded-lg p-4 mb-4">
+                <h3 className="text-sm font-medium text-foreground mb-2">
                   ✅ Setup Complete
                 </h3>
                 <div className="space-y-1 text-sm text-green-700">
@@ -177,12 +177,12 @@ export default function CreateGamePage() {
             </>
           )}
           
-          <p className="text-xs text-gray-500 mb-6">
+          <p className="text-xs text-muted-foreground mb-6">
             Use the block explorer link below to verify the transaction on Flow testnet and see the actual blockchain status.
           </p>
           
           <div className="space-y-3 mb-6">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="bg-accent border border-border rounded-lg p-4">
               <p className="text-sm text-green-700 mb-2">
                 <strong>✅ Blockchain:</strong> Transaction confirmed
               </p>
@@ -203,7 +203,7 @@ export default function CreateGamePage() {
             </div>
             
             {dbWriteError ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="bg-muted border border-border rounded-lg p-4">
                 <p className="text-sm text-yellow-700">
                   <strong>⚠️ Database:</strong> {dbWriteError}
                 </p>
@@ -212,7 +212,7 @@ export default function CreateGamePage() {
                 </p>
               </div>
             ) : (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="bg-accent border border-border rounded-lg p-4">
                 <p className="text-sm text-green-700">
                   <strong>✅ Database:</strong> Game saved successfully
                 </p>
@@ -228,7 +228,7 @@ export default function CreateGamePage() {
             </Link>
             <Link
               href="/games"
-              className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors text-center text-sm"
+              className="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-center text-sm"
             >
               View Games
             </Link>
@@ -242,7 +242,7 @@ export default function CreateGamePage() {
                 setDeadlineSet(false);
                 setActualGameId(null);
               }}
-              className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              className="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm"
             >
               Create Another
             </button>
@@ -255,14 +255,14 @@ export default function CreateGamePage() {
   const isFormValid = questionText.trim().length > 0 && parseFloat(entryFee) > 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+    <div className="min-h-screen bg-background py-8">
       <div className="max-w-md mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="bg-card rounded-lg shadow-lg p-8 border border-border">
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            <h1 className="text-2xl font-bold text-foreground mb-2">
               Create New Game
             </h1>
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               Start a new Minority Rule game on Flow blockchain
             </p>
           </div>
@@ -270,7 +270,7 @@ export default function CreateGamePage() {
           <form className="space-y-6">
             {/* Question Text */}
             <div>
-              <label htmlFor="question" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="question" className="block text-sm font-medium text-foreground mb-2">
                 Game Question
               </label>
               <textarea
@@ -278,18 +278,18 @@ export default function CreateGamePage() {
                 value={questionText}
                 onChange={(e) => setQuestionText(e.target.value)}
                 placeholder="e.g., Will Bitcoin reach $100k by 2024?"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent resize-none bg-background text-foreground"
                 rows={3}
                 maxLength={200}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {questionText.length}/200 characters
               </p>
             </div>
 
             {/* Entry Fee */}
             <div>
-              <label htmlFor="entryFee" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="entryFee" className="block text-sm font-medium text-foreground mb-2">
                 Entry Fee (FLOW)
               </label>
               <input
@@ -300,24 +300,24 @@ export default function CreateGamePage() {
                 step="0.1"
                 min="0.1"
                 placeholder="1.0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Minimum 0.1 FLOW required
               </p>
             </div>
 
             {/* Creator Info */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Game Creator</h3>
-              <p className="text-xs font-mono text-gray-600">
+            <div className="bg-muted rounded-lg p-4">
+              <h3 className="text-sm font-medium text-foreground mb-2">Game Creator</h3>
+              <p className="text-xs font-mono text-muted-foreground">
                 {user.addr}
               </p>
             </div>
 
             {/* Database status */}
             {isWritingToDatabase && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="bg-muted border border-border rounded-lg p-3">
                 <p className="text-sm text-blue-700">
                   💾 Saving game to database...
                 </p>
@@ -336,8 +336,8 @@ export default function CreateGamePage() {
               disabled={!isFormValid || isWritingToDatabase}
               className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
                 isFormValid && !isWritingToDatabase
-                  ? "bg-blue-600 text-white hover:bg-blue-700"
-                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "bg-muted text-muted-foreground cursor-not-allowed"
               }`}
               transaction={{
                 cadence: CREATE_GAME_TRANSACTION,
@@ -382,10 +382,10 @@ export default function CreateGamePage() {
             />
           </form>
 
-          <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="mt-6 pt-6 border-t border-border">
             <Link
               href="/"
-              className="text-sm text-blue-600 hover:text-blue-700"
+              className="text-sm text-primary hover:text-primary/80"
             >
               ← Back to Home
             </Link>

@@ -112,8 +112,8 @@ export default function SetCommitDeadline({
 
   if (!user?.loggedIn) {
     return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <p className="text-yellow-800 text-sm">
+      <div className="bg-muted border border-border rounded-lg p-4">
+        <p className="text-muted-foreground text-sm">
           Please connect your wallet to set commit deadline.
         </p>
       </div>
@@ -147,8 +147,8 @@ export default function SetCommitDeadline({
 
       {/* Preview */}
       {isFormValid && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p className="text-sm text-blue-700">
+        <div className="bg-muted border border-border rounded-lg p-3">
+          <p className="text-sm text-muted-foreground">
             <strong>Deadline will be set to:</strong>{" "}
             {new Date(Date.now() + parseFloat(deadlineHours) * 60 * 60 * 1000).toLocaleString()}
           </p>
@@ -167,8 +167,8 @@ export default function SetCommitDeadline({
         disabled={!isFormValid || isProcessing}
         className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
           isFormValid && !isProcessing
-            ? "bg-blue-600 text-white hover:bg-blue-700"
-            : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+            : "bg-muted text-muted-foreground cursor-not-allowed"
         }`}
         transaction={{
           cadence: SET_COMMIT_DEADLINE_TRANSACTION,

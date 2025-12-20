@@ -1,9 +1,10 @@
 "use client";
 
-import { Profile, Connect, useFlowCurrentUser } from "@onflow/react-sdk";
+import { Connect, useFlowCurrentUser } from "@onflow/react-sdk";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import UserProfile from "./UserProfile";
 
 export default function Navbar() {
   const { user } = useFlowCurrentUser();
@@ -28,13 +29,13 @@ export default function Navbar() {
   const visibleLinks = navLinks.filter(link => !link.authRequired || isLoggedIn);
 
   return (
-    <nav className="bg-white shadow-sm border-b border-gray-200 relative z-50">
+    <nav className="bg-background shadow-sm border-b border-border relative z-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* App Title */}
           <div className="flex-shrink-0">
             <Link href="/">
-              <h1 className="text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer">
+              <h1 className="text-xl font-bold text-foreground hover:text-foreground/80 transition-colors cursor-pointer">
                 Minority Rule Game
               </h1>
             </Link>
@@ -48,8 +49,8 @@ export default function Navbar() {
                 href={link.href}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActiveLink(link.href)
-                    ? "text-blue-600 bg-blue-50"
-                    : "text-gray-700 hover:text-blue-600 hover:bg-gray-50"
+                    ? "text-accent-foreground bg-accent"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
                 }`}
               >
                 {link.label}
@@ -62,7 +63,7 @@ export default function Navbar() {
             {/* Mobile menu button */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+              className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               <span className="sr-only">Open main menu</span>
               {!isMobileMenuOpen ? (
@@ -79,19 +80,7 @@ export default function Navbar() {
             {/* Auth Components */}
             <div className="flex-shrink-0 relative">
               {isLoggedIn ? (
-                <div className="relative">
-                  <Profile
-                    balanceType="combined"
-                    onDisconnect={() => console.log("User disconnected")}
-                    balanceTokens={[
-                      {
-                        symbol: "FLOW",
-                        name: "Flow Token", 
-                        vaultIdentifier: "A.1654653399040a61.FlowToken.Vault",
-                      },
-                    ]}
-                  />
-                </div>
+                <UserProfile />
               ) : (
                 <Connect
                   balanceTokens={[
@@ -111,7 +100,7 @@ export default function Navbar() {
         {/* Mobile Navigation Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden">
-            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t border-gray-200 bg-white">
+            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t border-border bg-background">
               {visibleLinks.map((link) => (
                 <Link
                   key={link.href}
@@ -119,8 +108,8 @@ export default function Navbar() {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
                     isActiveLink(link.href)
-                      ? "text-blue-600 bg-blue-50"
-                      : "text-gray-700 hover:text-blue-600 hover:bg-gray-50"
+                      ? "text-accent-foreground bg-accent"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
                   }`}
                 >
                   {link.label}
