@@ -110,6 +110,65 @@ export default function CreateGamePage() {
     );
   }
 
+  // Show success screen after game creation
+  if (gameCreatedEvent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="bg-card rounded-lg shadow-lg p-8 max-w-md w-full mx-4 border border-border">
+          <h1 className="text-2xl font-bold text-foreground mb-4">
+            🎉 Game Created!
+          </h1>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <strong className="text-green-700">Game ID:</strong>
+                <p className="font-mono text-green-600">{gameCreatedEvent.data.gameId}</p>
+              </div>
+              <div>
+                <strong className="text-green-700">Entry Fee:</strong>
+                <p className="font-mono text-green-600">{gameCreatedEvent.data.entryFee} FLOW</p>
+              </div>
+              <div className="col-span-2">
+                <strong className="text-green-700">Creator:</strong>
+                <p className="font-mono text-green-600 break-all">{gameCreatedEvent.data.creator}</p>
+              </div>
+            </div>
+            <div className="mt-3">
+              <strong className="text-green-700">Question:</strong>
+              <p className="text-green-600">{gameCreatedEvent.data.questionText}</p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Link
+              href="/"
+              className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors text-center text-sm"
+            >
+              Home
+            </Link>
+            <Link
+              href="/games"
+              className="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-center text-sm"
+            >
+              View Games
+            </Link>
+            <button
+              onClick={() => {
+                setQuestionText("");
+                setEntryFee("1.0");
+                setGameCreatedEvent(null);
+              }}
+              className="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm"
+            >
+              Create Another
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const isFormValid = questionText.trim().length > 0 && parseFloat(entryFee) > 0;
 
   return (
@@ -173,42 +232,11 @@ export default function CreateGamePage() {
               </p>
             </div>
 
-
-            {/* Latest Event Display */}
-            {gameCreatedEvent && (
-              <div className="bg-green-100 border-green-300 shadow-lg border rounded-lg p-4 mb-4">
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <strong className="text-green-700">Game ID:</strong>
-                    <p className="font-mono text-green-600">{gameCreatedEvent.data.gameId}</p>
-                  </div>
-                  <div>
-                    <strong className="text-green-700">Entry Fee:</strong>
-                    <p className="font-mono text-green-600">{gameCreatedEvent.data.entryFee} FLOW</p>
-                  </div>
-                  <div>
-                    <strong className="text-green-700">Creator:</strong>
-                    <p className="font-mono text-green-600 break-all">{gameCreatedEvent.data.creator}</p>
-                  </div>
-                  <div>
-                    <strong className="text-green-700">Transaction ID:</strong>
-                    <p className="font-mono text-green-600 break-all">{gameCreatedEvent.transactionId}</p>
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <strong className="text-green-700">Question:</strong>
-                  <p className="text-green-600">{gameCreatedEvent.data.questionText}</p>
-                </div>
-              </div>
-            )}
-
             {/* Submit Button */}
             <TransactionButton
               label="Create Game"
               className=
               "w-full py-3 px-4 rounded-lg font-medium transition-colors"
-              disabled={false}
               transaction={{
                 cadence: CREATE_GAME_TRANSACTION,
                 args: (arg, t) => [
