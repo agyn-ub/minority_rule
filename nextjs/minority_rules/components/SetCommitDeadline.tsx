@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { TransactionButton, useFlowCurrentUser } from "@onflow/react-sdk";
-import { supabase } from "@/lib/supabase";
 
 // SetCommitDeadline transaction cadence
 const SET_COMMIT_DEADLINE_TRANSACTION = `
@@ -51,62 +50,17 @@ export default function SetCommitDeadline({
 }: SetCommitDeadlineProps) {
   const { user } = useFlowCurrentUser();
   const [deadlineHours, setDeadlineHours] = useState("24");
-  const [isProcessing, setIsProcessing] = useState(false);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
-  // Update database with deadline information
-  const updateDatabase = async (transactionId: string) => {
-    try {
-      const deadlineDate = new Date();
-      deadlineDate.setHours(deadlineDate.getHours() + parseFloat(deadlineHours));
-      
-      const { error } = await supabase
-        .from('games')
-        .update({
-          commit_deadline: deadlineDate.toISOString(),
-          deadline_set_transaction_id: transactionId
-        })
-        .eq('game_id', parseInt(gameId));
 
-      if (error) {
-        console.error('Failed to update deadline in database:', error);
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error('Database update error:', error);
-      return false;
-    }
-  };
-
-  const handleSuccess = async (transactionId: string) => {
+  const handleSuccess = (transactionId: string) => {
     console.log("Deadline set! Transaction ID:", transactionId);
-    setIsProcessing(true);
-    
-    try {
-      // Update database
-      const dbSuccess = await updateDatabase(transactionId);
-      
-      if (dbSuccess) {
-        // Call the success callback if provided
-        onSuccess?.(transactionId);
-      } else {
-        // Database update failed, but blockchain transaction succeeded
-        console.warn('Blockchain transaction succeeded but database update failed');
-        onSuccess?.(transactionId);
-      }
-    } catch (error) {
-      console.error('Post-transaction processing failed:', error);
-      onError?.(error);
-    } finally {
-      setIsProcessing(false);
-    }
+    onSuccess?.(transactionId);
   };
 
   const handleError = (error: any) => {
     console.error("Failed to set deadline:", error);
-    setIsProcessing(false);
     onError?.(error);
   };
 
@@ -137,8 +91,7 @@ export default function SetCommitDeadline({
           min="1"
           max="168"
           step="1"
-          disabled={isProcessing}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <p className="text-xs text-gray-500 mt-1">
           Recommended: 24-72 hours for players to participate (Max: 7 days)
@@ -158,15 +111,13 @@ export default function SetCommitDeadline({
       {/* Transaction Button */}
       <TransactionButton
         label={
-          isProcessing 
-            ? "Processing..." 
-            : isFormValid 
-              ? buttonText
-              : "Enter valid hours"
+          isFormValid 
+            ? buttonText
+            : "Enter valid hours"
         }
-        disabled={!isFormValid || isProcessing}
+        disabled={!isFormValid}
         className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
-          isFormValid && !isProcessing
+          isFormValid
             ? "bg-primary text-primary-foreground hover:bg-primary/90"
             : "bg-muted text-muted-foreground cursor-not-allowed"
         }`}
