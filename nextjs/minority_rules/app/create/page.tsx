@@ -4,7 +4,6 @@ import { useState } from "react";
 import { TransactionButton, useFlowCurrentUser, useFlowEvents } from "@onflow/react-sdk";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import SetCommitDeadline from "@/components/SetCommitDeadline";
 
 // CreateGame transaction cadence
 const CREATE_GAME_TRANSACTION = `
@@ -76,6 +75,8 @@ export default function CreateGamePage() {
         const gameId = event.data.gameId;
         console.log("Extracted real game ID from event:", gameId);
 
+
+
       },
       onError: (error) => {
         console.error("Error listening for GameCreated events:", error);
@@ -132,6 +133,17 @@ export default function CreateGamePage() {
               <div className="col-span-2">
                 <strong className="text-green-700">Creator:</strong>
                 <p className="font-mono text-green-600 break-all">{gameCreatedEvent.data.creator}</p>
+              </div>
+              <div className="col-span-2">
+                <strong className="text-green-700">Transaction: </strong>
+                <a
+                  href={`https://testnet.flowscan.io/transaction/${gameCreatedEvent.transactionId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium break-all"
+                >
+                  🔗 View on Flow Explorer
+                </a>
               </div>
             </div>
             <div className="mt-3">

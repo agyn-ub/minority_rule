@@ -4,7 +4,7 @@ import "FlowToken"
 access(all) contract MinorityRuleGame {
 
     // Events - Full game history stored here
-    access(all) event GameCreated(gameId: UInt64, entryFee: UFix64, creator: Address, questionText: String)
+    access(all) event GameCreated(gameId: UInt64, entryFee: UFix64, creator: Address, questionText: String, phase: UInt8)
     access(all) event PlayerJoined(gameId: UInt64, player: Address, amount: UFix64, totalPlayers: UInt32)
     access(all) event GameStarted(gameId: UInt64, totalPlayers: UInt32)
     access(all) event VoteCommitted(gameId: UInt64, round: UInt8, player: Address)
@@ -168,7 +168,8 @@ access(all) contract MinorityRuleGame {
                 gameId: self.gameId,
                 entryFee: self.entryFee,
                 creator: self.creator,
-                questionText: self.questionText
+                questionText: self.questionText,
+                phase: self.state.rawValue
             )
             
             // Emit commit phase started event
