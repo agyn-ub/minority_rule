@@ -205,16 +205,10 @@ export default function CreateGamePage() {
 
             {/* Submit Button */}
             <TransactionButton
-              label={
-                isFormValid
-                  ? "Create Game on Blockchain"
-                  : "Please fill all fields"
-              }
-              disabled={!isFormValid}
-              className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${isFormValid
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "bg-muted text-muted-foreground cursor-not-allowed"
-                }`}
+              label="Create Game"
+              className=
+              "w-full py-3 px-4 rounded-lg font-medium transition-colors"
+              disabled={false}
               transaction={{
                 cadence: CREATE_GAME_TRANSACTION,
                 args: (arg, t) => [
