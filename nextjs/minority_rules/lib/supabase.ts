@@ -20,7 +20,7 @@ export type Game = {
   entry_fee: number
   creator_address: string
   current_round: number
-  game_state: 'commit_phase' | 'reveal_phase' | 'completed'
+  game_state: number // 0=zeroPhase, 1=commitPhase, 2=revealPhase, 3=processingRound, 4=completed
   commit_deadline: string | null
   reveal_deadline: string | null
   total_players: number

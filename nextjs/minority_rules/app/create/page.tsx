@@ -4,6 +4,7 @@ import { useState } from "react";
 import { TransactionButton, useFlowCurrentUser, useFlowEvents } from "@onflow/react-sdk";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { supabase, type Game } from "@/lib/supabase";
 
 // CreateGame transaction cadence
 const CREATE_GAME_TRANSACTION = `
@@ -51,6 +52,41 @@ export default function CreateGamePage() {
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
+  // Save game to Supabase
+  const saveGameToSupabase = async (eventData: any) => {
+    try {
+      const gameData = {
+        game_id: parseInt(eventData.gameId),
+        question_text: eventData.questionText,
+        entry_fee: parseFloat(eventData.entryFee),
+        creator_address: eventData.creator,
+        current_round: 1,
+        game_state: parseInt(eventData.phase), // Raw enum value (0-4)
+        commit_deadline: null,
+        reveal_deadline: null,
+        total_players: 0 // Creator must join separately
+      };
+
+      console.log("Saving game to Supabase:", gameData);
+      
+      const { data, error } = await supabase
+        .from('games')
+        .insert([gameData])
+        .select();
+
+      if (error) {
+        console.error("Error saving game to Supabase:", error);
+        throw error;
+      }
+
+      console.log("Game saved successfully to Supabase:", data);
+      return data;
+    } catch (error) {
+      console.error("Failed to save game to Supabase:", error);
+      // Don't throw - we don't want to break the UI if Supabase fails
+    }
+  };
+
   // Create validated event type
   const eventType = contractAddress
     ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.GameCreated`
@@ -75,6 +111,8 @@ export default function CreateGamePage() {
         const gameId = event.data.gameId;
         console.log("Extracted real game ID from event:", gameId);
 
+        // Save game to Supabase
+        await saveGameToSupabase(event.data);
 
 
       },
