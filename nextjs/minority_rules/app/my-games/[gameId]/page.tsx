@@ -320,7 +320,7 @@ export default function MyGameDetailsPage() {
         {/* Phase Management */}
         <div className="grid md:grid-cols-2 gap-6">
           {/* Set Commit Deadline */}
-          {true && (
+          {game.game_state === 0 && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 Start Commit Phase
@@ -353,7 +353,7 @@ export default function MyGameDetailsPage() {
                   cadence: SET_COMMIT_DEADLINE_TRANSACTION,
                   args: (arg, t) => [
                     arg(parseInt(gameId), t.UInt64),
-                    arg(parseFloat(commitDuration || "3600"), t.UFix64),
+                    arg(parseFloat(commitDuration || "3600").toFixed(8), t.UFix64),
                     arg(contractAddress, t.Address),
                   ],
                   limit: 999,
@@ -361,8 +361,7 @@ export default function MyGameDetailsPage() {
                 mutation={{
                   onSuccess: (transactionId) => {
                     console.log("Commit deadline set! Transaction ID:", transactionId);
-                    // Refresh page or update state
-                    setTimeout(() => window.location.reload(), 2000);
+                    alert("Commit deadline set successfully!");
                   },
                   onError: (error) => {
                     console.error("Failed to set commit deadline:", error);
@@ -407,7 +406,7 @@ export default function MyGameDetailsPage() {
                   cadence: SET_REVEAL_DEADLINE_TRANSACTION,
                   args: (arg, t) => [
                     arg(parseInt(gameId), t.UInt64),
-                    arg(parseFloat(revealDuration || "1800"), t.UFix64),
+                    arg(parseFloat(revealDuration || "1800").toFixed(8), t.UFix64),
                     arg(contractAddress, t.Address),
                   ],
                   limit: 999,
@@ -415,7 +414,7 @@ export default function MyGameDetailsPage() {
                 mutation={{
                   onSuccess: (transactionId) => {
                     console.log("Reveal deadline set! Transaction ID:", transactionId);
-                    setTimeout(() => window.location.reload(), 2000);
+                    alert("Reveal deadline set successfully!");
                   },
                   onError: (error) => {
                     console.error("Failed to set reveal deadline:", error);
@@ -450,7 +449,7 @@ export default function MyGameDetailsPage() {
                 mutation={{
                   onSuccess: (transactionId) => {
                     console.log("Round processed! Transaction ID:", transactionId);
-                    setTimeout(() => window.location.reload(), 2000);
+                    alert("Round processed successfully!");
                   },
                   onError: (error) => {
                     console.error("Failed to process round:", error);
