@@ -5,6 +5,18 @@ import { useFlowCurrentUser } from "@onflow/react-sdk";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
+// Helper functions for game state
+const getGameStateName = (state: number): string => {
+  switch (state) {
+    case 0: return "Zero Phase";
+    case 1: return "Commit Phase";
+    case 2: return "Reveal Phase";
+    case 3: return "Processing Round";
+    case 4: return "Completed";
+    default: return "Unknown";
+  }
+};
+
 // Type for game data from Supabase
 type Game = {
   game_id: number;
@@ -12,7 +24,9 @@ type Game = {
   entry_fee: number;
   creator_address: string;
   current_round: number;
-  game_state: 'commit_phase' | 'reveal_phase' | 'completed';
+  game_state: number; // 0=zeroPhase, 1=commitPhase, 2=revealPhase, 3=processingRound, 4=completed
+  commit_deadline: string | null;
+  reveal_deadline: string | null;
   total_players: number;
   created_at: string;
 };
@@ -57,25 +71,70 @@ export default function BrowseGamesPage() {
   // Filter games based on selected filter
   const filteredGames = games.filter(game => {
     if (filter === 'active') {
-      return game.game_state === 'commit_phase' || game.game_state === 'reveal_phase';
+      return game.game_state === 1 || game.game_state === 2; // commitPhase or revealPhase
     }
     if (filter === 'completed') {
-      return game.game_state === 'completed';
+      return game.game_state === 4; // completed
     }
     return true; // 'all'
   });
 
-  // Format game state for display
-  const formatGameState = (state: string) => {
+  // Format game state for display with enhanced styling
+  const formatGameState = (state: number, commitDeadline?: string | null) => {
+    const now = new Date();
+    
     switch (state) {
-      case 'commit_phase':
-        return { text: 'Voting Open', color: 'text-foreground bg-accent' };
-      case 'reveal_phase':
-        return { text: 'Revealing', color: 'text-foreground bg-accent' };
-      case 'completed':
-        return { text: 'Completed', color: 'text-muted-foreground bg-gray-50' };
+      case 0: // zeroPhase
+        return { 
+          text: 'Setting Up', 
+          color: 'text-gray-700 bg-gray-100 border-gray-200',
+          description: 'Game setup in progress'
+        };
+      case 1: // commitPhase
+        if (commitDeadline) {
+          const deadline = new Date(commitDeadline);
+          const isOpen = now < deadline;
+          return isOpen 
+            ? { 
+                text: 'Open for Joining', 
+                color: 'text-green-700 bg-green-100 border-green-200',
+                description: 'Players can join and vote'
+              }
+            : { 
+                text: 'Commit Ended', 
+                color: 'text-orange-700 bg-orange-100 border-orange-200',
+                description: 'Waiting for reveal phase'
+              };
+        }
+        return { 
+          text: 'Commit Phase', 
+          color: 'text-blue-700 bg-blue-100 border-blue-200',
+          description: 'Commit phase active'
+        };
+      case 2: // revealPhase
+        return { 
+          text: 'Reveal Phase', 
+          color: 'text-purple-700 bg-purple-100 border-purple-200',
+          description: 'Players revealing votes'
+        };
+      case 3: // processingRound
+        return { 
+          text: 'Processing', 
+          color: 'text-indigo-700 bg-indigo-100 border-indigo-200',
+          description: 'Calculating results'
+        };
+      case 4: // completed
+        return { 
+          text: 'Completed', 
+          color: 'text-gray-700 bg-gray-100 border-gray-200',
+          description: 'Game finished'
+        };
       default:
-        return { text: 'Unknown', color: 'text-muted-foreground bg-gray-50' };
+        return { 
+          text: 'Unknown', 
+          color: 'text-red-700 bg-red-100 border-red-200',
+          description: 'Unknown state'
+        };
     }
   };
 
@@ -175,16 +234,21 @@ export default function BrowseGamesPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredGames.map((game) => {
-                  const stateInfo = formatGameState(game.game_state);
-                  const isActive = game.game_state === 'commit_phase' || game.game_state === 'reveal_phase';
+                  const stateInfo = formatGameState(game.game_state, game.commit_deadline);
+                  const isActive = game.game_state === 1 || game.game_state === 2; // commitPhase or revealPhase
 
                   return (
                     <div key={game.game_id} className="bg-card rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
                       {/* Game State Badge */}
                       <div className="flex items-center justify-between mb-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${stateInfo.color}`}>
-                          {stateInfo.text}
-                        </span>
+                        <div className="flex flex-col">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${stateInfo.color}`}>
+                            {stateInfo.text}
+                          </span>
+                          <span className="text-xs text-muted-foreground mt-1">
+                            {getGameStateName(game.game_state)}
+                          </span>
+                        </div>
                         <span className="text-xs text-muted-foreground">
                           Game #{game.game_id}
                         </span>
@@ -209,6 +273,18 @@ export default function BrowseGamesPage() {
                           <span className="text-muted-foreground">Round:</span>
                           <span className="font-medium">{game.current_round}</span>
                         </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Phase:</span>
+                          <span className="font-medium text-xs">{getGameStateName(game.game_state)}</span>
+                        </div>
+                        {game.commit_deadline && game.game_state === 1 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Join Until:</span>
+                            <span className="font-medium text-xs">
+                              {new Date(game.commit_deadline).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Creator:</span>
                           <span className="font-mono text-xs">{formatAddress(game.creator_address)}</span>

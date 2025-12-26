@@ -1,9 +1,60 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { useFlowCurrentUser } from "@onflow/react-sdk";
+import { useFlowCurrentUser, TransactionButton, useFlowEvents } from "@onflow/react-sdk";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+
+// Join Game transaction cadence
+const JOIN_GAME_TRANSACTION = `
+import "MinorityRuleGame"
+import "FungibleToken"
+import "FlowToken"
+
+transaction(gameId: UInt64, contractAddress: Address) {
+    
+    let gameManager: &{MinorityRuleGame.GameManagerPublic}
+    let paymentVault: @FlowToken.Vault
+    let game: &MinorityRuleGame.Game
+    
+    prepare(signer: auth(Storage, Capabilities) &Account) {
+        self.gameManager = getAccount(contractAddress)
+            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+            ?? panic("Could not borrow game manager from public capability")
+        
+        self.game = self.gameManager.borrowGame(gameId: gameId)
+            ?? panic("Game not found")
+        
+        // Get entry fee from game
+        let gameInfo = self.game.getGameInfo()
+        let entryFee = gameInfo["entryFee"]! as! UFix64
+        
+        // Withdraw payment from player's FlowToken vault
+        let flowVault = signer.storage.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault)
+            ?? panic("Could not borrow FlowToken vault from storage")
+        
+        self.paymentVault <- flowVault.withdraw(amount: entryFee)
+    }
+    
+    execute {
+        self.game.joinGame(player: self.paymentVault.owner!.address, payment: <-self.paymentVault)
+        
+        log("Player joined game ".concat(gameId.toString()))
+    }
+}
+`;
+
+// Helper functions for game state
+const getGameStateName = (state: number): string => {
+  switch (state) {
+    case 0: return "Zero Phase";
+    case 1: return "Commit Phase";
+    case 2: return "Reveal Phase";
+    case 3: return "Processing Round";
+    case 4: return "Completed";
+    default: return "Unknown";
+  }
+};
 
 // Type for game data from Supabase
 type PublicGameDetails = {
@@ -12,7 +63,7 @@ type PublicGameDetails = {
   entry_fee: number;
   creator_address: string;
   current_round: number;
-  game_state: 'commit_phase' | 'reveal_phase' | 'completed';
+  game_state: number; // 0=zeroPhase, 1=commitPhase, 2=revealPhase, 3=processingRound, 4=completed
   commit_deadline: string | null;
   reveal_deadline: string | null;
   total_players: number;
@@ -29,11 +80,92 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   const { user } = useFlowCurrentUser();
   const resolvedParams = use(params);
   const gameId = resolvedParams.gameId;
-  
+
   const [game, setGame] = useState<PublicGameDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCreator, setIsCreator] = useState(false);
+  const [playerJoinedEvent, setPlayerJoinedEvent] = useState<any>(null);
+
+  const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
+
+  // Update game player count in Supabase when player joins
+  const updateGamePlayerCountInSupabase = async (eventData: any) => {
+    try {
+      console.log("=== PLAYER JOINED SUPABASE UPDATE ===");
+      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
+
+      const { data, error } = await supabase
+        .from('games')
+        .update({ total_players: parseInt(eventData.totalPlayers) })
+        .eq('game_id', parseInt(eventData.gameId))
+        .select();
+
+      if (error) {
+        console.error("=== SUPABASE ERROR DETAILS ===");
+        console.error("Full error object:", JSON.stringify(error, null, 2));
+        throw error;
+      }
+
+      console.log("Game player count updated successfully in Supabase:", data);
+      return data;
+    } catch (error) {
+      console.error("Failed to update game player count in Supabase:", error);
+    }
+  };
+
+  // Refetch game data
+  const refetchGameData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .eq('game_id', parseInt(gameId))
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        setGame(data);
+        console.log("Game data refreshed:", data);
+      }
+    } catch (err) {
+      console.error('Error refetching game data:', err);
+    }
+  };
+
+  // Listen for PlayerJoined events
+  const playerJoinedEventType = contractAddress
+    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.PlayerJoined`
+    : null;
+
+  if (playerJoinedEventType && contractAddress) {
+    useFlowEvents({
+      eventTypes: [playerJoinedEventType],
+      startHeight: 0,
+      onEvent: async (event) => {
+        console.log("==== PLAYER JOINED EVENT DETECTED ====");
+        console.log("Event type:", event.type);
+        console.log("Event transaction ID:", event.transactionId);
+        console.log("Event data:", event.data);
+        console.log("Full event object:", event);
+        console.log("======================================");
+
+        // Store the latest event for display
+        setPlayerJoinedEvent(event);
+
+        // Update game in Supabase
+        await updateGamePlayerCountInSupabase(event.data);
+
+        // Refresh game data if this is for our current game
+        if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
+          await refetchGameData();
+        }
+      },
+      onError: (error) => {
+        console.error("Error listening for PlayerJoined events:", error);
+      }
+    });
+  }
 
   // Fetch public game data
   useEffect(() => {
@@ -58,7 +190,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         }
 
         setGame(gameData);
-        
+
         // Check if current user is the creator
         if (user?.addr && gameData.creator_address === user.addr) {
           setIsCreator(true);
@@ -75,44 +207,78 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     fetchGameData();
   }, [gameId, user?.addr]);
 
-  // Determine game status for public view
+  // Determine game status for public view using real blockchain state
   const getGameStatus = (game: PublicGameDetails) => {
-    if (!game.commit_deadline) {
-      return {
-        status: 'setup',
-        text: 'Setting Up',
-        color: 'text-muted-foreground bg-muted border-border',
-        description: 'Game creator is still setting up this game'
-      };
-    }
-
     const now = new Date();
-    const deadline = new Date(game.commit_deadline);
-
-    if (game.game_state === 'completed') {
-      return {
-        status: 'completed',
-        text: 'Completed',
-        color: 'text-muted-foreground bg-gray-50 border-gray-200',
-        description: 'This game has ended'
-      };
+    
+    switch (game.game_state) {
+      case 0: // zeroPhase
+        return {
+          status: 'setup',
+          text: 'Setting Up',
+          color: 'text-muted-foreground bg-muted border-border',
+          description: 'Game creator is still setting up this game'
+        };
+      
+      case 1: // commitPhase
+        if (!game.commit_deadline) {
+          return {
+            status: 'setup',
+            text: 'Setting Up',
+            color: 'text-muted-foreground bg-muted border-border',
+            description: 'Commit deadline not yet set'
+          };
+        }
+        
+        const commitDeadline = new Date(game.commit_deadline);
+        if (now < commitDeadline) {
+          return {
+            status: 'open',
+            text: 'Open for Joining',
+            color: 'text-green-700 bg-green-50 border-green-200',
+            description: 'Players can join and submit vote commitments'
+          };
+        } else {
+          return {
+            status: 'commit_ended',
+            text: 'Commit Phase Ended',
+            color: 'text-orange-700 bg-orange-50 border-orange-200',
+            description: 'Waiting for reveal phase to start'
+          };
+        }
+      
+      case 2: // revealPhase
+        return {
+          status: 'revealing',
+          text: 'Reveal Phase',
+          color: 'text-blue-700 bg-blue-50 border-blue-200',
+          description: 'Players are revealing their votes'
+        };
+      
+      case 3: // processingRound
+        return {
+          status: 'processing',
+          text: 'Processing Round',
+          color: 'text-purple-700 bg-purple-50 border-purple-200',
+          description: 'Round results are being calculated'
+        };
+      
+      case 4: // completed
+        return {
+          status: 'completed',
+          text: 'Completed',
+          color: 'text-gray-700 bg-gray-50 border-gray-200',
+          description: 'This game has ended and prizes distributed'
+        };
+      
+      default:
+        return {
+          status: 'unknown',
+          text: 'Unknown State',
+          color: 'text-red-700 bg-red-50 border-red-200',
+          description: 'Game is in an unknown state'
+        };
     }
-
-    if (now < deadline && game.game_state === 'commit_phase') {
-      return {
-        status: 'open',
-        text: 'Open for Joining',
-        color: 'text-foreground bg-accent border-border',
-        description: 'Players can join and submit votes'
-      };
-    }
-
-    return {
-      status: 'in_progress',
-      text: 'In Progress',
-      color: 'text-foreground bg-accent border-border',
-      description: 'Game is currently running'
-    };
   };
 
   // Format address for display
@@ -195,42 +361,15 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           </ol>
         </nav>
 
-        {/* Game Header */}
-        <div className="bg-card rounded-lg shadow-lg p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-bold text-foreground">
-              Game #{game.game_id}
-            </h1>
-            <div className={`px-4 py-2 rounded-lg border ${statusInfo.color}`}>
-              <span className="font-medium text-sm">{statusInfo.text}</span>
-            </div>
-          </div>
-          
-          {/* Creator Notice */}
-          {isCreator && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <div className="flex items-center justify-between">
-                <p className="text-blue-800 text-sm">
-                  👑 You are the creator of this game
-                </p>
-                <Link
-                  href={`/my-games/${gameId}`}
-                  className="text-primary hover:text-primary/80 text-sm font-medium"
-                >
-                  Manage Game →
-                </Link>
-              </div>
-            </div>
-          )}
-
-          <p className="text-muted-foreground">{statusInfo.description}</p>
-        </div>
-
         {/* Game Details */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Main Game Info */}
           <div className="lg:col-span-2">
             <div className="bg-card rounded-lg shadow-lg p-6">
+              <h1 className="text-2xl font-bold text-foreground">
+                Game #{game.game_id}
+              </h1>
+              <br />
               <h2 className="text-xl font-semibold text-foreground mb-4">Game Question</h2>
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <p className="text-lg text-foreground font-medium">
@@ -305,47 +444,69 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                 </p>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Action Section */}
-        <div className="bg-card rounded-lg shadow-lg p-6 mb-8">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Actions</h3>
-          
-          {!user?.loggedIn ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">Connect your wallet to join this game</p>
-              <p className="text-sm text-muted-foreground">Use the profile button in the navigation bar</p>
-            </div>
-          ) : isCreator ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">You created this game</p>
-              <Link
-                href={`/my-games/${gameId}`}
-                className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                Manage Game
-              </Link>
-            </div>
-          ) : statusInfo.status === 'open' ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">Join this game and submit your vote</p>
-              <button
-                onClick={() => alert('Join game functionality coming soon!')}
-                className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors font-medium"
-              >
-                Join Game ({game.entry_fee} FLOW)
-              </button>
-            </div>
-          ) : statusInfo.status === 'setup' ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>This game is still being set up by the creator</p>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>This game is no longer accepting new players</p>
-            </div>
-          )}
+            {/* Join Game */}
+            {statusInfo.status === 'open' && user?.loggedIn && (
+              <div className="bg-card rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Join Game</h3>
+                <div className="text-center mb-4">
+                  <div className="text-2xl font-bold text-foreground mb-2">
+                    {game.entry_fee} FLOW
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Entry fee required
+                  </p>
+                </div>
+
+                <TransactionButton
+                  label="Join Game"
+                  className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                  transaction={{
+                    cadence: JOIN_GAME_TRANSACTION,
+                    args: (arg, t) => [
+                      arg(parseInt(gameId), t.UInt64),
+                      arg(contractAddress, t.Address),
+                    ],
+                    limit: 999,
+                  }}
+                  mutation={{
+                    onSuccess: (transactionId) => {
+                      console.log("Joined game! Transaction ID:", transactionId);
+                      alert("Successfully joined the game!");
+                    },
+                    onError: (error) => {
+                      console.error("Failed to join game:", error);
+                      alert("Failed to join game. Please make sure you have enough FLOW tokens and try again.");
+                    },
+                  }}
+                />
+
+                <div className="mt-3 text-xs text-muted-foreground text-center">
+                  <p>• You need {game.entry_fee} FLOW to join</p>
+                  <p>• Once joined, you can vote on the question</p>
+                  <p>• Only minority voters advance to next round</p>
+                </div>
+              </div>
+            )}
+
+            {/* Login Required for Join */}
+            {statusInfo.status === 'open' && !user?.loggedIn && (
+              <div className="bg-card rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Join Game</h3>
+                <div className="text-center">
+                  <p className="text-muted-foreground mb-4">
+                    Connect your wallet to join this game
+                  </p>
+                  <Link
+                    href="/"
+                    className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-lg hover:bg-primary/90 transition-colors font-medium text-center block"
+                  >
+                    Connect Wallet
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Navigation */}
