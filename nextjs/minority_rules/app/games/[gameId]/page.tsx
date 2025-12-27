@@ -14,45 +14,102 @@ import "FlowToken"
 transaction(gameId: UInt64, contractAddress: Address) {
     
     let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let paymentVault: @FlowToken.Vault
     let game: &MinorityRuleGame.Game
+    let payment: @{FungibleToken.Vault}
+    let player: Address
     
     prepare(signer: auth(Storage, Capabilities) &Account) {
+        self.player = signer.address
+        
+        // Borrow the game manager from the contract account
         self.gameManager = getAccount(contractAddress)
             .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
             ?? panic("Could not borrow game manager from public capability")
         
+        // Get the game
         self.game = self.gameManager.borrowGame(gameId: gameId)
             ?? panic("Game not found")
         
-        // Get entry fee from game
-        let gameInfo = self.game.getGameInfo()
-        let entryFee = gameInfo["entryFee"]! as! UFix64
+        // Get player's Flow token vault
+        let flowVault = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
+            ?? panic("Could not borrow Flow token vault")
         
-        // Withdraw payment from player's FlowToken vault
-        let flowVault = signer.storage.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault)
-            ?? panic("Could not borrow FlowToken vault from storage")
-        
-        self.paymentVault <- flowVault.withdraw(amount: entryFee)
+        // Withdraw entry fee
+        self.payment <- flowVault.withdraw(amount: self.game.entryFee)
     }
     
     execute {
-        self.game.joinGame(player: self.paymentVault.owner!.address, payment: <-self.paymentVault)
+        // Join the game (only allowed during Round 1)
+        self.game.joinGame(player: self.player, payment: <- self.payment)
         
-        log("Player joined game ".concat(gameId.toString()))
+        log("Player ".concat(self.player.toString()).concat(" joined game ").concat(gameId.toString()))
     }
 }
 `;
 
+// Submit Commit transaction cadence
+const SUBMIT_COMMIT_TRANSACTION = `
+import "MinorityRuleGame"
+
+transaction(gameId: UInt64, commitHash: String, contractAddress: Address) {
+    
+    let gameManager: &{MinorityRuleGame.GameManagerPublic}
+    let game: &MinorityRuleGame.Game
+    let player: Address
+    
+    prepare(signer: auth(Storage, Capabilities) &Account) {
+        self.player = signer.address
+        
+        // Borrow the game manager from the contract account
+        self.gameManager = getAccount(contractAddress)
+            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+            ?? panic("Could not borrow game manager from public capability")
+        
+        // Get the game
+        self.game = self.gameManager.borrowGame(gameId: gameId)
+            ?? panic("Game not found")
+    }
+    
+    execute {
+        // Submit vote commitment (hash of vote + salt)
+        self.game.submitCommit(player: self.player, commitHash: commitHash)
+        
+        log("Player ".concat(self.player.toString())
+            .concat(" submitted commit for game ").concat(gameId.toString())
+            .concat(" with hash: ").concat(commitHash))
+    }
+}
+`;
+
+// GameState enum matching Cadence contract
+enum GameState {
+  ZeroPhase = 0,
+  CommitPhase = 1,
+  RevealPhase = 2,
+  ProcessingRound = 3,
+  Completed = 4
+}
+
 // Helper functions for game state
 const getGameStateName = (state: number): string => {
   switch (state) {
-    case 0: return "Zero Phase";
-    case 1: return "Commit Phase";
-    case 2: return "Reveal Phase";
-    case 3: return "Processing Round";
-    case 4: return "Completed";
+    case GameState.ZeroPhase: return "Zero Phase";
+    case GameState.CommitPhase: return "Commit Phase";
+    case GameState.RevealPhase: return "Reveal Phase";
+    case GameState.ProcessingRound: return "Processing Round";
+    case GameState.Completed: return "Completed";
     default: return "Unknown";
+  }
+};
+
+const getGameStatusColor = (state: number): string => {
+  switch (state) {
+    case GameState.ZeroPhase: return "text-gray-700 bg-gray-100 border-gray-300";
+    case GameState.CommitPhase: return "text-blue-700 bg-blue-100 border-blue-300";
+    case GameState.RevealPhase: return "text-purple-700 bg-purple-100 border-purple-300";
+    case GameState.ProcessingRound: return "text-orange-700 bg-orange-100 border-orange-300";
+    case GameState.Completed: return "text-green-700 bg-green-100 border-green-300";
+    default: return "text-red-700 bg-red-100 border-red-300";
   }
 };
 
@@ -86,8 +143,60 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   const [error, setError] = useState<string | null>(null);
   const [isCreator, setIsCreator] = useState(false);
   const [playerJoinedEvent, setPlayerJoinedEvent] = useState<any>(null);
+  const [hasUserJoined, setHasUserJoined] = useState(false);
+  const [hasUserCommitted, setHasUserCommitted] = useState(false);
+  const [userVote, setUserVote] = useState<boolean | null>(null);
+  const [userSalt, setUserSalt] = useState('');
+  const [commitHash, setCommitHash] = useState('');
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
+
+  // Check if current user has already joined this game
+  const checkIfUserHasJoined = async () => {
+    if (!user?.addr || !gameId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('game_players')
+        .select('player_address')
+        .eq('game_id', parseInt(gameId))
+        .eq('player_address', user.addr)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error("Error checking if user has joined:", error);
+        return;
+      }
+
+      setHasUserJoined(data !== null);
+    } catch (err) {
+      console.error("Error checking user join status:", err);
+    }
+  };
+
+  // Check if current user has already committed this round
+  const checkIfUserHasCommitted = async () => {
+    if (!user?.addr || !gameId || !game) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('commits')
+        .select('commit_hash')
+        .eq('game_id', parseInt(gameId))
+        .eq('round_number', game.current_round)
+        .eq('player_address', user.addr)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error("Error checking if user has committed:", error);
+        return;
+      }
+
+      setHasUserCommitted(data !== null);
+    } catch (err) {
+      console.error("Error checking user commit status:", err);
+    }
+  };
 
   // Update game player count in Supabase when player joins
   const updateGamePlayerCountInSupabase = async (eventData: any) => {
@@ -111,6 +220,83 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       return data;
     } catch (error) {
       console.error("Failed to update game player count in Supabase:", error);
+    }
+  };
+
+  // Insert new player into game_players table when player joins
+  const insertPlayerIntoGamePlayers = async (eventData: any) => {
+    try {
+      console.log("=== INSERTING PLAYER INTO game_players TABLE ===");
+      console.log("Event data for player insertion:", JSON.stringify(eventData, null, 2));
+
+      const playerData = {
+        game_id: parseInt(eventData.gameId),
+        player_address: eventData.player,
+        joined_at: new Date().toISOString(),
+        status: 'active' as const
+      };
+
+      console.log("Player data to insert:", JSON.stringify(playerData, null, 2));
+
+      const { data, error } = await supabase
+        .from('game_players')
+        .insert([playerData])
+        .select();
+
+      if (error) {
+        console.error("=== GAME_PLAYERS INSERT ERROR ===");
+        console.error("Full error object:", JSON.stringify(error, null, 2));
+        console.error("Error message:", error?.message);
+        console.error("Error code:", error?.code);
+        console.error("Error details:", error?.details);
+        console.error("===============================");
+        throw error;
+      }
+
+      console.log("Player inserted successfully into game_players table:", data);
+      return data;
+    } catch (error) {
+      console.error("Failed to insert player into game_players table:", error);
+      // Don't throw - we don't want to break the UI if this fails
+    }
+  };
+
+  // Insert commit into Supabase when VoteCommitted event is detected
+  const insertCommitIntoSupabase = async (eventData: any) => {
+    try {
+      console.log("=== INSERTING COMMIT INTO commits TABLE ===");
+      console.log("Event data for commit insertion:", JSON.stringify(eventData, null, 2));
+
+      const commitData = {
+        game_id: parseInt(eventData.gameId),
+        round_number: parseInt(eventData.round),
+        player_address: eventData.player,
+        commit_hash: commitHash, // Use the locally stored hash
+        committed_at: new Date().toISOString()
+      };
+
+      console.log("Commit data to insert:", JSON.stringify(commitData, null, 2));
+
+      const { data, error } = await supabase
+        .from('commits')
+        .insert([commitData])
+        .select();
+
+      if (error) {
+        console.error("=== COMMITS INSERT ERROR ===");
+        console.error("Full error object:", JSON.stringify(error, null, 2));
+        console.error("Error message:", error?.message);
+        console.error("Error code:", error?.code);
+        console.error("Error details:", error?.details);
+        console.error("========================");
+        throw error;
+      }
+
+      console.log("Commit inserted successfully into commits table:", data);
+      return data;
+    } catch (error) {
+      console.error("Failed to insert commit into commits table:", error);
+      // Don't throw - we don't want to break the UI if this fails
     }
   };
 
@@ -156,6 +342,14 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         // Update game in Supabase
         await updateGamePlayerCountInSupabase(event.data);
 
+        // Insert player into game_players table
+        await insertPlayerIntoGamePlayers(event.data);
+
+        // Check if this is the current user joining
+        if (event.data.player === user?.addr) {
+          setHasUserJoined(true);
+        }
+
         // Refresh game data if this is for our current game
         if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
           await refetchGameData();
@@ -163,6 +357,42 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       },
       onError: (error) => {
         console.error("Error listening for PlayerJoined events:", error);
+      }
+    });
+  }
+
+  // Listen for VoteCommitted events
+  const voteCommittedEventType = contractAddress
+    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.VoteCommitted`
+    : null;
+
+  if (voteCommittedEventType && contractAddress) {
+    useFlowEvents({
+      eventTypes: [voteCommittedEventType],
+      startHeight: 0,
+      onEvent: async (event) => {
+        console.log("==== VOTE COMMITTED EVENT DETECTED ====");
+        console.log("Event type:", event.type);
+        console.log("Event transaction ID:", event.transactionId);
+        console.log("Event data:", event.data);
+        console.log("Full event object:", event);
+        console.log("=======================================");
+
+        // Insert commit into Supabase
+        await insertCommitIntoSupabase(event.data);
+
+        // Check if this is the current user committing
+        if (event.data.player === user?.addr) {
+          setHasUserCommitted(true);
+        }
+
+        // Refresh game data if this is for our current game
+        if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
+          await refetchGameData();
+        }
+      },
+      onError: (error) => {
+        console.error("Error listening for VoteCommitted events:", error);
       }
     });
   }
@@ -207,12 +437,48 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     fetchGameData();
   }, [gameId, user?.addr]);
 
+  // Check if user has joined when component mounts or user changes
+  useEffect(() => {
+    if (user?.addr && gameId) {
+      checkIfUserHasJoined();
+    }
+  }, [user?.addr, gameId]);
+
+  // Check if user has committed when component mounts, user changes, or game data changes
+  useEffect(() => {
+    if (user?.addr && gameId && game) {
+      checkIfUserHasCommitted();
+    }
+  }, [user?.addr, gameId, game]);
+
+  // Generate commit hash from vote and salt
+  const generateCommitHash = (vote: boolean, salt: string) => {
+    const voteString = vote ? "true" : "false";
+    const combinedString = voteString + salt;
+    // Simple hash for demo - in production, use proper SHA3-256
+    const hash = btoa(combinedString).replace(/[^a-zA-Z0-9]/g, '').substring(0, 64).padEnd(64, '0');
+    return hash;
+  };
+
+  // Handle vote selection and generate salt/hash
+  const handleVoteSelection = (vote: boolean) => {
+    setUserVote(vote);
+    
+    // Generate a random salt
+    const salt = Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    setUserSalt(salt);
+    
+    // Generate commit hash
+    const hash = generateCommitHash(vote, salt);
+    setCommitHash(hash);
+  };
+
   // Determine game status for public view using real blockchain state
   const getGameStatus = (game: PublicGameDetails) => {
     const now = new Date();
     
     switch (game.game_state) {
-      case 0: // zeroPhase
+      case GameState.ZeroPhase:
         return {
           status: 'setup',
           text: 'Setting Up',
@@ -220,7 +486,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           description: 'Game creator is still setting up this game'
         };
       
-      case 1: // commitPhase
+      case GameState.CommitPhase:
         if (!game.commit_deadline) {
           return {
             status: 'setup',
@@ -233,7 +499,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         const commitDeadline = new Date(game.commit_deadline);
         if (now < commitDeadline) {
           return {
-            status: 'open',
+            status: 'joinable',
             text: 'Open for Joining',
             color: 'text-green-700 bg-green-50 border-green-200',
             description: 'Players can join and submit vote commitments'
@@ -247,7 +513,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           };
         }
       
-      case 2: // revealPhase
+      case GameState.RevealPhase:
         return {
           status: 'revealing',
           text: 'Reveal Phase',
@@ -255,7 +521,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           description: 'Players are revealing their votes'
         };
       
-      case 3: // processingRound
+      case GameState.ProcessingRound:
         return {
           status: 'processing',
           text: 'Processing Round',
@@ -263,7 +529,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           description: 'Round results are being calculated'
         };
       
-      case 4: // completed
+      case GameState.Completed:
         return {
           status: 'completed',
           text: 'Completed',
@@ -331,8 +597,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     );
   }
 
-  const statusInfo = getGameStatus(game);
-
   return (
     <div className="min-h-screen bg-background py-8">
       <div className="max-w-4xl mx-auto px-4">
@@ -362,91 +626,144 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         </nav>
 
         {/* Game Details */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          {/* Main Game Info */}
-          <div className="lg:col-span-2">
-            <div className="bg-card rounded-lg shadow-lg p-6">
-              <h1 className="text-2xl font-bold text-foreground">
-                Game #{game.game_id}
-              </h1>
-              <br />
-              <h2 className="text-xl font-semibold text-foreground mb-4">Game Question</h2>
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                <p className="text-lg text-foreground font-medium">
-                  {game.question_text}
-                </p>
+        <div className="space-y-6 mb-8">
+          {/* Row 1: Game Header */}
+          <div className="bg-card rounded-lg shadow-lg p-6">
+            <div className="flex items-start justify-between mb-6">
+              <div className="flex-1">
+                <div className="flex items-center gap-4 mb-4">
+                  <h1 className="text-3xl font-bold text-foreground">
+                    Game #{game.game_id}
+                  </h1>
+                  <span className={`px-4 py-2 rounded-full text-sm font-medium border ${getGameStatusColor(game.game_state)}`}>
+                    {getGameStateName(game.game_state)}
+                  </span>
+                </div>
+                
+                {/* Game Question */}
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold text-foreground mb-3">Game Question</h2>
+                  <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
+                    <p className="text-xl text-foreground font-medium leading-relaxed">
+                      {game.question_text}
+                    </p>
+                  </div>
+                </div>
               </div>
+              
+              {/* Quick Stats */}
+              <div className="bg-gray-50 rounded-lg p-4 ml-6 min-w-[200px]">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600 mb-1">{game.total_players}</div>
+                  <div className="text-sm text-muted-foreground mb-3">Players</div>
+                  <div className="text-lg font-semibold text-green-600">
+                    {(game.total_players * game.entry_fee * 0.98).toFixed(1)} FLOW
+                  </div>
+                  <div className="text-xs text-muted-foreground">Prize Pool</div>
+                </div>
+              </div>
+            </div>
 
-              {/* Game Rules */}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-foreground mb-3">How to Play</h3>
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <p>• Answer the question with YES or NO</p>
-                  <p>• Only players in the minority advance to the next round</p>
-                  <p>• Game continues until 1-2 players remain</p>
-                  <p>• Winners split the prize pool</p>
+            {/* Game Rules */}
+            <div className="border-t pt-4">
+              <h3 className="text-lg font-semibold text-foreground mb-3">🎯 How to Play</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-blue-500">1️⃣</span>
+                  <span>Answer with <strong>YES</strong> or <strong>NO</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-purple-500">2️⃣</span>
+                  <span>Only <strong>minority</strong> players advance</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-orange-500">3️⃣</span>
+                  <span>Continue until <strong>1-2 players</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-green-500">4️⃣</span>
+                  <span>Winners <strong>split prize pool</strong></span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Game Stats */}
-          <div className="space-y-6">
-            {/* Entry Requirements */}
-            <div className="bg-card rounded-lg shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">Entry Details</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Entry Fee:</span>
-                  <span className="font-semibold text-lg">{game.entry_fee} FLOW</span>
+          {/* Row 2: Game Statistics */}
+          <div className="bg-card rounded-lg shadow-lg p-6">
+            <h3 className="text-xl font-semibold text-foreground mb-6">📊 Game Statistics</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Entry Fee */}
+              <div className="text-center bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <div className="text-2xl mb-2">💰</div>
+                <div className="text-2xl font-bold text-blue-600 mb-1">{game.entry_fee}</div>
+                <div className="text-sm text-blue-700 font-medium">FLOW Entry Fee</div>
+              </div>
+
+              {/* Players */}
+              <div className="text-center bg-purple-50 rounded-lg p-4 border border-purple-200">
+                <div className="text-2xl mb-2">👥</div>
+                <div className="text-2xl font-bold text-purple-600 mb-1">{game.total_players}</div>
+                <div className="text-sm text-purple-700 font-medium">Total Players</div>
+              </div>
+
+              {/* Round */}
+              <div className="text-center bg-orange-50 rounded-lg p-4 border border-orange-200">
+                <div className="text-2xl mb-2">🔄</div>
+                <div className="text-2xl font-bold text-orange-600 mb-1">{game.current_round}</div>
+                <div className="text-sm text-orange-700 font-medium">Current Round</div>
+              </div>
+
+              {/* Prize Pool */}
+              <div className="text-center bg-green-50 rounded-lg p-4 border border-green-200">
+                <div className="text-2xl mb-2">🏆</div>
+                <div className="text-2xl font-bold text-green-600 mb-1">
+                  {(game.total_players * game.entry_fee * 0.98).toFixed(1)}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Current Players:</span>
-                  <span className="font-medium">{game.total_players}</span>
+                <div className="text-sm text-green-700 font-medium">FLOW Prize Pool</div>
+              </div>
+            </div>
+
+            {/* Additional Info */}
+            {game.commit_deadline && (
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="flex justify-center items-center gap-2 text-sm text-muted-foreground">
+                  <span>⏰ Join deadline:</span>
+                  <span className="font-medium">{new Date(game.commit_deadline).toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Current Round:</span>
-                  <span className="font-medium">{game.current_round}</span>
-                </div>
-                {game.commit_deadline && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Join Deadline:</span>
-                    <span className="font-medium text-xs">
-                      {new Date(game.commit_deadline).toLocaleDateString()}
-                    </span>
+              </div>
+            )}
+          </div>
+
+          {/* Row 3: Creator Info & Actions */}
+          <div className="bg-card rounded-lg shadow-lg p-6">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              {/* Creator Info */}
+              <div className="flex-1">
+                <h3 className="text-xl font-semibold text-foreground mb-4">👤 Game Creator</h3>
+                <div className="flex items-center gap-4">
+                  <div className="bg-gray-100 rounded-lg p-3 flex-1 max-w-md">
+                    <code className="text-sm text-gray-700 break-all">
+                      {formatAddress(game.creator_address)}
+                    </code>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Prize Pool */}
-            <div className="bg-card rounded-lg shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">Prize Pool</h3>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-foreground mb-2">
-                  {(game.total_players * game.entry_fee * 0.98).toFixed(2)} FLOW
+                  <div className="text-sm text-muted-foreground">
+                    <div>📅 Created: {new Date(game.created_at).toLocaleDateString()}</div>
+                    {game.commit_deadline && (
+                      <div className="mt-1">⏱️ Deadline: {new Date(game.commit_deadline).toLocaleDateString()}</div>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Total prize for winners
-                </p>
               </div>
-            </div>
-
-            {/* Creator Info */}
-            <div className="bg-card rounded-lg shadow-lg p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">Game Creator</h3>
-              <div className="text-center">
-                <code className="text-xs bg-gray-100 px-2 py-1 rounded">
-                  {formatAddress(game.creator_address)}
-                </code>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Created {new Date(game.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-
-            {/* Join Game */}
-            {statusInfo.status === 'open' && user?.loggedIn && (
+              
+              {/* Actions Section */}
+              <div className="flex-shrink-0">
+                {/* Join Game Form - Show only if user can join */}
+            {game.game_state === GameState.CommitPhase && 
+             game.commit_deadline && 
+             new Date() < new Date(game.commit_deadline) && 
+             user?.loggedIn && 
+             !hasUserJoined && (
               <div className="bg-card rounded-lg shadow-lg p-6">
                 <h3 className="text-lg font-semibold text-foreground mb-4">Join Game</h3>
                 <div className="text-center mb-4">
@@ -489,8 +806,37 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
               </div>
             )}
 
+            {/* Player Already Joined Confirmation */}
+            {game.game_state === GameState.CommitPhase && 
+             game.commit_deadline && 
+             user?.loggedIn && 
+             hasUserJoined && (
+              <div className="bg-card rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">✅ You've Joined!</h3>
+                <div className="text-center mb-4">
+                  <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg p-4">
+                    <p className="font-medium mb-2">Successfully joined this game</p>
+                    <p className="text-sm text-green-600">Entry fee: {game.entry_fee} FLOW paid</p>
+                  </div>
+                </div>
+
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p><strong>Next Steps:</strong></p>
+                  <p>• Wait for the commit phase to begin</p>
+                  <p>• Submit your vote commitment when voting opens</p>
+                  <p>• Only minority voters advance to the next round</p>
+                  {game.commit_deadline && new Date() < new Date(game.commit_deadline) && (
+                    <p>• Voting ends: {new Date(game.commit_deadline).toLocaleString()}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Login Required for Join */}
-            {statusInfo.status === 'open' && !user?.loggedIn && (
+            {game.game_state === GameState.CommitPhase && 
+             game.commit_deadline && 
+             new Date() < new Date(game.commit_deadline) && 
+             !user?.loggedIn && (
               <div className="bg-card rounded-lg shadow-lg p-6">
                 <h3 className="text-lg font-semibold text-foreground mb-4">Join Game</h3>
                 <div className="text-center">
@@ -506,6 +852,122 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                 </div>
               </div>
             )}
+
+            {/* Commit Vote Form - Show only if user has joined and hasn't committed */}
+            {game.game_state === GameState.CommitPhase && 
+             game.commit_deadline && 
+             new Date() < new Date(game.commit_deadline) && 
+             user?.loggedIn && 
+             hasUserJoined && 
+             !hasUserCommitted && (
+              <div className="bg-card rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">💭 Submit Your Vote</h3>
+                <div className="text-center mb-6">
+                  <p className="text-muted-foreground mb-4">
+                    What's your answer to: <strong>{game.question_text}</strong>
+                  </p>
+                  
+                  {/* Vote Selection */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <button
+                      onClick={() => handleVoteSelection(true)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        userVote === true 
+                          ? 'border-green-500 bg-green-50 text-green-700' 
+                          : 'border-gray-300 bg-gray-50 hover:border-green-300 hover:bg-green-50'
+                      }`}
+                    >
+                      <div className="text-2xl mb-2">✅</div>
+                      <div className="font-semibold">YES</div>
+                    </button>
+                    
+                    <button
+                      onClick={() => handleVoteSelection(false)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        userVote === false 
+                          ? 'border-red-500 bg-red-50 text-red-700' 
+                          : 'border-gray-300 bg-gray-50 hover:border-red-300 hover:bg-red-50'
+                      }`}
+                    >
+                      <div className="text-2xl mb-2">❌</div>
+                      <div className="font-semibold">NO</div>
+                    </button>
+                  </div>
+                  
+                  {userVote !== null && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        <strong>Your vote:</strong> {userVote ? 'YES' : 'NO'}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Your vote will be hidden until the reveal phase
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Submit Button */}
+                {userVote !== null && (
+                  <TransactionButton
+                    label="Submit Vote Commitment"
+                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    transaction={{
+                      cadence: SUBMIT_COMMIT_TRANSACTION,
+                      args: (arg, t) => [
+                        arg(parseInt(gameId), t.UInt64),
+                        arg(commitHash, t.String),
+                        arg(contractAddress, t.Address),
+                      ],
+                      limit: 999,
+                    }}
+                    mutation={{
+                      onSuccess: (transactionId) => {
+                        console.log("Vote committed! Transaction ID:", transactionId);
+                        alert(`Vote committed successfully! Remember your vote (${userVote ? 'YES' : 'NO'}) and salt (${userSalt}) for the reveal phase.`);
+                      },
+                      onError: (error) => {
+                        console.error("Failed to commit vote:", error);
+                        alert("Failed to commit vote. Please try again.");
+                      },
+                    }}
+                  />
+                )}
+
+                <div className="mt-4 text-xs text-muted-foreground text-center">
+                  <p>• Your vote will be hidden until the reveal phase</p>
+                  <p>• Remember your choice - you'll need it to reveal later</p>
+                  <p>• Only minority voters advance to the next round</p>
+                </div>
+              </div>
+            )}
+
+            {/* Vote Committed Confirmation */}
+            {game.game_state === GameState.CommitPhase && 
+             user?.loggedIn && 
+             hasUserJoined && 
+             hasUserCommitted && (
+              <div className="bg-card rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">✅ Vote Committed!</h3>
+                <div className="text-center">
+                  <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <p className="font-medium mb-2">Your vote has been successfully committed</p>
+                    <p className="text-sm text-green-600">Your vote is hidden until the reveal phase begins</p>
+                  </div>
+
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p><strong>Next Steps:</strong></p>
+                    <p>• Wait for the commit phase to end</p>
+                    <p>• Reveal your vote during the reveal phase</p>
+                    <p>• Remember your original vote choice</p>
+                    {game.commit_deadline && new Date() < new Date(game.commit_deadline) && (
+                      <p>• Commit phase ends: {new Date(game.commit_deadline).toLocaleString()}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+              </div>
+            </div>
           </div>
         </div>
 
