@@ -118,13 +118,14 @@ export default function MyGameDetailsPage() {
   const [commitDuration, setCommitDuration] = useState("3600"); // 1 hour default
   const [revealDuration, setRevealDuration] = useState("1800"); // 30 minutes default
   const [commitDeadlineSetEvent, setCommitDeadlineSetEvent] = useState<any>(null);
+  const [revealDeadlineSetEvent, setRevealDeadlineSetEvent] = useState<any>(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
-  // Update game deadline in Supabase
-  const updateGameDeadlineInSupabase = async (eventData: any) => {
+  // Update game commit deadline in Supabase
+  const updateGameCommitDeadlineInSupabase = async (eventData: any) => {
     try {
-      console.log("=== SUPABASE UPDATE DEBUG ===");
+      console.log("=== COMMIT DEADLINE SUPABASE UPDATE ===");
       console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
 
       const updateData = {
@@ -143,21 +144,60 @@ export default function MyGameDetailsPage() {
         .select();
 
       if (error) {
-        console.error("=== SUPABASE ERROR DETAILS ===");
+        console.error("=== COMMIT DEADLINE SUPABASE ERROR ===");
         console.error("Full error object:", JSON.stringify(error, null, 2));
         console.error("Error message:", error?.message);
         console.error("Error code:", error?.code);
         console.error("Error details:", error?.details);
         console.error("Error hint:", error?.hint);
-        console.error("==============================");
+        console.error("==========================================");
         throw error;
       }
 
-      console.log("Game deadline updated successfully in Supabase:", data);
+      console.log("Commit deadline updated successfully in Supabase:", data);
       return data;
     } catch (error) {
-      console.error("Failed to update game deadline in Supabase - Catch block:");
-      console.error("Catch error:", JSON.stringify(error, null, 2));
+      console.error("Failed to update commit deadline in Supabase:", error);
+      // Don't throw - we don't want to break the UI if Supabase fails
+    }
+  };
+
+  // Update game reveal deadline in Supabase
+  const updateGameRevealDeadlineInSupabase = async (eventData: any) => {
+    try {
+      console.log("=== REVEAL DEADLINE SUPABASE UPDATE ===");
+      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
+
+      const updateData = {
+        game_state: 2, // revealPhase
+        reveal_deadline: new Date(parseFloat(eventData.deadline) * 1000).toISOString(),
+        current_round: parseInt(eventData.round)
+      };
+
+      console.log("Update data being sent:", JSON.stringify(updateData, null, 2));
+      console.log("Updating game_id:", parseInt(eventData.gameId));
+
+      const { data, error } = await supabase
+        .from('games')
+        .update(updateData)
+        .eq('game_id', parseInt(eventData.gameId))
+        .select();
+
+      if (error) {
+        console.error("=== REVEAL DEADLINE SUPABASE ERROR ===");
+        console.error("Full error object:", JSON.stringify(error, null, 2));
+        console.error("Error message:", error?.message);
+        console.error("Error code:", error?.code);
+        console.error("Error details:", error?.details);
+        console.error("Error hint:", error?.hint);
+        console.error("=========================================");
+        throw error;
+      }
+
+      console.log("Reveal deadline updated successfully in Supabase:", data);
+      return data;
+    } catch (error) {
+      console.error("Failed to update reveal deadline in Supabase:", error);
       // Don't throw - we don't want to break the UI if Supabase fails
     }
   };
@@ -202,7 +242,7 @@ export default function MyGameDetailsPage() {
         setCommitDeadlineSetEvent(event);
 
         // Update game in Supabase
-        await updateGameDeadlineInSupabase(event.data);
+        await updateGameCommitDeadlineInSupabase(event.data);
 
         // Refresh game data
         if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
@@ -211,6 +251,40 @@ export default function MyGameDetailsPage() {
       },
       onError: (error) => {
         console.error("Error listening for CommitDeadlineSet events:", error);
+      }
+    });
+  }
+
+  // Listen for RevealDeadlineSet events
+  const revealDeadlineEventType = contractAddress
+    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.RevealDeadlineSet`
+    : null;
+
+  if (revealDeadlineEventType && contractAddress) {
+    useFlowEvents({
+      eventTypes: [revealDeadlineEventType],
+      startHeight: 0,
+      onEvent: async (event) => {
+        console.log("==== REVEAL DEADLINE SET EVENT DETECTED ====");
+        console.log("Event type:", event.type);
+        console.log("Event transaction ID:", event.transactionId);
+        console.log("Event data:", event.data);
+        console.log("Full event object:", event);
+        console.log("============================================");
+
+        // Store the latest event for display
+        setRevealDeadlineSetEvent(event);
+
+        // Update game in Supabase
+        await updateGameRevealDeadlineInSupabase(event.data);
+
+        // Refresh game data
+        if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
+          await refetchGameData();
+        }
+      },
+      onError: (error) => {
+        console.error("Error listening for RevealDeadlineSet events:", error);
       }
     });
   }
@@ -490,8 +564,8 @@ export default function MyGameDetailsPage() {
             </div>
           )}
 
-          {/* Set Reveal Deadline */}
-          {game.game_state === 1 && (
+          {/* Set Reveal Deadline - Show only when in commit phase and reveal deadline not set */}
+          {game.game_state === 1 && !game.reveal_deadline && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 Start Reveal Phase
@@ -540,6 +614,47 @@ export default function MyGameDetailsPage() {
                   },
                 }}
               />
+            </div>
+          )}
+
+          {/* Reveal Deadline Display - Show when reveal deadline is set */}
+          {game.game_state === 2 && game.reveal_deadline && (
+            <div className="bg-card rounded-lg shadow-lg border border-border p-6">
+              <h3 className="text-lg font-semibold text-foreground mb-4">
+                ✅ Reveal Phase Active
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Players can now reveal their vote commitments until the deadline.
+              </p>
+
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Reveal Deadline:</span>
+                  <span className="font-medium">
+                    {new Date(game.reveal_deadline).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Time Remaining:</span>
+                  <span className="font-medium text-yellow-600">
+                    {new Date(game.reveal_deadline) > new Date()
+                      ? `${Math.ceil((new Date(game.reveal_deadline).getTime() - new Date().getTime()) / 1000 / 60)} minutes`
+                      : 'Deadline passed'
+                    }
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Current Round:</span>
+                  <span className="font-medium">{game.current_round}</span>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p className="text-sm text-yellow-700 font-medium">Next Step:</p>
+                <p className="text-xs text-yellow-600 mt-1">
+                  Once the reveal deadline passes, process the round to calculate results and advance to the next phase.
+                </p>
+              </div>
             </div>
           )}
 

@@ -81,6 +81,42 @@ transaction(gameId: UInt64, commitHash: String, contractAddress: Address) {
 }
 `;
 
+// Submit Reveal transaction cadence
+const SUBMIT_REVEAL_TRANSACTION = `
+import "MinorityRuleGame"
+
+transaction(gameId: UInt64, vote: Bool, salt: String, contractAddress: Address) {
+    
+    let gameManager: &{MinorityRuleGame.GameManagerPublic}
+    let game: &MinorityRuleGame.Game
+    let player: Address
+    
+    prepare(signer: auth(Storage, Capabilities) &Account) {
+        self.player = signer.address
+        
+        // Borrow the game manager from the contract account
+        self.gameManager = getAccount(contractAddress)
+            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
+            ?? panic("Could not borrow game manager from public capability")
+        
+        // Get the game
+        self.game = self.gameManager.borrowGame(gameId: gameId)
+            ?? panic("Game not found")
+    }
+    
+    execute {
+        // Submit vote reveal (actual vote + salt for verification)
+        self.game.submitReveal(player: self.player, vote: vote, salt: salt)
+        
+        let voteText = vote ? "YES" : "NO"
+        log("Player ".concat(self.player.toString())
+            .concat(" revealed vote ").concat(voteText)
+            .concat(" for game ").concat(gameId.toString())
+            .concat(" with salt: ").concat(salt))
+    }
+}
+`;
+
 // GameState enum matching Cadence contract
 enum GameState {
   ZeroPhase = 0,
@@ -148,6 +184,9 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   const [userVote, setUserVote] = useState<boolean | null>(null);
   const [userSalt, setUserSalt] = useState('');
   const [commitHash, setCommitHash] = useState('');
+  const [hasUserRevealed, setHasUserRevealed] = useState(false);
+  const [revealVote, setRevealVote] = useState<boolean | null>(null);
+  const [revealSalt, setRevealSalt] = useState('');
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
@@ -195,6 +234,30 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       setHasUserCommitted(data !== null);
     } catch (err) {
       console.error("Error checking user commit status:", err);
+    }
+  };
+
+  // Check if current user has already revealed this round
+  const checkIfUserHasRevealed = async () => {
+    if (!user?.addr || !gameId || !game) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('reveals')
+        .select('vote_value, salt')
+        .eq('game_id', parseInt(gameId))
+        .eq('round_number', game.current_round)
+        .eq('player_address', user.addr)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error("Error checking if user has revealed:", error);
+        return;
+      }
+
+      setHasUserRevealed(data !== null);
+    } catch (err) {
+      console.error("Error checking user reveal status:", err);
     }
   };
 
@@ -300,6 +363,46 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
   };
 
+  // Insert reveal into Supabase when VoteRevealed event is detected
+  const insertRevealIntoSupabase = async (eventData: any) => {
+    try {
+      console.log("=== INSERTING REVEAL INTO reveals TABLE ===");
+      console.log("Event data for reveal insertion:", JSON.stringify(eventData, null, 2));
+
+      const revealData = {
+        game_id: parseInt(eventData.gameId),
+        round_number: parseInt(eventData.round),
+        player_address: eventData.player,
+        vote_value: eventData.vote,
+        salt: revealSalt, // Use the locally stored salt
+        revealed_at: new Date().toISOString()
+      };
+
+      console.log("Reveal data to insert:", JSON.stringify(revealData, null, 2));
+
+      const { data, error } = await supabase
+        .from('reveals')
+        .insert([revealData])
+        .select();
+
+      if (error) {
+        console.error("=== REVEALS INSERT ERROR ===");
+        console.error("Full error object:", JSON.stringify(error, null, 2));
+        console.error("Error message:", error?.message);
+        console.error("Error code:", error?.code);
+        console.error("Error details:", error?.details);
+        console.error("========================");
+        throw error;
+      }
+
+      console.log("Reveal inserted successfully into reveals table:", data);
+      return data;
+    } catch (error) {
+      console.error("Failed to insert reveal into reveals table:", error);
+      // Don't throw - we don't want to break the UI if this fails
+    }
+  };
+
   // Refetch game data
   const refetchGameData = async () => {
     try {
@@ -397,6 +500,42 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     });
   }
 
+  // Listen for VoteRevealed events
+  const voteRevealedEventType = contractAddress
+    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.VoteRevealed`
+    : null;
+
+  if (voteRevealedEventType && contractAddress) {
+    useFlowEvents({
+      eventTypes: [voteRevealedEventType],
+      startHeight: 0,
+      onEvent: async (event) => {
+        console.log("==== VOTE REVEALED EVENT DETECTED ====");
+        console.log("Event type:", event.type);
+        console.log("Event transaction ID:", event.transactionId);
+        console.log("Event data:", event.data);
+        console.log("Full event object:", event);
+        console.log("=======================================");
+
+        // Insert reveal into Supabase
+        await insertRevealIntoSupabase(event.data);
+
+        // Check if this is the current user revealing
+        if (event.data.player === user?.addr) {
+          setHasUserRevealed(true);
+        }
+
+        // Refresh game data if this is for our current game
+        if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
+          await refetchGameData();
+        }
+      },
+      onError: (error) => {
+        console.error("Error listening for VoteRevealed events:", error);
+      }
+    });
+  }
+
   // Fetch public game data
   useEffect(() => {
     const fetchGameData = async () => {
@@ -448,6 +587,13 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   useEffect(() => {
     if (user?.addr && gameId && game) {
       checkIfUserHasCommitted();
+    }
+  }, [user?.addr, gameId, game]);
+
+  // Check if user has revealed when component mounts, user changes, or game data changes
+  useEffect(() => {
+    if (user?.addr && gameId && game) {
+      checkIfUserHasRevealed();
     }
   }, [user?.addr, gameId, game]);
 
@@ -961,6 +1107,166 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                     <p>• Remember your original vote choice</p>
                     {game.commit_deadline && new Date() < new Date(game.commit_deadline) && (
                       <p>• Commit phase ends: {new Date(game.commit_deadline).toLocaleString()}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Debug: Check all reveal button conditions */}
+            {(() => {
+              console.log("Reveal button conditions:", {
+                gameState: game.game_state,
+                isRevealPhase: game.game_state === GameState.RevealPhase,
+                revealDeadline: game.reveal_deadline,
+                deadlineNotPassed: game.reveal_deadline && new Date() < new Date(game.reveal_deadline),
+                userLoggedIn: user?.loggedIn,
+                hasUserJoined,
+                hasUserCommitted,
+                hasNotRevealed: !hasUserRevealed,
+                allConditionsMet: (
+                  game.game_state === GameState.RevealPhase && 
+                  game.reveal_deadline && 
+                  new Date() < new Date(game.reveal_deadline) && 
+                  user?.loggedIn && 
+                  hasUserJoined && 
+                  hasUserCommitted &&
+                  !hasUserRevealed
+                )
+              });
+              return null;
+            })()}
+
+            {/* Reveal Vote Form - Show only if user has committed and game is in reveal phase */}
+            {game.game_state === GameState.RevealPhase && 
+             game.reveal_deadline && 
+             new Date() < new Date(game.reveal_deadline) && 
+             user?.loggedIn && 
+             hasUserJoined && 
+             hasUserCommitted &&
+             !hasUserRevealed && (
+              <div className="bg-card rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">🔓 Reveal Your Vote</h3>
+                <div className="text-center mb-6">
+                  <p className="text-muted-foreground mb-4">
+                    Reveal your answer to: <strong>{game.question_text}</strong>
+                  </p>
+                  
+                  {/* Vote Reveal Selection */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <button
+                      onClick={() => setRevealVote(true)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        revealVote === true 
+                          ? 'border-green-500 bg-green-50 text-green-700' 
+                          : 'border-gray-300 bg-gray-50 hover:border-green-300 hover:bg-green-50'
+                      }`}
+                    >
+                      <div className="text-2xl mb-2">✅</div>
+                      <div className="font-semibold">YES</div>
+                    </button>
+                    
+                    <button
+                      onClick={() => setRevealVote(false)}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        revealVote === false 
+                          ? 'border-red-500 bg-red-50 text-red-700' 
+                          : 'border-gray-300 bg-gray-50 hover:border-red-300 hover:bg-red-50'
+                      }`}
+                    >
+                      <div className="text-2xl mb-2">❌</div>
+                      <div className="font-semibold">NO</div>
+                    </button>
+                  </div>
+
+                  {/* Salt Input */}
+                  <div className="mb-6">
+                    <label htmlFor="revealSalt" className="block text-sm font-medium text-foreground mb-2">
+                      Salt (from your original commitment)
+                    </label>
+                    <input
+                      id="revealSalt"
+                      type="text"
+                      value={revealSalt}
+                      onChange={(e) => setRevealSalt(e.target.value)}
+                      placeholder="Enter the 64-character salt from when you committed"
+                      className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground font-mono text-sm"
+                      maxLength={64}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      This was generated when you submitted your commitment
+                    </p>
+                  </div>
+                  
+                  {revealVote !== null && revealSalt.length === 64 && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        <strong>Revealing:</strong> {revealVote ? 'YES' : 'NO'}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Make sure this matches your original commitment
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Submit Button */}
+                {revealVote !== null && revealSalt.length === 64 && (
+                  <TransactionButton
+                    label="Reveal Vote"
+                    className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                    transaction={{
+                      cadence: SUBMIT_REVEAL_TRANSACTION,
+                      args: (arg, t) => [
+                        arg(parseInt(gameId), t.UInt64),
+                        arg(revealVote, t.Bool),
+                        arg(revealSalt, t.String),
+                        arg(contractAddress, t.Address),
+                      ],
+                      limit: 999,
+                    }}
+                    mutation={{
+                      onSuccess: (transactionId) => {
+                        console.log("Vote revealed! Transaction ID:", transactionId);
+                        alert(`Vote revealed successfully! Your ${revealVote ? 'YES' : 'NO'} vote is now public.`);
+                      },
+                      onError: (error) => {
+                        console.error("Failed to reveal vote:", error);
+                        alert("Failed to reveal vote. Please check your vote and salt match your original commitment.");
+                      },
+                    }}
+                  />
+                )}
+
+                <div className="mt-4 text-xs text-muted-foreground text-center">
+                  <p>• You must reveal the same vote and salt you committed earlier</p>
+                  <p>• If they don't match, the transaction will fail</p>
+                  <p>• Only minority voters advance to the next round</p>
+                </div>
+              </div>
+            )}
+
+            {/* Vote Revealed Confirmation */}
+            {game.game_state === GameState.RevealPhase && 
+             user?.loggedIn && 
+             hasUserJoined && 
+             hasUserCommitted && 
+             hasUserRevealed && (
+              <div className="bg-card rounded-lg shadow-lg p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">✅ Vote Revealed!</h3>
+                <div className="text-center">
+                  <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <p className="font-medium mb-2">Your vote has been successfully revealed</p>
+                    <p className="text-sm text-green-600">Your vote is now public and being counted</p>
+                  </div>
+
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p><strong>Next Steps:</strong></p>
+                    <p>• Wait for all players to reveal their votes</p>
+                    <p>• Round will be processed when reveal phase ends</p>
+                    <p>• Only minority voters advance to next round</p>
+                    {game.reveal_deadline && new Date() < new Date(game.reveal_deadline) && (
+                      <p>• Reveal phase ends: {new Date(game.reveal_deadline).toLocaleString()}</p>
                     )}
                   </div>
                 </div>

@@ -46,9 +46,9 @@ transaction(questionText: String, entryFee: UFix64, contractAddress: Address) {
 
 export default function CreateGamePage() {
   const { user } = useFlowCurrentUser();
+  const router = useRouter();
   const [questionText, setQuestionText] = useState("");
   const [entryFee, setEntryFee] = useState("1.0");
-  const [gameCreatedEvent, setGameCreatedEvent] = useState<any>(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
@@ -105,16 +105,14 @@ export default function CreateGamePage() {
         console.log("Full event object:", event);
         console.log("=====================================");
 
-        // Store the latest event for display
-        setGameCreatedEvent(event);
-
         const gameId = event.data.gameId;
         console.log("Extracted real game ID from event:", gameId);
 
         // Save game to Supabase
         await saveGameToSupabase(event.data);
 
-
+        // Immediately redirect to manage the new game
+        router.push(`/my-games/${gameId}`);
       },
       onError: (error) => {
         console.error("Error listening for GameCreated events:", error);
@@ -122,10 +120,6 @@ export default function CreateGamePage() {
     });
   }
 
-  // Generate block explorer URL for transaction
-  const getBlockExplorerUrl = (transactionId: string) => {
-    return `https://testnet.flowscan.io/transaction/${transactionId}`;
-  };
 
 
   if (!user?.loggedIn) {
@@ -149,75 +143,6 @@ export default function CreateGamePage() {
     );
   }
 
-  // Show success screen after game creation
-  if (gameCreatedEvent) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="bg-card rounded-lg shadow-lg p-8 max-w-md w-full mx-4 border border-border">
-          <h1 className="text-2xl font-bold text-foreground mb-4">
-            🎉 Game Created!
-          </h1>
-
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <strong className="text-green-700">Game ID:</strong>
-                <p className="font-mono text-green-600">{gameCreatedEvent.data.gameId}</p>
-              </div>
-              <div>
-                <strong className="text-green-700">Entry Fee:</strong>
-                <p className="font-mono text-green-600">{gameCreatedEvent.data.entryFee} FLOW</p>
-              </div>
-              <div className="col-span-2">
-                <strong className="text-green-700">Creator:</strong>
-                <p className="font-mono text-green-600 break-all">{gameCreatedEvent.data.creator}</p>
-              </div>
-              <div className="col-span-2">
-                <strong className="text-green-700">Transaction: </strong>
-                <a
-                  href={`https://testnet.flowscan.io/transaction/${gameCreatedEvent.transactionId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium break-all"
-                >
-                  🔗 View on Flow Explorer
-                </a>
-              </div>
-            </div>
-            <div className="mt-3">
-              <strong className="text-green-700">Question:</strong>
-              <p className="text-green-600">{gameCreatedEvent.data.questionText}</p>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Link
-              href="/"
-              className="flex-1 bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors text-center text-sm"
-            >
-              Home
-            </Link>
-            <Link
-              href="/games"
-              className="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-center text-sm"
-            >
-              View Games
-            </Link>
-            <button
-              onClick={() => {
-                setQuestionText("");
-                setEntryFee("1.0");
-                setGameCreatedEvent(null);
-              }}
-              className="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm"
-            >
-              Create Another
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const isFormValid = questionText.trim().length > 0 && parseFloat(entryFee) > 0;
 
