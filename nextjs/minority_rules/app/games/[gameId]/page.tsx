@@ -830,45 +830,45 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           </div>
 
           {/* Row 2: Game Statistics */}
-          <div className="bg-card rounded-lg shadow-lg p-6">
-            <h3 className="text-xl font-semibold text-foreground mb-6">📊 Game Statistics</h3>
+          <div className="bg-card rounded-lg shadow-lg p-4">
+            <h3 className="text-lg font-semibold text-foreground mb-4">📊 Game Statistics</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Entry Fee */}
-              <div className="text-center bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <div className="text-2xl mb-2">💰</div>
-                <div className="text-2xl font-bold text-blue-600 mb-1">{game.entry_fee}</div>
-                <div className="text-sm text-blue-700 font-medium">FLOW Entry Fee</div>
+              <div className="text-center bg-blue-50 rounded-lg p-2 border border-blue-200">
+                <div className="text-xl mb-1">💰</div>
+                <div className="text-xl font-bold text-blue-600 mb-0.5">{game.entry_fee}</div>
+                <div className="text-xs text-blue-700 font-medium">FLOW Entry Fee</div>
               </div>
 
               {/* Players */}
-              <div className="text-center bg-purple-50 rounded-lg p-4 border border-purple-200">
-                <div className="text-2xl mb-2">👥</div>
-                <div className="text-2xl font-bold text-purple-600 mb-1">{game.total_players}</div>
-                <div className="text-sm text-purple-700 font-medium">Total Players</div>
+              <div className="text-center bg-purple-50 rounded-lg p-2 border border-purple-200">
+                <div className="text-xl mb-1">👥</div>
+                <div className="text-xl font-bold text-purple-600 mb-0.5">{game.total_players}</div>
+                <div className="text-xs text-purple-700 font-medium">Total Players</div>
               </div>
 
               {/* Round */}
-              <div className="text-center bg-orange-50 rounded-lg p-4 border border-orange-200">
-                <div className="text-2xl mb-2">🔄</div>
-                <div className="text-2xl font-bold text-orange-600 mb-1">{game.current_round}</div>
-                <div className="text-sm text-orange-700 font-medium">Current Round</div>
+              <div className="text-center bg-orange-50 rounded-lg p-2 border border-orange-200">
+                <div className="text-xl mb-1">🔄</div>
+                <div className="text-xl font-bold text-orange-600 mb-0.5">{game.current_round}</div>
+                <div className="text-xs text-orange-700 font-medium">Current Round</div>
               </div>
 
               {/* Prize Pool */}
-              <div className="text-center bg-green-50 rounded-lg p-4 border border-green-200">
-                <div className="text-2xl mb-2">🏆</div>
-                <div className="text-2xl font-bold text-green-600 mb-1">
+              <div className="text-center bg-green-50 rounded-lg p-2 border border-green-200">
+                <div className="text-xl mb-1">🏆</div>
+                <div className="text-xl font-bold text-green-600 mb-0.5">
                   {(game.total_players * game.entry_fee * 0.98).toFixed(1)}
                 </div>
-                <div className="text-sm text-green-700 font-medium">FLOW Prize Pool</div>
+                <div className="text-xs text-green-700 font-medium">FLOW Prize Pool</div>
               </div>
             </div>
 
             {/* Additional Info */}
             {game.commit_deadline && (
-              <div className="mt-6 pt-4 border-t border-gray-200">
-                <div className="flex justify-center items-center gap-2 text-sm text-muted-foreground">
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <div className="flex justify-center items-center gap-2 text-xs text-muted-foreground">
                   <span>⏰ Join deadline:</span>
                   <span className="font-medium">{new Date(game.commit_deadline).toLocaleString()}</span>
                 </div>
