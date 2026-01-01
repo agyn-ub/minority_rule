@@ -128,7 +128,7 @@ flow transactions send cadence/transactions/JoinGame.cdc \
 
 ### Step 4: Check Game Status
 ```bash
-flow scripts execute cadence/scripts/GetGameInfo.cdc 1 0x206a0f93916f5d8f --network testnet
+flow scripts execute cadence/scripts/GetGameInfo.cdc 44 0x206a0f93916f5d8f --network testnet
 ```
 
 ### Step 5: Players Submit Commits

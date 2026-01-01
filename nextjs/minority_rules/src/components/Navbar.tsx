@@ -14,7 +14,6 @@ export default function Navbar() {
   const navigation = [
     { name: 'Home', href: '/' },
     { name: 'Create Game', href: '/create' },
-    { name: 'Available Games', href: '/games' },
   ];
 
   const isActive = (href: string) => {
