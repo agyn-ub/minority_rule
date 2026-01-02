@@ -246,16 +246,6 @@ export default function UserProfile() {
                 </svg>
                 <span>Create Game</span>
               </Link>
-              <Link
-                href="/games"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center space-x-2 px-3 py-2 text-sm text-foreground rounded-md hover:bg-gray-50 transition-colors"
-              >
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <span>Browse Games</span>
-              </Link>
             </div>
 
             {/* Disconnect */}

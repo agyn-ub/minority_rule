@@ -754,14 +754,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                 Home
               </Link>
             </li>
-            <li>
-              <div className="flex items-center">
-                <span className="mx-2 text-gray-400">/</span>
-                <Link href="/games" className="text-primary hover:text-primary/80">
-                  Browse Games
-                </Link>
-              </div>
-            </li>
             <li aria-current="page">
               <div className="flex items-center">
                 <span className="mx-2 text-gray-400">/</span>
@@ -777,8 +769,9 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           <div className="bg-card rounded-lg shadow-lg p-6">
             <div className="flex items-start justify-between mb-6">
               <div className="flex-1">
+
                 <div className="flex items-center gap-4 mb-4">
-                  <h1 className="text-3xl font-bold text-foreground">
+                  <h1 className="text-xl font-bold text-foreground">
                     Game #{game.game_id}
                   </h1>
                   <span className={`px-4 py-2 rounded-full text-sm font-medium border ${getGameStatusColor(game.game_state)}`}>
@@ -789,7 +782,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                 {/* Game Creator */}
                 <div className="mb-3">
                   <p className="text-sm text-muted-foreground">
-                    👤 Game Creator: <code className="bg-gray-100 px-2 py-1 rounded text-xs">{formatAddress(game.creator_address)}</code>
+                    👤 Game Creator: <code className="px-2 py-1 rounded text-xs">{game.creator_address}</code>
                   </p>
                 </div>
 
