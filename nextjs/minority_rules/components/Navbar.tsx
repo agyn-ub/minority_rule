@@ -1,14 +1,13 @@
 "use client";
 
-import { Connect, useFlowCurrentUser } from "@onflow/react-sdk";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useFlowUser } from "@/lib/useFlowUser";
 import UserProfile from "./UserProfile";
 
 export default function Navbar() {
-  const { user } = useFlowCurrentUser();
-  const isLoggedIn = user?.loggedIn;
+  const { user, login, isLoggedIn, loading, configReady } = useFlowUser();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -81,16 +80,13 @@ export default function Navbar() {
               {isLoggedIn ? (
                 <UserProfile />
               ) : (
-                <Connect
-                  balanceTokens={[
-                    {
-                      symbol: "FLOW",
-                      name: "Flow Token",
-                      vaultIdentifier: "A.1654653399040a61.FlowToken.Vault",
-                    },
-                  ]}
-                  balanceType="combined"
-                />
+                <button
+                  onClick={login}
+                  disabled={loading || !configReady}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {loading || !configReady ? "Configuring..." : "Connect Wallet"}
+                </button>
               )}
             </div>
           </div>

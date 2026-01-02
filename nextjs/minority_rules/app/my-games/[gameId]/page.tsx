@@ -1,87 +1,18 @@
 "use client";
+import { useFlowUser } from "@/lib/useFlowUser";
+import * as fcl from "@onflow/fcl";
 
 import { useState, useEffect } from "react";
-import { useFlowCurrentUser, TransactionButton, useFlowEvents } from "@onflow/react-sdk";
+// React SDK removed - using FCL directly
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { supabase, type Game } from "@/lib/supabase";
-
-// Cadence transactions
-const SET_COMMIT_DEADLINE_TRANSACTION = `
-import "MinorityRuleGame"
-
-transaction(gameId: UInt64, durationSeconds: UFix64, contractAddress: Address) {
-    
-    let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let game: &MinorityRuleGame.Game
-    
-    prepare(signer: auth(Storage, Capabilities) &Account) {
-        self.gameManager = getAccount(contractAddress)
-            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
-            ?? panic("Could not borrow game manager from public capability")
-        
-        self.game = self.gameManager.borrowGame(gameId: gameId)
-            ?? panic("Game not found")
-    }
-    
-    execute {
-        self.game.setCommitDeadline(durationSeconds: durationSeconds)
-        
-        log("Commit deadline set for game ".concat(gameId.toString())
-            .concat(" to ").concat(durationSeconds.toString()).concat(" seconds from now"))
-    }
-}
-`;
-
-const SET_REVEAL_DEADLINE_TRANSACTION = `
-import "MinorityRuleGame"
-
-transaction(gameId: UInt64, durationSeconds: UFix64, contractAddress: Address) {
-    
-    let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let game: &MinorityRuleGame.Game
-    
-    prepare(signer: auth(Storage, Capabilities) &Account) {
-        self.gameManager = getAccount(contractAddress)
-            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
-            ?? panic("Could not borrow game manager from public capability")
-        
-        self.game = self.gameManager.borrowGame(gameId: gameId)
-            ?? panic("Game not found")
-    }
-    
-    execute {
-        self.game.setRevealDeadline(durationSeconds: durationSeconds)
-        
-        log("Reveal deadline set for game ".concat(gameId.toString())
-            .concat(" to ").concat(durationSeconds.toString()).concat(" seconds from now"))
-    }
-}
-`;
-
-const PROCESS_ROUND_TRANSACTION = `
-import "MinorityRuleGame"
-
-transaction(gameId: UInt64, contractAddress: Address) {
-    
-    let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    
-    prepare(signer: auth(Storage, Capabilities) &Account) {
-        self.gameManager = getAccount(contractAddress)
-            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
-            ?? panic("Could not borrow game manager from public capability")
-        
-        let game = self.gameManager.borrowGame(gameId: gameId)
-            ?? panic("Game not found")
-            
-        game.processRound()
-    }
-    
-    execute {
-        log("Round processed for game ".concat(gameId.toString()))
-    }
-}
-`;
+import {
+  setCommitDeadlineTransaction,
+  setRevealDeadlineTransaction,
+  processRoundTransaction,
+  TX_STATES
+} from "@/lib/transactions";
 
 // Helper functions
 const getGameStateName = (state: number): string => {
@@ -107,9 +38,8 @@ const getStateColor = (state: number): string => {
 };
 
 export default function MyGameDetailsPage() {
-  const { user } = useFlowCurrentUser();
+  const { user } = useFlowUser();
   const params = useParams();
-  const router = useRouter();
   const gameId = params.gameId as string;
 
   const [game, setGame] = useState<Game | null>(null);
@@ -117,10 +47,123 @@ export default function MyGameDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [commitDuration, setCommitDuration] = useState("3600"); // 1 hour default
   const [revealDuration, setRevealDuration] = useState("1800"); // 30 minutes default
-  const [commitDeadlineSetEvent, setCommitDeadlineSetEvent] = useState<any>(null);
-  const [revealDeadlineSetEvent, setRevealDeadlineSetEvent] = useState<any>(null);
+
+  // Transaction state management
+  const [txState, setTxState] = useState(TX_STATES.IDLE);
+  const [txError, setTxError] = useState<string | null>(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
+
+  // Transaction execution functions
+  const handleSetCommitDeadline = async () => {
+    if (!commitDuration || !user?.loggedIn) return;
+
+    try {
+      setTxError(null);
+      console.log("🚀 Setting commit deadline:", { gameId, commitDuration, contractAddress });
+
+      const result = await setCommitDeadlineTransaction(
+        gameId,
+        commitDuration,
+        contractAddress,
+        {
+          onStateChange: (state: string, data?: any) => {
+            console.log("Transaction state:", state, data);
+            setTxState(state);
+          },
+          onSuccess: (txId: string, transaction: any) => {
+            console.log("✅ Commit deadline set successfully:", txId);
+          },
+          onError: (error: any, txId?: string, transaction?: any) => {
+            console.error("❌ Failed to set commit deadline:", error);
+            setTxError(error.message || "Failed to set commit deadline");
+            setTxState(TX_STATES.ERROR);
+          }
+        }
+      );
+
+      if (!result.success) {
+        throw result.error;
+      }
+    } catch (error: any) {
+      console.error("Set commit deadline error:", error);
+      setTxError(error.message || "Failed to set commit deadline");
+      setTxState(TX_STATES.ERROR);
+    }
+  };
+
+  const handleSetRevealDeadline = async () => {
+    if (!revealDuration || !user?.loggedIn) return;
+
+    try {
+      setTxError(null);
+      console.log("🚀 Setting reveal deadline:", { gameId, revealDuration, contractAddress });
+
+      const result = await setRevealDeadlineTransaction(
+        gameId,
+        revealDuration,
+        contractAddress,
+        {
+          onStateChange: (state: string, data?: any) => {
+            console.log("Transaction state:", state, data);
+            setTxState(state);
+          },
+          onSuccess: (txId: string, transaction: any) => {
+            console.log("✅ Reveal deadline set successfully:", txId);
+          },
+          onError: (error: any, txId?: string, transaction?: any) => {
+            console.error("❌ Failed to set reveal deadline:", error);
+            setTxError(error.message || "Failed to set reveal deadline");
+            setTxState(TX_STATES.ERROR);
+          }
+        }
+      );
+
+      if (!result.success) {
+        throw result.error;
+      }
+    } catch (error: any) {
+      console.error("Set reveal deadline error:", error);
+      setTxError(error.message || "Failed to set reveal deadline");
+      setTxState(TX_STATES.ERROR);
+    }
+  };
+
+  const handleProcessRound = async () => {
+    if (!user?.loggedIn) return;
+
+    try {
+      setTxError(null);
+      console.log("🚀 Processing round:", { gameId, contractAddress });
+
+      const result = await processRoundTransaction(
+        gameId,
+        contractAddress,
+        {
+          onStateChange: (state: string, data?: any) => {
+            console.log("Transaction state:", state, data);
+            setTxState(state);
+          },
+          onSuccess: (txId: string, transaction: any) => {
+            console.log("✅ Round processed successfully:", txId);
+          },
+          onError: (error: any, txId?: string, transaction?: any) => {
+            console.error("❌ Failed to process round:", error);
+            setTxError(error.message || "Failed to process round");
+            setTxState(TX_STATES.ERROR);
+          }
+        }
+      );
+
+      if (!result.success) {
+        throw result.error;
+      }
+    } catch (error: any) {
+      console.error("Process round error:", error);
+      setTxError(error.message || "Failed to process round");
+      setTxState(TX_STATES.ERROR);
+    }
+  };
 
   // Update game commit deadline in Supabase
   const updateGameCommitDeadlineInSupabase = async (eventData: any) => {
@@ -156,7 +199,7 @@ export default function MyGameDetailsPage() {
 
       console.log("Commit deadline updated successfully in Supabase:", data);
       return data;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to update commit deadline in Supabase:", error);
       // Don't throw - we don't want to break the UI if Supabase fails
     }
@@ -196,7 +239,7 @@ export default function MyGameDetailsPage() {
 
       console.log("Reveal deadline updated successfully in Supabase:", data);
       return data;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to update reveal deadline in Supabase:", error);
       // Don't throw - we don't want to break the UI if Supabase fails
     }
@@ -221,73 +264,49 @@ export default function MyGameDetailsPage() {
     }
   };
 
-  // Listen for CommitDeadlineSet events
-  const commitDeadlineEventType = contractAddress
-    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.CommitDeadlineSet`
-    : null;
+  // Listen for game management events using FCL native events API
+  useEffect(() => {
+    if (!contractAddress || !gameId) return;
 
-  if (commitDeadlineEventType && contractAddress) {
-    useFlowEvents({
-      eventTypes: [commitDeadlineEventType],
-      startHeight: 0,
-      onEvent: async (event) => {
-        console.log("==== COMMIT DEADLINE SET EVENT DETECTED ====");
-        console.log("Event type:", event.type);
-        console.log("Event transaction ID:", event.transactionId);
-        console.log("Event data:", event.data);
-        console.log("Full event object:", event);
-        console.log("============================================");
+    const eventTypes = [
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.CommitDeadlineSet`,
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.RevealDeadlineSet`
+    ];
 
-        // Store the latest event for display
-        setCommitDeadlineSetEvent(event);
+    const unsubscribes = eventTypes.map(eventType =>
+      fcl.events(eventType).subscribe(
+        async (event) => {
+          // Filter by game ID
+          if (event.data.gameId && parseInt(event.data.gameId) !== parseInt(gameId)) {
+            return;
+          }
 
-        // Update game in Supabase
-        await updateGameCommitDeadlineInSupabase(event.data);
+          console.log(`==== GAME ${gameId} EVENT DETECTED ====`);
+          console.log("Event type:", eventType);
+          console.log("Event transaction ID:", event.transactionId);
+          console.log("Event data:", event.data);
+          console.log("=========================================");
 
-        // Refresh game data
-        if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
+          // Handle different event types
+          if (eventType.includes('CommitDeadlineSet')) {
+            await updateGameCommitDeadlineInSupabase(event.data);
+          } else if (eventType.includes('RevealDeadlineSet')) {
+            await updateGameRevealDeadlineInSupabase(event.data);
+          }
+
+          // Refresh game data
           await refetchGameData();
+        },
+        (error) => {
+          console.error(`Error listening for game ${gameId} events:`, error);
         }
-      },
-      onError: (error) => {
-        console.error("Error listening for CommitDeadlineSet events:", error);
-      }
-    });
-  }
+      )
+    );
 
-  // Listen for RevealDeadlineSet events
-  const revealDeadlineEventType = contractAddress
-    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.RevealDeadlineSet`
-    : null;
-
-  if (revealDeadlineEventType && contractAddress) {
-    useFlowEvents({
-      eventTypes: [revealDeadlineEventType],
-      startHeight: 0,
-      onEvent: async (event) => {
-        console.log("==== REVEAL DEADLINE SET EVENT DETECTED ====");
-        console.log("Event type:", event.type);
-        console.log("Event transaction ID:", event.transactionId);
-        console.log("Event data:", event.data);
-        console.log("Full event object:", event);
-        console.log("============================================");
-
-        // Store the latest event for display
-        setRevealDeadlineSetEvent(event);
-
-        // Update game in Supabase
-        await updateGameRevealDeadlineInSupabase(event.data);
-
-        // Refresh game data
-        if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
-          await refetchGameData();
-        }
-      },
-      onError: (error) => {
-        console.error("Error listening for RevealDeadlineSet events:", error);
-      }
-    });
-  }
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [contractAddress, gameId]);
 
   // Fetch game details
   useEffect(() => {
@@ -497,29 +516,19 @@ export default function MyGameDetailsPage() {
                 </p>
               </div>
 
-              <TransactionButton
-                label="Set Commit Deadline"
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-                transaction={{
-                  cadence: SET_COMMIT_DEADLINE_TRANSACTION,
-                  args: (arg, t) => [
-                    arg(parseInt(gameId), t.UInt64),
-                    arg(parseFloat(commitDuration || "3600").toFixed(8), t.UFix64),
-                    arg(contractAddress, t.Address),
-                  ],
-                  limit: 999,
-                }}
-                mutation={{
-                  onSuccess: (transactionId) => {
-                    console.log("Commit deadline set! Transaction ID:", transactionId);
-                    alert("Commit deadline set successfully!");
-                  },
-                  onError: (error) => {
-                    console.error("Failed to set commit deadline:", error);
-                    alert("Failed to set commit deadline. Please try again.");
-                  },
-                }}
-              />
+              <button
+                onClick={handleSetCommitDeadline}
+                disabled={!commitDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                className={`w-full py-2 px-4 rounded-lg transition-colors ${!commitDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                    ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+              >
+                {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                  ? "Setting Deadline..."
+                  : "Set Commit Deadline"
+                }
+              </button>
             </div>
           )}
 
@@ -564,8 +573,11 @@ export default function MyGameDetailsPage() {
             </div>
           )}
 
-          {/* Set Reveal Deadline - Show only when in commit phase and reveal deadline not set */}
-          {game.game_state === 1 && !game.reveal_deadline && (
+          {/* Set Reveal Deadline - Show only when commit deadline has passed and reveal deadline not set */}
+          {game.game_state === 1 && 
+           game.commit_deadline && 
+           new Date() > new Date(game.commit_deadline) && 
+           !game.reveal_deadline && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 Start Reveal Phase
@@ -591,29 +603,19 @@ export default function MyGameDetailsPage() {
                 </p>
               </div>
 
-              <TransactionButton
-                label="Set Reveal Deadline"
-                className="w-full bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 transition-colors"
-                transaction={{
-                  cadence: SET_REVEAL_DEADLINE_TRANSACTION,
-                  args: (arg, t) => [
-                    arg(parseInt(gameId), t.UInt64),
-                    arg(parseFloat(revealDuration || "1800").toFixed(8), t.UFix64),
-                    arg(contractAddress, t.Address),
-                  ],
-                  limit: 999,
-                }}
-                mutation={{
-                  onSuccess: (transactionId) => {
-                    console.log("Reveal deadline set! Transaction ID:", transactionId);
-                    alert("Reveal deadline set successfully!");
-                  },
-                  onError: (error) => {
-                    console.error("Failed to set reveal deadline:", error);
-                    alert("Failed to set reveal deadline. Please try again.");
-                  },
-                }}
-              />
+              <button
+                onClick={handleSetRevealDeadline}
+                disabled={!revealDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                className={`w-full py-2 px-4 rounded-lg transition-colors ${!revealDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                    ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                    : "bg-yellow-600 text-white hover:bg-yellow-700"
+                  }`}
+              >
+                {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                  ? "Setting Deadline..."
+                  : "Set Reveal Deadline"
+                }
+              </button>
             </div>
           )}
 
@@ -668,28 +670,19 @@ export default function MyGameDetailsPage() {
                 Calculate results and advance to next round or end game.
               </p>
 
-              <TransactionButton
-                label="Process Round"
-                className="w-full bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 transition-colors"
-                transaction={{
-                  cadence: PROCESS_ROUND_TRANSACTION,
-                  args: (arg, t) => [
-                    arg(parseInt(gameId), t.UInt64),
-                    arg(contractAddress, t.Address),
-                  ],
-                  limit: 999,
-                }}
-                mutation={{
-                  onSuccess: (transactionId) => {
-                    console.log("Round processed! Transaction ID:", transactionId);
-                    alert("Round processed successfully!");
-                  },
-                  onError: (error) => {
-                    console.error("Failed to process round:", error);
-                    alert("Failed to process round. Please try again.");
-                  },
-                }}
-              />
+              <button
+                onClick={handleProcessRound}
+                disabled={txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                className={`w-full py-2 px-4 rounded-lg transition-colors ${txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                    ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                    : "bg-orange-600 text-white hover:bg-orange-700"
+                  }`}
+              >
+                {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                  ? "Processing..."
+                  : "Process Round"
+                }
+              </button>
             </div>
           )}
 
@@ -711,6 +704,28 @@ export default function MyGameDetailsPage() {
             </div>
           )}
         </div>
+
+        {/* Transaction Error Display */}
+        {txError && (
+          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700 text-sm font-medium">Transaction Error</p>
+            <p className="text-red-600 text-sm mt-1">{txError}</p>
+            <button
+              onClick={() => setTxError(null)}
+              className="mt-2 text-red-700 hover:text-red-800 text-sm underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Transaction Success Display */}
+        {txState === TX_STATES.SUCCESS && (
+          <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-green-700 text-sm font-medium">Transaction Successful!</p>
+            <p className="text-green-600 text-sm mt-1">The operation completed successfully.</p>
+          </div>
+        )}
       </div>
     </div>
   );

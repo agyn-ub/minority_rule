@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useFlowCurrentUser } from "@onflow/react-sdk";
+import { useFlowUser } from "@/lib/useFlowUser";
 import Link from "next/link";
 import * as fcl from "@onflow/fcl";
 
 export default function UserProfile() {
-  const { user, unauthenticate } = useFlowCurrentUser();
+  const { user, logout } = useFlowUser();
   const [isOpen, setIsOpen] = useState(false);
   const [showCopySuccess, setShowCopySuccess] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
@@ -112,7 +112,7 @@ export default function UserProfile() {
   const handleDisconnect = () => {
     const confirmed = window.confirm('Are you sure you want to disconnect your wallet?');
     if (confirmed) {
-      unauthenticate();
+      logout();
       setIsOpen(false);
     }
   };

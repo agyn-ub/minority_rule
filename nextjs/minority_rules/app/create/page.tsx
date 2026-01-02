@@ -1,54 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { TransactionButton, useFlowCurrentUser, useFlowEvents } from "@onflow/react-sdk";
+import { useState, useEffect } from "react";
+import { useFlowUser } from "@/lib/useFlowUser";
+import * as fcl from "@onflow/fcl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase, type Game } from "@/lib/supabase";
-
-// CreateGame transaction cadence
-const CREATE_GAME_TRANSACTION = `
-import "MinorityRuleGame"
-import "FungibleToken"
-import "FlowToken"
-
-transaction(questionText: String, entryFee: UFix64, contractAddress: Address) {
-    
-    let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let gameId: UInt64
-    let creator: Address
-    
-    prepare(signer: auth(Storage, Capabilities) &Account) {
-        self.creator = signer.address
-        
-        // Borrow the game manager from the contract account
-        self.gameManager = getAccount(contractAddress)
-            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
-            ?? panic("Could not borrow game manager from public capability")
-        
-        // Create the game
-        self.gameId = self.gameManager.createGame(
-            questionText: questionText,
-            entryFee: entryFee,
-            creator: self.creator
-        )
-    }
-    
-    execute {
-        log("Game created with ID: ".concat(self.gameId.toString()))
-        log("Creator: ".concat(self.creator.toString()))
-        log("Game is now ready - players can join and vote")
-        log("Manual processing: Use EndCommitPhase and ProcessRound transactions when needed")
-    }
-}
-`;
-
+import { supabase } from "@/lib/supabase";
+import { createGameTransaction, TX_STATES } from "@/lib/transactions";
 
 export default function CreateGamePage() {
-  const { user } = useFlowCurrentUser();
+  const { user } = useFlowUser();
   const router = useRouter();
   const [questionText, setQuestionText] = useState("");
   const [entryFee, setEntryFee] = useState("1.0");
+  const [txState, setTxState] = useState(TX_STATES.IDLE);
+  const [txError, setTxError] = useState(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
@@ -68,7 +34,7 @@ export default function CreateGamePage() {
       };
 
       console.log("Saving game to Supabase:", gameData);
-      
+
       const { data, error } = await supabase
         .from('games')
         .insert([gameData])
@@ -87,38 +53,75 @@ export default function CreateGamePage() {
     }
   };
 
-  // Create validated event type
-  const eventType = contractAddress
-    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.GameCreated`
-    : null;
+  // Create game function
+  const handleCreateGame = async () => {
+    if (!isFormValid || !user?.loggedIn) return;
 
-  // Listen for GameCreated events from our contract (with enhanced logging)
-  if (eventType && contractAddress) {
-    useFlowEvents({
-      eventTypes: [eventType],
-      startHeight: 0,
-      onEvent: async (event) => {
-        console.log("==== GAMECREATED EVENT DETECTED ====");
-        console.log("Event type:", event.type);
-        console.log("Event transaction ID:", event.transactionId);
-        console.log("Event data:", event.data);
-        console.log("Full event object:", event);
-        console.log("=====================================");
+    try {
+      setTxError(null);
+      
+      console.log("🚀 Creating game with:", { questionText, entryFee, contractAddress });
 
-        const gameId = event.data.gameId;
-        console.log("Extracted real game ID from event:", gameId);
+      const result = await createGameTransaction(
+        questionText,
+        entryFee,
+        contractAddress,
+        {
+          onStateChange: (state, data) => {
+            console.log("Transaction state:", state, data);
+            setTxState(state);
+          },
+          onSuccess: (txId, transaction) => {
+            console.log("✅ Game creation successful:", txId);
+            // Event listener will handle navigation
+          },
+          onError: (error, txId, transaction) => {
+            console.error("❌ Game creation failed:", error);
+            setTxError(error.message || "Failed to create game");
+            setTxState(TX_STATES.ERROR);
+          }
+        }
+      );
 
-        // Save game to Supabase
-        await saveGameToSupabase(event.data);
-
-        // Immediately redirect to manage the new game
-        router.push(`/my-games/${gameId}`);
-      },
-      onError: (error) => {
-        console.error("Error listening for GameCreated events:", error);
+      if (!result.success) {
+        throw result.error;
       }
-    });
-  }
+
+    } catch (error) {
+      console.error("Create game error:", error);
+      setTxError(error.message || "Failed to create game");
+      setTxState(TX_STATES.ERROR);
+    }
+  };
+
+  // Listen for GameCreated events using FCL native events API
+  useEffect(() => {
+    if (!contractAddress) return;
+
+    const eventType = `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.GameCreated`;
+
+    const unsubscribe = fcl.events(eventType).subscribe(
+      async (event) => {
+        console.log("🎯 GameCreated event received:", event);
+
+        // Only process if the creator is the current user
+        if (event.data.creator === user?.addr) {
+          console.log("✅ Game created by current user, processing...");
+
+          // Save game to Supabase
+          await saveGameToSupabase(event.data);
+
+          // Redirect to manage the new game
+          router.push(`/my-games/${event.data.gameId}`);
+        }
+      },
+      (error) => {
+        console.error("❌ GameCreated event error:", error);
+      }
+    );
+
+    return unsubscribe;
+  }, [contractAddress, user?.addr, router]);
 
 
 
@@ -145,6 +148,7 @@ export default function CreateGamePage() {
 
 
   const isFormValid = questionText.trim().length > 0 && parseFloat(entryFee) > 0;
+  const isCreating = txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING;
 
   return (
     <div className="min-h-screen bg-background py-8">
@@ -159,7 +163,13 @@ export default function CreateGamePage() {
             </p>
           </div>
 
-          <form className="space-y-6">
+          <form 
+            className="space-y-6"
+            onSubmit={(e) => {
+              e.preventDefault();
+              console.log("Form submission prevented");
+            }}
+          >
             {/* Question Text */}
             <div>
               <label htmlFor="question" className="block text-sm font-medium text-foreground mb-2">
@@ -208,29 +218,44 @@ export default function CreateGamePage() {
             </div>
 
             {/* Submit Button */}
-            <TransactionButton
-              label="Create Game"
-              className=
-              "w-full py-3 px-4 rounded-lg font-medium transition-colors"
-              transaction={{
-                cadence: CREATE_GAME_TRANSACTION,
-                args: (arg, t) => [
-                  arg(questionText.trim(), t.String),
-                  arg(parseFloat(entryFee).toFixed(8), t.UFix64),
-                  arg(contractAddress, t.Address),
-                ],
-                limit: 999,
-              }}
-              mutation={{
-                onSuccess: (transactionId) => {
-                  console.log("Game created! Transaction ID:", transactionId);
-                },
-                onError: (error) => {
-                  console.error("Game creation failed:", error);
-                  alert("Failed to create game. Please try again.");
-                },
-              }}
-            />
+            <button
+              type="button"
+              onClick={handleCreateGame}
+              disabled={!isFormValid || isCreating}
+              className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                isFormValid && !isCreating
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-gray-400 text-gray-200 cursor-not-allowed"
+              }`}
+            >
+              {isCreating ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  {txState === TX_STATES.SUBMITTING && "Submitting..."}
+                  {txState === TX_STATES.SUBMITTED && "Processing..."}
+                  {txState === TX_STATES.SEALING && "Finalizing..."}
+                </span>
+              ) : (
+                "Create Game"
+              )}
+            </button>
+
+            {/* Error Display */}
+            {txError && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 text-sm">{txError}</p>
+              </div>
+            )}
+
+            {/* Transaction Status */}
+            {txState === TX_STATES.SUCCESS && (
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-green-700 text-sm">Game created successfully! Redirecting...</p>
+              </div>
+            )}
           </form>
 
           <div className="mt-6 pt-6 border-t border-border">

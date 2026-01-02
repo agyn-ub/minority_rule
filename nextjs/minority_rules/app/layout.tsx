@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { FlowProviderWrapper } from "@/components/FlowProvider";
+import { configureFlow } from "@/lib/flow-config";
 import Navbar from "@/components/Navbar";
+
+// Initialize FCL configuration
+configureFlow();
 
 const inter = Inter({
   subsets: ["latin"],
@@ -22,10 +25,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} font-sans antialiased`}>
-        <FlowProviderWrapper>
-          <Navbar />
-          {children}
-        </FlowProviderWrapper>
+        <Navbar />
+        {children}
       </body>
     </html>
   );

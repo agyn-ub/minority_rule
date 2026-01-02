@@ -1,121 +1,18 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { useFlowCurrentUser, TransactionButton, useFlowEvents } from "@onflow/react-sdk";
+import { useFlowUser } from "@/lib/useFlowUser";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { CopySuccessDialog } from "@/components/ui/info-dialog";
+import { 
+  joinGameTransaction, 
+  submitVoteCommitTransaction, 
+  submitVoteRevealTransaction,
+  TX_STATES 
+} from "@/lib/transactions";
+import * as fcl from "@onflow/fcl";
 
-// Join Game transaction cadence
-const JOIN_GAME_TRANSACTION = `
-import "MinorityRuleGame"
-import "FungibleToken"
-import "FlowToken"
-
-transaction(gameId: UInt64, contractAddress: Address) {
-    
-    let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let game: &MinorityRuleGame.Game
-    let payment: @{FungibleToken.Vault}
-    let player: Address
-    
-    prepare(signer: auth(Storage, Capabilities) &Account) {
-        self.player = signer.address
-        
-        // Borrow the game manager from the contract account
-        self.gameManager = getAccount(contractAddress)
-            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
-            ?? panic("Could not borrow game manager from public capability")
-        
-        // Get the game
-        self.game = self.gameManager.borrowGame(gameId: gameId)
-            ?? panic("Game not found")
-        
-        // Get player's Flow token vault
-        let flowVault = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
-            ?? panic("Could not borrow Flow token vault")
-        
-        // Withdraw entry fee
-        self.payment <- flowVault.withdraw(amount: self.game.entryFee)
-    }
-    
-    execute {
-        // Join the game (only allowed during Round 1)
-        self.game.joinGame(player: self.player, payment: <- self.payment)
-        
-        log("Player ".concat(self.player.toString()).concat(" joined game ").concat(gameId.toString()))
-    }
-}
-`;
-
-// Submit Commit transaction cadence
-const SUBMIT_COMMIT_TRANSACTION = `
-import "MinorityRuleGame"
-
-transaction(gameId: UInt64, commitHash: String, contractAddress: Address) {
-    
-    let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let game: &MinorityRuleGame.Game
-    let player: Address
-    
-    prepare(signer: auth(Storage, Capabilities) &Account) {
-        self.player = signer.address
-        
-        // Borrow the game manager from the contract account
-        self.gameManager = getAccount(contractAddress)
-            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
-            ?? panic("Could not borrow game manager from public capability")
-        
-        // Get the game
-        self.game = self.gameManager.borrowGame(gameId: gameId)
-            ?? panic("Game not found")
-    }
-    
-    execute {
-        // Submit vote commitment (hash of vote + salt)
-        self.game.submitCommit(player: self.player, commitHash: commitHash)
-        
-        log("Player ".concat(self.player.toString())
-            .concat(" submitted commit for game ").concat(gameId.toString())
-            .concat(" with hash: ").concat(commitHash))
-    }
-}
-`;
-
-// Submit Reveal transaction cadence
-const SUBMIT_REVEAL_TRANSACTION = `
-import "MinorityRuleGame"
-
-transaction(gameId: UInt64, vote: Bool, salt: String, contractAddress: Address) {
-    
-    let gameManager: &{MinorityRuleGame.GameManagerPublic}
-    let game: &MinorityRuleGame.Game
-    let player: Address
-    
-    prepare(signer: auth(Storage, Capabilities) &Account) {
-        self.player = signer.address
-        
-        // Borrow the game manager from the contract account
-        self.gameManager = getAccount(contractAddress)
-            .capabilities.borrow<&{MinorityRuleGame.GameManagerPublic}>(MinorityRuleGame.GamePublicPath)
-            ?? panic("Could not borrow game manager from public capability")
-        
-        // Get the game
-        self.game = self.gameManager.borrowGame(gameId: gameId)
-            ?? panic("Game not found")
-    }
-    
-    execute {
-        // Submit vote reveal (actual vote + salt for verification)
-        self.game.submitReveal(player: self.player, vote: vote, salt: salt)
-        
-        let voteText = vote ? "YES" : "NO"
-        log("Player ".concat(self.player.toString())
-            .concat(" revealed vote ").concat(voteText)
-            .concat(" for game ").concat(gameId.toString())
-            .concat(" with salt: ").concat(salt))
-    }
-}
-`;
 
 // GameState enum matching Cadence contract
 enum GameState {
@@ -170,7 +67,7 @@ interface PublicGamePageProps {
 }
 
 export default function PublicGamePage({ params }: PublicGamePageProps) {
-  const { user } = useFlowCurrentUser();
+  const { user } = useFlowUser();
   const resolvedParams = use(params);
   const gameId = resolvedParams.gameId;
 
@@ -187,8 +84,125 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   const [hasUserRevealed, setHasUserRevealed] = useState(false);
   const [revealVote, setRevealVote] = useState<boolean | null>(null);
   const [revealSalt, setRevealSalt] = useState('');
+  const [showCopySuccessDialog, setShowCopySuccessDialog] = useState(false);
+  
+  // Transaction state management
+  const [txState, setTxState] = useState(TX_STATES.IDLE);
+  const [txError, setTxError] = useState<string | null>(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
+
+  // Transaction execution functions
+  const handleJoinGame = async () => {
+    if (!user?.loggedIn) return;
+
+    try {
+      setTxError(null);
+      console.log("🚀 Joining game:", { gameId, contractAddress });
+
+      const result = await joinGameTransaction(
+        gameId,
+        contractAddress,
+        {
+          onStateChange: (state: string, data?: any) => {
+            console.log("Transaction state:", state, data);
+            setTxState(state);
+          },
+          onSuccess: (txId: string, transaction: any) => {
+            console.log("✅ Successfully joined game:", txId);
+          },
+          onError: (error: any, txId?: string, transaction?: any) => {
+            console.error("❌ Failed to join game:", error);
+            setTxError(error.message || "Failed to join game");
+            setTxState(TX_STATES.ERROR);
+          }
+        }
+      );
+
+      if (!result.success) {
+        throw result.error;
+      }
+    } catch (error: any) {
+      console.error("Join game error:", error);
+      setTxError(error.message || "Failed to join game");
+      setTxState(TX_STATES.ERROR);
+    }
+  };
+
+  const handleCommitVote = async () => {
+    if (!user?.loggedIn || !commitHash) return;
+
+    try {
+      setTxError(null);
+      console.log("🚀 Committing vote:", { gameId, commitHash, contractAddress });
+
+      const result = await submitVoteCommitTransaction(
+        gameId,
+        commitHash,
+        contractAddress,
+        {
+          onStateChange: (state: string, data?: any) => {
+            console.log("Transaction state:", state, data);
+            setTxState(state);
+          },
+          onSuccess: (txId: string, transaction: any) => {
+            console.log("✅ Successfully committed vote:", txId);
+          },
+          onError: (error: any, txId?: string, transaction?: any) => {
+            console.error("❌ Failed to commit vote:", error);
+            setTxError(error.message || "Failed to commit vote");
+            setTxState(TX_STATES.ERROR);
+          }
+        }
+      );
+
+      if (!result.success) {
+        throw result.error;
+      }
+    } catch (error: any) {
+      console.error("Commit vote error:", error);
+      setTxError(error.message || "Failed to commit vote");
+      setTxState(TX_STATES.ERROR);
+    }
+  };
+
+  const handleRevealVote = async () => {
+    if (!user?.loggedIn || revealVote === null || !revealSalt) return;
+
+    try {
+      setTxError(null);
+      console.log("🚀 Revealing vote:", { gameId, revealVote, revealSalt, contractAddress });
+
+      const result = await submitVoteRevealTransaction(
+        gameId,
+        revealVote,
+        revealSalt,
+        contractAddress,
+        {
+          onStateChange: (state: string, data?: any) => {
+            console.log("Transaction state:", state, data);
+            setTxState(state);
+          },
+          onSuccess: (txId: string, transaction: any) => {
+            console.log("✅ Successfully revealed vote:", txId);
+          },
+          onError: (error: any, txId?: string, transaction?: any) => {
+            console.error("❌ Failed to reveal vote:", error);
+            setTxError(error.message || "Failed to reveal vote");
+            setTxState(TX_STATES.ERROR);
+          }
+        }
+      );
+
+      if (!result.success) {
+        throw result.error;
+      }
+    } catch (error: any) {
+      console.error("Reveal vote error:", error);
+      setTxError(error.message || "Failed to reveal vote");
+      setTxState(TX_STATES.ERROR);
+    }
+  };
 
   // Check if current user has already joined this game
   const checkIfUserHasJoined = async () => {
@@ -422,119 +436,64 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
   };
 
-  // Listen for PlayerJoined events
-  const playerJoinedEventType = contractAddress
-    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.PlayerJoined`
-    : null;
+  // Listen for game events using FCL native events API
+  useEffect(() => {
+    if (!contractAddress || !gameId) return;
 
-  if (playerJoinedEventType && contractAddress) {
-    useFlowEvents({
-      eventTypes: [playerJoinedEventType],
-      startHeight: 0,
-      onEvent: async (event) => {
-        console.log("==== PLAYER JOINED EVENT DETECTED ====");
-        console.log("Event type:", event.type);
-        console.log("Event transaction ID:", event.transactionId);
-        console.log("Event data:", event.data);
-        console.log("Full event object:", event);
-        console.log("======================================");
+    const eventTypes = [
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.PlayerJoined`,
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.VoteCommitted`,
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.VoteRevealed`
+    ];
 
-        // Store the latest event for display
-        setPlayerJoinedEvent(event);
+    const unsubscribes = eventTypes.map(eventType => 
+      fcl.events(eventType).subscribe(
+        async (event) => {
+          // Filter by game ID if present
+          if (event.data.gameId && parseInt(event.data.gameId) !== parseInt(gameId)) {
+            return;
+          }
 
-        // Update game in Supabase
-        await updateGamePlayerCountInSupabase(event.data);
+          console.log(`==== ${eventType.split('.').pop()} EVENT DETECTED ====`);
+          console.log("Event type:", eventType);
+          console.log("Event transaction ID:", event.transactionId);
+          console.log("Event data:", event.data);
+          console.log("=========================================");
 
-        // Insert player into game_players table
-        await insertPlayerIntoGamePlayers(event.data);
+          // Handle different event types
+          if (eventType.includes('PlayerJoined')) {
+            setPlayerJoinedEvent(event);
+            await updateGamePlayerCountInSupabase(event.data);
+            await insertPlayerIntoGamePlayers(event.data);
 
-        // Check if this is the current user joining
-        if (event.data.player === user?.addr) {
-          setHasUserJoined(true);
-        }
+            if (event.data.player === user?.addr) {
+              setHasUserJoined(true);
+            }
+          } else if (eventType.includes('VoteCommitted')) {
+            await insertCommitIntoSupabase(event.data);
+            if (event.data.player === user?.addr) {
+              setHasUserCommitted(true);
+            }
+          } else if (eventType.includes('VoteRevealed')) {
+            await insertRevealIntoSupabase(event.data);
+            if (event.data.player === user?.addr) {
+              setHasUserRevealed(true);
+            }
+          }
 
-        // Refresh game data if this is for our current game
-        if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
+          // Refresh game data
           await refetchGameData();
+        },
+        (error) => {
+          console.error(`Error listening for ${eventType} events:`, error);
         }
-      },
-      onError: (error) => {
-        console.error("Error listening for PlayerJoined events:", error);
-      }
-    });
-  }
+      )
+    );
 
-  // Listen for VoteCommitted events
-  const voteCommittedEventType = contractAddress
-    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.VoteCommitted`
-    : null;
-
-  if (voteCommittedEventType && contractAddress) {
-    useFlowEvents({
-      eventTypes: [voteCommittedEventType],
-      startHeight: 0,
-      onEvent: async (event) => {
-        console.log("==== VOTE COMMITTED EVENT DETECTED ====");
-        console.log("Event type:", event.type);
-        console.log("Event transaction ID:", event.transactionId);
-        console.log("Event data:", event.data);
-        console.log("Full event object:", event);
-        console.log("=======================================");
-
-        // Insert commit into Supabase
-        await insertCommitIntoSupabase(event.data);
-
-        // Check if this is the current user committing
-        if (event.data.player === user?.addr) {
-          setHasUserCommitted(true);
-        }
-
-        // Refresh game data if this is for our current game
-        if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
-          await refetchGameData();
-        }
-      },
-      onError: (error) => {
-        console.error("Error listening for VoteCommitted events:", error);
-      }
-    });
-  }
-
-  // Listen for VoteRevealed events
-  const voteRevealedEventType = contractAddress
-    ? `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.VoteRevealed`
-    : null;
-
-  if (voteRevealedEventType && contractAddress) {
-    useFlowEvents({
-      eventTypes: [voteRevealedEventType],
-      startHeight: 0,
-      onEvent: async (event) => {
-        console.log("==== VOTE REVEALED EVENT DETECTED ====");
-        console.log("Event type:", event.type);
-        console.log("Event transaction ID:", event.transactionId);
-        console.log("Event data:", event.data);
-        console.log("Full event object:", event);
-        console.log("=======================================");
-
-        // Insert reveal into Supabase
-        await insertRevealIntoSupabase(event.data);
-
-        // Check if this is the current user revealing
-        if (event.data.player === user?.addr) {
-          setHasUserRevealed(true);
-        }
-
-        // Refresh game data if this is for our current game
-        if (event.data.gameId && parseInt(event.data.gameId) === parseInt(gameId)) {
-          await refetchGameData();
-        }
-      },
-      onError: (error) => {
-        console.error("Error listening for VoteRevealed events:", error);
-      }
-    });
-  }
+    return () => {
+      unsubscribes.forEach(unsubscribe => unsubscribe());
+    };
+  }, [contractAddress, gameId, user?.addr]);
 
   // Fetch public game data
   useEffect(() => {
@@ -747,7 +706,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     <div className="min-h-screen bg-background py-8">
       <div className="max-w-4xl mx-auto px-4">
         {/* Breadcrumb */}
-        <nav className="flex mb-8" aria-label="Breadcrumb">
+        <nav className="flex mb-8" aria-label="breadcrumb">
           <ol className="inline-flex items-center space-x-1 md:space-x-3">
             <li className="inline-flex items-center">
               <Link href="/" className="text-primary hover:text-primary/80">
@@ -892,28 +851,20 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                         </p>
                       </div>
 
-                      <TransactionButton
-                        label="Join Game"
-                        className="w-full bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium"
-                        transaction={{
-                          cadence: JOIN_GAME_TRANSACTION,
-                          args: (arg, t) => [
-                            arg(parseInt(gameId), t.UInt64),
-                            arg(contractAddress, t.Address),
-                          ],
-                          limit: 999,
-                        }}
-                        mutation={{
-                          onSuccess: (transactionId) => {
-                            console.log("Joined game! Transaction ID:", transactionId);
-                            alert("Successfully joined the game!");
-                          },
-                          onError: (error) => {
-                            console.error("Failed to join game:", error);
-                            alert("Failed to join game. Please make sure you have enough FLOW tokens and try again.");
-                          },
-                        }}
-                      />
+                      <button 
+                        onClick={handleJoinGame}
+                        disabled={txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                        className={`w-full py-3 px-4 rounded-lg transition-colors font-medium ${
+                          txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                            ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                            : "bg-green-600 text-white hover:bg-green-700"
+                        }`}
+                      >
+                        {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                          ? "Joining..."
+                          : "Join Game"
+                        }
+                      </button>
 
                       <div className="mt-3 text-xs text-muted-foreground text-center">
                         <p>• You need {game.entry_fee} FLOW to join</p>
@@ -1023,29 +974,20 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
 
                       {/* Submit Button */}
                       {userVote !== null && (
-                        <TransactionButton
-                          label="Submit Vote Commitment"
-                          className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                          transaction={{
-                            cadence: SUBMIT_COMMIT_TRANSACTION,
-                            args: (arg, t) => [
-                              arg(parseInt(gameId), t.UInt64),
-                              arg(commitHash, t.String),
-                              arg(contractAddress, t.Address),
-                            ],
-                            limit: 999,
-                          }}
-                          mutation={{
-                            onSuccess: (transactionId) => {
-                              console.log("Vote committed! Transaction ID:", transactionId);
-                              // Salt will be displayed prominently in the UI instead of alert
-                            },
-                            onError: (error) => {
-                              console.error("Failed to commit vote:", error);
-                              alert("Failed to commit vote. Please try again.");
-                            },
-                          }}
-                        />
+                        <button 
+                          onClick={handleCommitVote}
+                          disabled={!commitHash || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                          className={`w-full py-3 px-4 rounded-lg transition-colors font-medium ${
+                            !commitHash || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                              : "bg-blue-600 text-white hover:bg-blue-700"
+                          }`}
+                        >
+                          {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                            ? "Committing..."
+                            : "Submit Vote Commitment"
+                          }
+                        </button>
                       )}
 
                       <div className="mt-4 text-xs text-muted-foreground text-center">
@@ -1086,7 +1028,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                                 <button
                                   onClick={() => {
                                     navigator.clipboard.writeText(userSalt);
-                                    alert('Salt copied to clipboard!');
+                                    setShowCopySuccessDialog(true);
                                   }}
                                   className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition-colors text-sm font-medium"
                                 >
@@ -1216,30 +1158,20 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
 
                       {/* Submit Button */}
                       {revealVote !== null && revealSalt.length === 64 && (
-                        <TransactionButton
-                          label="Reveal Vote"
-                          className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                          transaction={{
-                            cadence: SUBMIT_REVEAL_TRANSACTION,
-                            args: (arg, t) => [
-                              arg(parseInt(gameId), t.UInt64),
-                              arg(revealVote, t.Bool),
-                              arg(revealSalt, t.String),
-                              arg(contractAddress, t.Address),
-                            ],
-                            limit: 999,
-                          }}
-                          mutation={{
-                            onSuccess: (transactionId) => {
-                              console.log("Vote revealed! Transaction ID:", transactionId);
-                              alert(`Vote revealed successfully! Your ${revealVote ? 'YES' : 'NO'} vote is now public.`);
-                            },
-                            onError: (error) => {
-                              console.error("Failed to reveal vote:", error);
-                              alert("Failed to reveal vote. Please check your vote and salt match your original commitment.");
-                            },
-                          }}
-                        />
+                        <button 
+                          onClick={handleRevealVote}
+                          disabled={revealVote === null || revealSalt.length !== 64 || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                          className={`w-full py-3 px-4 rounded-lg transition-colors font-medium ${
+                            revealVote === null || revealSalt.length !== 64 || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                              : "bg-purple-600 text-white hover:bg-purple-700"
+                          }`}
+                        >
+                          {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                            ? "Revealing..."
+                            : "Reveal Vote"
+                          }
+                        </button>
                       )}
 
                       <div className="mt-4 text-xs text-muted-foreground text-center">
@@ -1281,8 +1213,30 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           </div>
         </div>
 
+        {/* Transaction Error Display */}
+        {txError && (
+          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-700 text-sm font-medium">Transaction Error</p>
+            <p className="text-red-600 text-sm mt-1">{txError}</p>
+            <button 
+              onClick={() => setTxError(null)}
+              className="mt-2 text-red-700 hover:text-red-800 text-sm underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Transaction Success Display */}
+        {txState === TX_STATES.SUCCESS && (
+          <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-green-700 text-sm font-medium">Transaction Successful!</p>
+            <p className="text-green-600 text-sm mt-1">The operation completed successfully.</p>
+          </div>
+        )}
+
         {/* Navigation */}
-        <div className="text-center">
+        <div className="text-center mt-6">
           <Link
             href="/games"
             className="text-primary hover:text-primary/80 text-sm"
@@ -1291,6 +1245,12 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           </Link>
         </div>
       </div>
+
+      <CopySuccessDialog
+        open={showCopySuccessDialog}
+        onOpenChange={setShowCopySuccessDialog}
+        item="Salt"
+      />
     </div>
   );
 }

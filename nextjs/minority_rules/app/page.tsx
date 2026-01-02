@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useFlowCurrentUser } from "@onflow/react-sdk";
+import { useFlowUser } from "@/lib/useFlowUser";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
@@ -32,7 +32,7 @@ type Game = {
 };
 
 export default function HomePage() {
-  const { user } = useFlowCurrentUser();
+  const { user } = useFlowUser();
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

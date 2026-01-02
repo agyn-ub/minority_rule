@@ -1,7 +1,9 @@
 "use client";
+import { useFlowUser } from "@/lib/useFlowUser";
 
 import { useState } from "react";
-import { TransactionButton, useFlowCurrentUser } from "@onflow/react-sdk";
+// React SDK removed - using FCL directly
+import { DevelopmentDialog } from "@/components/ui/info-dialog";
 
 // SetCommitDeadline transaction cadence
 const SET_COMMIT_DEADLINE_TRANSACTION = `
@@ -48,8 +50,9 @@ export default function SetCommitDeadline({
   className = "",
   buttonText = "Set Commit Deadline"
 }: SetCommitDeadlineProps) {
-  const { user } = useFlowCurrentUser();
+  const { user } = useFlowUser();
   const [deadlineHours, setDeadlineHours] = useState("24");
+  const [showDevelopmentDialog, setShowDevelopmentDialog] = useState(false);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
@@ -109,32 +112,19 @@ export default function SetCommitDeadline({
       )}
 
       {/* Transaction Button */}
-      <TransactionButton
-        label={
-          isFormValid 
-            ? buttonText
-            : "Enter valid hours"
-        }
+      <button
+        onClick={() => {
+          setShowDevelopmentDialog(true);
+        }}
         disabled={!isFormValid}
         className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
           isFormValid
             ? "bg-primary text-primary-foreground hover:bg-primary/90"
             : "bg-muted text-muted-foreground cursor-not-allowed"
         }`}
-        transaction={{
-          cadence: SET_COMMIT_DEADLINE_TRANSACTION,
-          args: (arg, t) => [
-            arg(gameId, t.UInt64),
-            arg((parseFloat(deadlineHours) * 3600).toFixed(8), t.UFix64), // Convert hours to seconds
-            arg(contractAddress, t.Address),
-          ],
-          limit: 999,
-        }}
-        mutation={{
-          onSuccess: handleSuccess,
-          onError: handleError,
-        }}
-      />
+      >
+        {isFormValid ? buttonText : "Enter valid hours"}
+      </button>
 
       {/* Help Text */}
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
@@ -146,6 +136,13 @@ export default function SetCommitDeadline({
           <li>• You cannot change the deadline once set</li>
         </ul>
       </div>
+      
+      <DevelopmentDialog
+        open={showDevelopmentDialog}
+        onOpenChange={setShowDevelopmentDialog}
+        feature="Set Commit Deadline"
+        description="FCL transaction implementation is needed for setting commit deadlines. This feature will allow players to start submitting their vote commitments."
+      />
     </div>
   );
 }
