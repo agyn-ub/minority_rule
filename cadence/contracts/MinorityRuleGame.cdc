@@ -430,7 +430,25 @@ access(all) contract MinorityRuleGame {
             
             self.state = GameState.processingRound
             
-            // Determine minority vote
+            // Check if too few players for minority rule - auto-win condition
+            if self.remainingPlayers.length <= 2 {
+                // With 1-2 players, remaining players automatically win
+                self.winners = self.remainingPlayers
+                
+                emit RoundCompleted(
+                    gameId: self.gameId,
+                    round: self.currentRound,
+                    yesCount: self.currentRoundYesVotes,
+                    noCount: self.currentRoundNoVotes,
+                    minorityVote: true, // Arbitrary - not meaningful with <3 players
+                    votesRemaining: UInt32(self.remainingPlayers.length)
+                )
+                
+                self.endGame()
+                return
+            }
+            
+            // Apply minority rule logic only with 3+ players
             let minorityVote: Bool = self.currentRoundYesVotes <= self.currentRoundNoVotes
             let votesRemaining: UInt32 = minorityVote ? self.currentRoundYesVotes : self.currentRoundNoVotes
             
@@ -463,7 +481,7 @@ access(all) contract MinorityRuleGame {
             self.remainingPlayers = newRemainingPlayers
             
             // Check if game should end
-            if votesRemaining <= 2 || votesRemaining == 0 {
+            if votesRemaining <= 2 {
                 self.winners = self.remainingPlayers
                 self.endGame()
             } else {
