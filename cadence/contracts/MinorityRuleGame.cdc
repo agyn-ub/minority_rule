@@ -430,22 +430,29 @@ access(all) contract MinorityRuleGame {
             
             self.state = GameState.processingRound
             
-            // Check if too few players for minority rule - auto-win condition
-            if self.remainingPlayers.length <= 2 {
-                // With 1-2 players, remaining players automatically win
-                self.winners = self.remainingPlayers
-                
-                emit RoundCompleted(
-                    gameId: self.gameId,
-                    round: self.currentRound,
-                    yesCount: self.currentRoundYesVotes,
-                    noCount: self.currentRoundNoVotes,
-                    minorityVote: true, // Arbitrary - not meaningful with <3 players
-                    votesRemaining: UInt32(self.remainingPlayers.length)
-                )
-                
-                self.endGame()
-                return
+            // Check if too few players for minority rule - first round only
+            if self.currentRound == 1 {
+                let totalVotes = self.currentRoundYesVotes + self.currentRoundNoVotes
+                if totalVotes <= 2 {
+                    // With 1-2 players in first round, they automatically win
+                    let firstRoundWinners: [Address] = []
+                    for player in self.currentRoundReveals.keys {
+                        firstRoundWinners.append(player)
+                    }
+                    self.winners = firstRoundWinners
+                    
+                    emit RoundCompleted(
+                        gameId: self.gameId,
+                        round: self.currentRound,
+                        yesCount: self.currentRoundYesVotes,
+                        noCount: self.currentRoundNoVotes,
+                        minorityVote: true, // Arbitrary - not meaningful with <3 players
+                        votesRemaining: 0
+                    )
+                    
+                    self.endGame()
+                    return
+                }
             }
             
             // Apply minority rule logic only with 3+ players
