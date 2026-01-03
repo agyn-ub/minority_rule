@@ -177,6 +177,7 @@ export default function HomePage() {
           </p>
         </div>
 
+
         {/* Filter Tabs */}
         <div className="mb-6">
           <div className="flex space-x-1 bg-card rounded-lg p-1 shadow-sm">

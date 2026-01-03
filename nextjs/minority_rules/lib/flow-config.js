@@ -78,7 +78,7 @@ export const configureFlow = () => {
     "discovery.wallet": currentNetwork.discoveryWallet,
     "discovery.authn.include": currentNetwork.discoveryAuthnInclude || [],
     "app.detail.title": "Minority Rule Game",
-    "app.detail.icon": "wallet_logo.png",
+    "app.detail.icon": "https://fcl-discovery.onflow.org/images/blocto.png",
     "flow.network": FLOW_ENV,
     "fcl.limit": 999,
     // Contract address mappings

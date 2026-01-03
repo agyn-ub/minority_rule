@@ -503,11 +503,12 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   };
 
   // Update game when game is completed
-  const updateGameCompletedInSupabase = async (eventData: any) => {
+  const updateGameCompletedInSupabase = async (eventData: any, transactionId?: string) => {
     try {
       console.log("=== GAME COMPLETED SUPABASE UPDATE ===");
       console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
 
+      // Update games table
       const updateData = {
         game_state: 4, // completed
         total_rounds: parseInt(eventData.totalRounds)
@@ -529,9 +530,15 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       }
 
       console.log("Game completed updated successfully in Supabase:", data);
+
+      // Update user profile game counts
+      const { handleGameCompletion } = await import('@/lib/prize-distribution-handler');
+      await handleGameCompletion(eventData, transactionId);
+
       return data;
     } catch (error: any) {
       console.error("Failed to update game completed in Supabase:", error);
+      throw error;
     }
   };
 
@@ -570,18 +577,15 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
   };
 
-  // Log prize distribution (for tracking purposes)
-  const updatePrizeDistributedInSupabase = async (eventData: any) => {
+  // Process prize distribution and save to database
+  const updatePrizeDistributedInSupabase = async (eventData: any, transactionId?: string) => {
     try {
-      console.log("=== PRIZE DISTRIBUTED EVENT ===");
-      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
-
-      // Just log the prize distribution - could be stored in a separate table if needed
-      console.log(`Prize distributed: ${eventData.amount} FLOW to ${eventData.winner} for game ${eventData.gameId}`);
-      
+      const { handlePrizeDistribution } = await import('@/lib/prize-distribution-handler');
+      await handlePrizeDistribution(eventData, transactionId);
       return true;
     } catch (error: any) {
       console.error("Failed to process prize distributed event:", error);
+      return false;
     }
   };
 
