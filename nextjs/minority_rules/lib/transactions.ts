@@ -3,6 +3,21 @@ import * as fcl from "@onflow/fcl";
 import * as t from "@onflow/types";
 import { CONTRACT_ADDRESS, DEFAULT_TX_LIMIT } from "./flow-config";
 
+// TypeScript interfaces
+interface TransactionOptions {
+  limit?: number;
+  onStateChange?: (state: string, data?: any) => void;
+  onSuccess?: (transactionId: string, transaction: any) => void;
+  onError?: (error: Error, transactionId?: string, transaction?: any) => void;
+}
+
+interface TransactionResult {
+  success: boolean;
+  transactionId?: string;
+  transaction?: any;
+  error?: Error;
+}
+
 // Transaction states
 export const TX_STATES = {
   IDLE: 'idle',
@@ -15,7 +30,11 @@ export const TX_STATES = {
 };
 
 // Custom transaction executor
-export const executeTransaction = async (cadence, args = [], options = {}) => {
+export const executeTransaction = async (
+  cadence: string, 
+  args: any[] = [], 
+  options: TransactionOptions = {}
+): Promise<TransactionResult> => {
   const {
     limit = DEFAULT_TX_LIMIT,
     onStateChange = () => {},
@@ -63,16 +82,21 @@ export const executeTransaction = async (cadence, args = [], options = {}) => {
       return { success: false, error, transactionId, transaction: sealedTx };
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Transaction error:", error);
-    onStateChange(TX_STATES.ERROR, { error });
-    onError(error);
-    return { success: false, error };
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    onStateChange(TX_STATES.ERROR, { error: errorObj });
+    onError(errorObj);
+    return { success: false, error: errorObj };
   }
 };
 
 // Specific transaction functions
-export const joinGameTransaction = async (gameId, contractAddress, options = {}) => {
+export const joinGameTransaction = async (
+  gameId: string | number, 
+  contractAddress?: string, 
+  options: TransactionOptions = {}
+): Promise<TransactionResult> => {
   const cadence = `
     import MinorityRuleGame from 0xMinorityRuleGame
     import FungibleToken from 0xFungibleToken
@@ -115,14 +139,19 @@ export const joinGameTransaction = async (gameId, contractAddress, options = {})
   `;
 
   const args = [
-    fcl.arg(parseInt(gameId), t.UInt64),
-    fcl.arg(contractAddress || CONTRACT_ADDRESS, t.Address)
+    fcl.arg(parseInt(String(gameId)), t.UInt64),
+    fcl.arg(contractAddress || CONTRACT_ADDRESS || '', t.Address)
   ];
 
   return executeTransaction(cadence, args, options);
 };
 
-export const createGameTransaction = async (questionText, entryFee, contractAddress, options = {}) => {
+export const createGameTransaction = async (
+  questionText: string, 
+  entryFee: string | number, 
+  contractAddress?: string, 
+  options: TransactionOptions = {}
+): Promise<TransactionResult> => {
   const cadence = `
     import MinorityRuleGame from 0xMinorityRuleGame
     import FungibleToken from 0xFungibleToken
@@ -161,14 +190,19 @@ export const createGameTransaction = async (questionText, entryFee, contractAddr
 
   const args = [
     fcl.arg(questionText, t.String),
-    fcl.arg(parseFloat(entryFee).toFixed(8), t.UFix64), // Ensure decimal point for UFix64
-    fcl.arg(contractAddress || CONTRACT_ADDRESS, t.Address)
+    fcl.arg(parseFloat(String(entryFee)).toFixed(8), t.UFix64), // Ensure decimal point for UFix64
+    fcl.arg(contractAddress || CONTRACT_ADDRESS || '', t.Address)
   ];
 
   return executeTransaction(cadence, args, options);
 };
 
-export const submitVoteCommitTransaction = async (gameId, commitHash, contractAddress, options = {}) => {
+export const submitVoteCommitTransaction = async (
+  gameId: string | number, 
+  commitHash: string, 
+  contractAddress?: string, 
+  options: TransactionOptions = {}
+): Promise<TransactionResult> => {
   const cadence = `
     import MinorityRuleGame from 0xMinorityRuleGame
 
@@ -203,15 +237,21 @@ export const submitVoteCommitTransaction = async (gameId, commitHash, contractAd
   `;
 
   const args = [
-    fcl.arg(parseInt(gameId), t.UInt64),
+    fcl.arg(parseInt(String(gameId)), t.UInt64),
     fcl.arg(commitHash, t.String),
-    fcl.arg(contractAddress || CONTRACT_ADDRESS, t.Address)
+    fcl.arg(contractAddress || CONTRACT_ADDRESS || '', t.Address)
   ];
 
   return executeTransaction(cadence, args, options);
 };
 
-export const submitVoteRevealTransaction = async (gameId, vote, salt, contractAddress, options = {}) => {
+export const submitVoteRevealTransaction = async (
+  gameId: string | number, 
+  vote: boolean, 
+  salt: string, 
+  contractAddress?: string, 
+  options: TransactionOptions = {}
+): Promise<TransactionResult> => {
   const cadence = `
     import MinorityRuleGame from 0xMinorityRuleGame
 
@@ -248,16 +288,21 @@ export const submitVoteRevealTransaction = async (gameId, vote, salt, contractAd
   `;
 
   const args = [
-    fcl.arg(parseInt(gameId), t.UInt64),
+    fcl.arg(parseInt(String(gameId)), t.UInt64),
     fcl.arg(vote, t.Bool),
     fcl.arg(salt, t.String),
-    fcl.arg(contractAddress || CONTRACT_ADDRESS, t.Address)
+    fcl.arg(contractAddress || CONTRACT_ADDRESS || '', t.Address)
   ];
 
   return executeTransaction(cadence, args, options);
 };
 
-export const setCommitDeadlineTransaction = async (gameId, durationSeconds, contractAddress, options = {}) => {
+export const setCommitDeadlineTransaction = async (
+  gameId: string | number, 
+  durationSeconds: string | number, 
+  contractAddress?: string, 
+  options: TransactionOptions = {}
+): Promise<TransactionResult> => {
   const cadence = `
     import MinorityRuleGame from 0xMinorityRuleGame
 
@@ -285,15 +330,20 @@ export const setCommitDeadlineTransaction = async (gameId, durationSeconds, cont
   `;
 
   const args = [
-    fcl.arg(parseInt(gameId), t.UInt64),
-    fcl.arg(parseFloat(durationSeconds).toFixed(8), t.UFix64), // Ensure decimal point for UFix64
-    fcl.arg(contractAddress || CONTRACT_ADDRESS, t.Address)
+    fcl.arg(parseInt(String(gameId)), t.UInt64),
+    fcl.arg(parseFloat(String(durationSeconds)).toFixed(8), t.UFix64), // Ensure decimal point for UFix64
+    fcl.arg(contractAddress || CONTRACT_ADDRESS || '', t.Address)
   ];
 
   return executeTransaction(cadence, args, options);
 };
 
-export const setRevealDeadlineTransaction = async (gameId, durationSeconds, contractAddress, options = {}) => {
+export const setRevealDeadlineTransaction = async (
+  gameId: string | number, 
+  durationSeconds: string | number, 
+  contractAddress?: string, 
+  options: TransactionOptions = {}
+): Promise<TransactionResult> => {
   const cadence = `
     import MinorityRuleGame from 0xMinorityRuleGame
 
@@ -321,15 +371,19 @@ export const setRevealDeadlineTransaction = async (gameId, durationSeconds, cont
   `;
 
   const args = [
-    fcl.arg(parseInt(gameId), t.UInt64),
-    fcl.arg(parseFloat(durationSeconds).toFixed(8), t.UFix64), // Ensure decimal point for UFix64
-    fcl.arg(contractAddress || CONTRACT_ADDRESS, t.Address)
+    fcl.arg(parseInt(String(gameId)), t.UInt64),
+    fcl.arg(parseFloat(String(durationSeconds)).toFixed(8), t.UFix64), // Ensure decimal point for UFix64
+    fcl.arg(contractAddress || CONTRACT_ADDRESS || '', t.Address)
   ];
 
   return executeTransaction(cadence, args, options);
 };
 
-export const processRoundTransaction = async (gameId, contractAddress, options = {}) => {
+export const processRoundTransaction = async (
+  gameId: string | number, 
+  contractAddress?: string, 
+  options: TransactionOptions = {}
+): Promise<TransactionResult> => {
   const cadence = `
     import MinorityRuleGame from 0xMinorityRuleGame
 
@@ -355,8 +409,8 @@ export const processRoundTransaction = async (gameId, contractAddress, options =
   `;
 
   const args = [
-    fcl.arg(parseInt(gameId), t.UInt64),
-    fcl.arg(contractAddress || CONTRACT_ADDRESS, t.Address)
+    fcl.arg(parseInt(String(gameId)), t.UInt64),
+    fcl.arg(contractAddress || CONTRACT_ADDRESS || '', t.Address)
   ];
 
   return executeTransaction(cadence, args, options);

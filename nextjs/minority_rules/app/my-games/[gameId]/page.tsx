@@ -817,15 +817,52 @@ export default function MyGameDetailsPage() {
             </div>
           )}
 
-          {/* Process Round */}
-          {game.game_state === 2 && (
+          {/* Waiting for Reveal Deadline - Show when reveal phase active but deadline hasn't passed */}
+          {game.game_state === 2 && 
+           game.reveal_deadline && 
+           new Date() <= new Date(game.reveal_deadline) && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
-                Process Round
+                ⏳ Waiting for Reveal Deadline
               </h3>
               <p className="text-muted-foreground mb-4">
-                Calculate results and advance to next round or end game.
+                The reveal phase is still active. Round processing will be available after the reveal deadline passes.
               </p>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-blue-700 font-medium">Reveal Deadline:</span>
+                  <span className="text-blue-600">
+                    {new Date(game.reveal_deadline).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-blue-700 font-medium">Time Remaining:</span>
+                  <span className="text-blue-600">
+                    {Math.ceil((new Date(game.reveal_deadline).getTime() - new Date().getTime()) / 1000 / 60)} minutes
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Process Round - Only show after reveal deadline passes */}
+          {game.game_state === 2 && 
+           game.reveal_deadline && 
+           new Date() > new Date(game.reveal_deadline) && (
+            <div className="bg-card rounded-lg shadow-lg border border-border p-6">
+              <h3 className="text-lg font-semibold text-foreground mb-4">
+                🚀 Process Round
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Reveal deadline has passed. Process the round to calculate results and advance to the next phase.
+              </p>
+
+              <div className="bg-green-50 border border-green-200 rounded p-3 mb-4">
+                <p className="text-green-700 text-sm">
+                  ✅ Ready to process - reveal deadline passed at {new Date(game.reveal_deadline).toLocaleString()}
+                </p>
+              </div>
 
               <button
                 onClick={handleProcessRound}

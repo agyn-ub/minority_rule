@@ -4,8 +4,27 @@ import * as fcl from "@onflow/fcl";
 import { configureFlow } from './flow-config';
 import { supabase } from './supabase';
 
+// TypeScript interfaces
+interface FlowUser {
+  loggedIn?: boolean;
+  addr?: string | null;
+  cid?: string;
+  expiresAt?: number;
+  f_type?: string;
+  f_vsn?: string;
+}
+
+interface UseFlowUserReturn {
+  user: FlowUser;
+  loading: boolean;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
+  isLoggedIn: boolean;
+  configReady: boolean;
+}
+
 // Function to create user profile if it doesn't exist
-const createUserProfileIfNeeded = async (address) => {
+const createUserProfileIfNeeded = async (address: string): Promise<void> => {
   try {
     console.log("👤 Checking user profile for:", address);
     
@@ -48,8 +67,8 @@ const createUserProfileIfNeeded = async (address) => {
   }
 };
 
-export const useFlowUser = () => {
-  const [user, setUser] = useState({ loggedIn: false, addr: null });
+export const useFlowUser = (): UseFlowUserReturn => {
+  const [user, setUser] = useState<FlowUser>({ loggedIn: false, addr: null });
   const [loading, setLoading] = useState(true);
   const [configReady, setConfigReady] = useState(false);
 
@@ -66,11 +85,11 @@ export const useFlowUser = () => {
     }
 
     // Subscribe to current user changes
-    const unsubscribe = fcl.currentUser.subscribe(setUser);
+    const unsubscribe = fcl.currentUser.subscribe((user) => setUser(user));
     
     // Initial check
-    fcl.currentUser.snapshot().then((user) => {
-      setUser(user);
+    fcl.currentUser.snapshot().then((userData) => {
+      setUser(userData);
       setLoading(false);
     });
 
@@ -89,7 +108,7 @@ export const useFlowUser = () => {
     }
   }, [user.loggedIn, user.addr]);
 
-  const login = async () => {
+  const login = async (): Promise<void> => {
     if (!configReady) {
       throw new Error("FCL configuration not ready. Please try again.");
     }
@@ -104,7 +123,7 @@ export const useFlowUser = () => {
     }
   };
 
-  const logout = async () => {
+  const logout = async (): Promise<void> => {
     if (!configReady) {
       throw new Error("FCL configuration not ready. Please try again.");
     }
@@ -124,7 +143,7 @@ export const useFlowUser = () => {
     loading,
     login,
     logout,
-    isLoggedIn: user.loggedIn,
+    isLoggedIn: !!user.loggedIn,
     configReady
   };
 };

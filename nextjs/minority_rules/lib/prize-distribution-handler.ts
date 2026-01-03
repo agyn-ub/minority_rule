@@ -1,50 +1,5 @@
 import { supabase } from './supabase';
 
-// Ensure user profile exists for prize winner
-async function ensureUserProfileExists(address: string) {
-  try {
-    console.log("👤 Ensuring user profile exists for winner:", address);
-    
-    const { data: existingProfile, error: selectError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('player_address', address)
-      .single();
-      
-    if (selectError && selectError.code !== 'PGRST116') {
-      // PGRST116 is "not found" - anything else is a real error
-      console.error("❌ Error checking user profile:", selectError);
-      throw selectError;
-    }
-    
-    if (!existingProfile) {
-      // Create new user profile for the winner
-      console.log("➕ Creating new user profile for winner:", address);
-      const { error: insertError } = await supabase
-        .from('user_profiles')
-        .insert({
-          player_address: address,
-          display_name: null,
-          total_games: 0,
-          total_wins: 0,
-          total_earnings: 0
-        });
-        
-      if (insertError) {
-        console.error("❌ Error creating user profile:", insertError);
-        throw insertError;
-      } else {
-        console.log("✅ User profile created successfully for:", address);
-      }
-    } else {
-      console.log("✅ User profile already exists for:", address);
-    }
-  } catch (error) {
-    console.error("❌ Error in ensureUserProfileExists:", error);
-    throw error;
-  }
-}
-
 // Handle prize distribution event
 export async function handlePrizeDistribution(eventData: any, transactionId?: string) {
   try {
@@ -57,10 +12,7 @@ export async function handlePrizeDistribution(eventData: any, transactionId?: st
       throw new Error("Missing required prize distribution data");
     }
 
-    // Ensure winner has a user profile
-    await ensureUserProfileExists(winner);
-    
-    // Insert prize distribution record
+    // Insert prize distribution record first
     console.log("💰 Inserting prize distribution record...");
     const { error: insertError } = await supabase
       .from('prize_distributions')
@@ -68,7 +20,7 @@ export async function handlePrizeDistribution(eventData: any, transactionId?: st
         game_id: parseInt(gameId),
         winner_address: winner,
         amount: parseFloat(amount),
-        transaction_id: transactionId || null
+        transaction_id: transactionId
       });
 
     if (insertError) {
@@ -76,13 +28,32 @@ export async function handlePrizeDistribution(eventData: any, transactionId?: st
       throw insertError;
     }
 
-    // Update user profile statistics using direct Supabase update
+    // Update user profile statistics - user should already exist from wallet connection
     console.log("📊 Updating user statistics...");
+    
+    // Get current user stats
+    const { data: profile, error: selectError } = await supabase
+      .from('user_profiles')
+      .select('total_wins, total_earnings')
+      .eq('player_address', winner)
+      .single();
+
+    if (selectError) {
+      console.error("❌ Error getting user profile:", selectError);
+      throw new Error(`User profile not found for ${winner}. User should have been created on wallet connection.`);
+    }
+
+    // Update user stats
+    const newWins = (profile?.total_wins || 0) + 1;
+    const newEarnings = (profile?.total_earnings || 0) + parseFloat(amount);
+
+    console.log(`📈 Updating user: wins ${profile?.total_wins || 0} → ${newWins}, earnings ${profile?.total_earnings || 0} → ${newEarnings}`);
+
     const { error: updateError } = await supabase
       .from('user_profiles')
       .update({
-        total_wins: supabase.sql`total_wins + 1`,
-        total_earnings: supabase.sql`total_earnings + ${parseFloat(amount)}`
+        total_wins: newWins,
+        total_earnings: newEarnings
       })
       .eq('player_address', winner);
 
@@ -101,7 +72,7 @@ export async function handlePrizeDistribution(eventData: any, transactionId?: st
 }
 
 // Handle game completion and update user game counts
-export async function handleGameCompletion(eventData: any, transactionId?: string) {
+export async function handleGameCompletion(eventData: any) {
   try {
     console.log("=== PROCESSING GAME COMPLETION ===");
     console.log("Event data:", JSON.stringify(eventData, null, 2));
@@ -127,21 +98,42 @@ export async function handleGameCompletion(eventData: any, transactionId?: strin
     if (players && players.length > 0) {
       const playerAddresses = players.map(p => p.player_address);
       
-      // Update total_games for all players using direct Supabase update
       console.log(`📊 Updating game counts for ${players.length} players...`);
-      const { error: updatePlayersError } = await supabase
+      
+      // Get current game counts for all players
+      const { data: profiles, error: selectError } = await supabase
         .from('user_profiles')
-        .update({
-          total_games: supabase.sql`total_games + 1`
-        })
+        .select('player_address, total_games')
         .in('player_address', playerAddresses);
 
-      if (updatePlayersError) {
-        console.error("❌ Error updating player game counts:", updatePlayersError);
-        throw updatePlayersError;
+      if (selectError) {
+        console.error("❌ Error getting player profiles for game count update:", selectError);
+        throw selectError;
       }
 
-      console.log(`✅ Successfully updated game counts for ${players.length} players`);
+      // Update each player's game count individually
+      let updatedCount = 0;
+      for (const profile of profiles || []) {
+        const newGameCount = (profile.total_games || 0) + 1;
+        
+        console.log(`📈 Player ${profile.player_address}: games ${profile.total_games || 0} → ${newGameCount}`);
+        
+        const { error: updateError } = await supabase
+          .from('user_profiles')
+          .update({
+            total_games: newGameCount
+          })
+          .eq('player_address', profile.player_address);
+
+        if (updateError) {
+          console.error(`❌ Error updating game count for ${profile.player_address}:`, updateError);
+          throw updateError;
+        }
+        
+        updatedCount++;
+      }
+
+      console.log(`✅ Successfully updated game counts for ${updatedCount} players`);
     }
 
     console.log("✅ Successfully processed game completion");

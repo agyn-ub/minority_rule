@@ -1,10 +1,32 @@
 import { config } from "@onflow/fcl";
 
+// TypeScript interfaces
+interface NetworkConfig {
+  accessNode: string;
+  discoveryWallet: string;
+  discoveryAuthnInclude?: string[];
+  contractAddress?: string;
+}
+
+interface Networks {
+  [key: string]: NetworkConfig;
+}
+
+interface ContractAddresses {
+  [contractName: string]: string | undefined;
+}
+
+interface EnvironmentAddresses {
+  [environment: string]: ContractAddresses;
+}
+
+type FlowEnvironment = 'emulator' | 'testnet' | 'mainnet';
+
 // Flow network configuration
-const FLOW_ENV = process.env.NEXT_PUBLIC_FLOW_NETWORK || 'emulator';
+const FLOW_ENV: FlowEnvironment = (process.env.NEXT_PUBLIC_FLOW_NETWORK as FlowEnvironment) || 'emulator';
 
 // Network configurations
-const networks = {
+const networks: Networks = {
   emulator: {
     accessNode: "http://127.0.0.1:8888",
     discoveryWallet: "http://127.0.0.1:8701/fcl/authn",
@@ -33,10 +55,10 @@ const networks = {
   }
 };
 
-const currentNetwork = networks[FLOW_ENV];
+const currentNetwork: NetworkConfig = networks[FLOW_ENV];
 
 // Configure FCL
-export const configureFlow = () => {
+export const configureFlow = (): void => {
   console.log("🔧 Configuring FCL...");
   console.log("Environment:", FLOW_ENV);
   console.log("Network config:", currentNetwork);
@@ -51,8 +73,8 @@ export const configureFlow = () => {
   }
 
   // Network-specific contract addresses
-  const getContractAddress = (contractName) => {
-    const addresses = {
+  const getContractAddress = (contractName: string): string | undefined => {
+    const addresses: EnvironmentAddresses = {
       emulator: {
         MinorityRuleGame: "0xf8d6e0586b0a20c7",
         FungibleToken: "0xee82856bf20e2aa6",
@@ -95,11 +117,11 @@ export const configureFlow = () => {
 };
 
 // Export contract address for easy access
-export const CONTRACT_ADDRESS = currentNetwork.contractAddress;
+export const CONTRACT_ADDRESS: string | undefined = currentNetwork.contractAddress;
 
 // Export network info
-export const NETWORK = FLOW_ENV;
+export const NETWORK: FlowEnvironment = FLOW_ENV;
 
 // Transaction options
-export const DEFAULT_TX_LIMIT = 999;
-export const DEFAULT_TX_PAYER = undefined; // Let wallet handle
+export const DEFAULT_TX_LIMIT: number = 999;
+export const DEFAULT_TX_PAYER: undefined = undefined; // Let wallet handle
