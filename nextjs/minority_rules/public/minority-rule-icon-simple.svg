@@ -1,0 +1,25 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Simple background circle -->
+  <circle cx="100" cy="100" r="90" fill="#3B82F6"/>
+  
+  <!-- Three voting circles representing majority/minority concept -->
+  <!-- Two white circles (majority) -->
+  <circle cx="75" cy="80" r="16" fill="#FFFFFF" opacity="0.9"/>
+  <circle cx="125" cy="80" r="16" fill="#FFFFFF" opacity="0.9"/>
+  
+  <!-- One highlighted circle (minority) -->
+  <circle cx="100" cy="120" r="18" fill="#FCD34D" stroke="#F59E0B" stroke-width="2"/>
+  
+  <!-- Simple checkmarks -->
+  <path d="M70 75 L75 80 L80 70" stroke="#3B82F6" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M120 75 L125 80 L130 70" stroke="#3B82F6" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M95 115 L100 120 L110 110" stroke="#D97706" stroke-width="4" fill="none" stroke-linecap="round"/>
+  
+  <!-- Simple crown -->
+  <path d="M85 50 L90 40 L95 45 L100 35 L105 45 L110 40 L115 50 Z" fill="#FCD34D"/>
+  
+  <!-- Title text -->
+  <text x="100" y="170" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF">
+    MINORITY RULE
+  </text>
+</svg>

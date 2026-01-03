@@ -1,0 +1,31 @@
+Result: {
+    "playerVoteHistory": {
+        0x2ccacf008ad47114: [A.206a0f93916f5d8f.MinorityRuleGame.VoteRecord(round: 1, vote: true, timestamp: 1767440879.00000000)
+        ]
+    },
+    "prizePool": 0.00000000,
+    "currentRound": 1,
+    "state": 4,
+    "currentNoVotes": 0,
+    "totalPlayers": 1,
+    "remainingPlayers": [],
+    "creator": 0x2ccacf008ad47114,
+    "roundResults": {},
+    "revealDeadline": 1767441051.00000000,
+    "winners": [
+        0x2ccacf008ad47114
+    ],
+    "entryFee": 1.00000000,
+    "questionText": "26?",
+    "commitCount": 1,
+    "stateName": "completed",
+    "gameId": 55,
+    "timeRemainingInPhase": "No active deadline",
+    "currentYesVotes": 1,
+    "players": [
+        0x2ccacf008ad47114
+    ],
+    "commitDeadline": 1767440823.00000000,
+    "revealCount": 1,
+    "prizesDistributed": true
+}

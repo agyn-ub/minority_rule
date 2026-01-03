@@ -40,12 +40,12 @@ export const configureFlow = () => {
   console.log("🔧 Configuring FCL...");
   console.log("Environment:", FLOW_ENV);
   console.log("Network config:", currentNetwork);
-  
+
   // Validate required configuration
   if (!currentNetwork.accessNode) {
     throw new Error("Access node URL is required for FCL configuration");
   }
-  
+
   if (!currentNetwork.discoveryWallet) {
     throw new Error("Discovery wallet URL is required for FCL configuration");
   }
@@ -55,7 +55,7 @@ export const configureFlow = () => {
     const addresses = {
       emulator: {
         MinorityRuleGame: "0xf8d6e0586b0a20c7",
-        FungibleToken: "0xee82856bf20e2aa6", 
+        FungibleToken: "0xee82856bf20e2aa6",
         FlowToken: "0x0ae53cb6e3f42a79"
       },
       testnet: {
@@ -69,7 +69,7 @@ export const configureFlow = () => {
         FlowToken: "0x1654653399040a61"
       }
     };
-    
+
     return addresses[FLOW_ENV]?.[contractName];
   };
 
@@ -78,7 +78,7 @@ export const configureFlow = () => {
     "discovery.wallet": currentNetwork.discoveryWallet,
     "discovery.authn.include": currentNetwork.discoveryAuthnInclude || [],
     "app.detail.title": "Minority Rule Game",
-    "app.detail.icon": "https://minority-rule.app/icon.png",
+    "app.detail.icon": "wallet_logo.png",
     "flow.network": FLOW_ENV,
     "fcl.limit": 999,
     // Contract address mappings
@@ -88,9 +88,9 @@ export const configureFlow = () => {
   };
 
   console.log("📡 FCL Configuration:", fclConfig);
-  
+
   config(fclConfig);
-  
+
   console.log("✅ FCL configured successfully");
 };
 

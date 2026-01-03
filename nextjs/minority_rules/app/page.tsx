@@ -82,11 +82,11 @@ export default function HomePage() {
   // Format game state for display with enhanced styling
   const formatGameState = (state: number, commitDeadline?: string | null) => {
     const now = new Date();
-    
+
     switch (state) {
       case 0: // zeroPhase
-        return { 
-          text: 'Setting Up', 
+        return {
+          text: 'Setting Up',
           color: 'text-gray-700 bg-gray-100 border-gray-200',
           description: 'Game setup in progress'
         };
@@ -94,44 +94,44 @@ export default function HomePage() {
         if (commitDeadline) {
           const deadline = new Date(commitDeadline);
           const isOpen = now < deadline;
-          return isOpen 
-            ? { 
-                text: 'Open for Joining', 
-                color: 'text-green-700 bg-green-100 border-green-200',
-                description: 'Players can join and vote'
-              }
-            : { 
-                text: 'Commit Ended', 
-                color: 'text-orange-700 bg-orange-100 border-orange-200',
-                description: 'Waiting for reveal phase'
-              };
+          return isOpen
+            ? {
+              text: 'Open for Joining',
+              color: 'text-green-700 bg-green-100 border-green-200',
+              description: 'Players can join and vote'
+            }
+            : {
+              text: 'Commit Ended',
+              color: 'text-orange-700 bg-orange-100 border-orange-200',
+              description: 'Waiting for reveal phase'
+            };
         }
-        return { 
-          text: 'Commit Phase', 
+        return {
+          text: 'Commit Phase',
           color: 'text-blue-700 bg-blue-100 border-blue-200',
           description: 'Commit phase active'
         };
       case 2: // revealPhase
-        return { 
-          text: 'Reveal Phase', 
+        return {
+          text: 'Reveal Phase',
           color: 'text-purple-700 bg-purple-100 border-purple-200',
           description: 'Players revealing votes'
         };
       case 3: // processingRound
-        return { 
-          text: 'Processing', 
+        return {
+          text: 'Processing',
           color: 'text-indigo-700 bg-indigo-100 border-indigo-200',
           description: 'Calculating results'
         };
       case 4: // completed
-        return { 
-          text: 'Completed', 
+        return {
+          text: 'Completed',
           color: 'text-gray-700 bg-gray-100 border-gray-200',
           description: 'Game finished'
         };
       default:
-        return { 
-          text: 'Unknown', 
+        return {
+          text: 'Unknown',
           color: 'text-red-700 bg-red-100 border-red-200',
           description: 'Unknown state'
         };
@@ -188,11 +188,10 @@ export default function HomePage() {
               <button
                 key={tab.key}
                 onClick={() => setFilter(tab.key as any)}
-                className={`px-4 py-2 rounded-md font-medium text-sm transition-colors ${
-                  filter === tab.key
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+                className={`px-4 py-2 rounded-md font-medium text-sm transition-colors ${filter === tab.key
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 {tab.label}
               </button>
@@ -296,7 +295,7 @@ export default function HomePage() {
                           href={`/games/${game.game_id}`}
                           className="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium text-center"
                         >
-                          {isActive ? 'Join Game' : 'View Details'}
+                          {isActive ? 'Go Game' : 'View Details'}
                         </Link>
                       </div>
 

@@ -34,9 +34,21 @@ export type GamePlayer = {
   status: 'active' | 'eliminated' | 'winner'
 }
 
+export type Round = {
+  id: number
+  game_id: number
+  round_number: number
+  yes_count: number
+  no_count: number
+  minority_vote: boolean
+  votes_remaining: number
+  completed_at: string
+}
+
 export type Commit = {
   game_id: number
   round_number: number
+  round_id: number | null  // Foreign key to rounds table
   player_address: string
   commit_hash: string
   committed_at: string
@@ -45,6 +57,7 @@ export type Commit = {
 export type Reveal = {
   game_id: number
   round_number: number
+  round_id: number | null  // Foreign key to rounds table
   player_address: string
   vote_value: boolean
   salt: string

@@ -245,6 +245,147 @@ export default function MyGameDetailsPage() {
     }
   };
 
+  // Update game when round is completed
+  const updateRoundCompletedInSupabase = async (eventData: any) => {
+    try {
+      console.log("=== ROUND COMPLETED SUPABASE UPDATE ===");
+      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
+
+      // First insert round data into rounds table
+      const roundData = {
+        game_id: parseInt(eventData.gameId),
+        round_number: parseInt(eventData.round),
+        yes_count: parseInt(eventData.yesCount),
+        no_count: parseInt(eventData.noCount),
+        minority_vote: eventData.minorityVote,
+        votes_remaining: parseInt(eventData.votesRemaining)
+      };
+
+      console.log("Inserting round data:", JSON.stringify(roundData, null, 2));
+
+      const { data: roundInsertData, error: roundError } = await supabase
+        .from('rounds')
+        .insert(roundData)
+        .select();
+
+      if (roundError) {
+        console.error("=== ROUND INSERT ERROR ===");
+        console.error("Full error object:", JSON.stringify(roundError, null, 2));
+        throw roundError;
+      }
+
+      console.log("Round data inserted successfully:", roundInsertData);
+
+      // Then update game state
+      const updateData = {
+        game_state: 3, // processingRound
+        current_round: parseInt(eventData.round)
+      };
+
+      console.log("Updating game state:", JSON.stringify(updateData, null, 2));
+
+      const { data, error } = await supabase
+        .from('games')
+        .update(updateData)
+        .eq('game_id', parseInt(eventData.gameId))
+        .select();
+
+      if (error) {
+        console.error("=== ROUND COMPLETED SUPABASE ERROR ===");
+        console.error("Full error object:", JSON.stringify(error, null, 2));
+        throw error;
+      }
+
+      console.log("Round completed updated successfully in Supabase:", data);
+      return { gameData: data, roundData: roundInsertData };
+    } catch (error: any) {
+      console.error("Failed to update round completed in Supabase:", error);
+    }
+  };
+
+  // Update game when game is completed
+  const updateGameCompletedInSupabase = async (eventData: any) => {
+    try {
+      console.log("=== GAME COMPLETED SUPABASE UPDATE ===");
+      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
+
+      const updateData = {
+        game_state: 4, // completed
+        total_rounds: parseInt(eventData.totalRounds)
+      };
+
+      console.log("Update data being sent:", JSON.stringify(updateData, null, 2));
+      console.log("Updating game_id:", parseInt(eventData.gameId));
+
+      const { data, error } = await supabase
+        .from('games')
+        .update(updateData)
+        .eq('game_id', parseInt(eventData.gameId))
+        .select();
+
+      if (error) {
+        console.error("=== GAME COMPLETED SUPABASE ERROR ===");
+        console.error("Full error object:", JSON.stringify(error, null, 2));
+        throw error;
+      }
+
+      console.log("Game completed updated successfully in Supabase:", data);
+      return data;
+    } catch (error: any) {
+      console.error("Failed to update game completed in Supabase:", error);
+    }
+  };
+
+  // Update game when new round starts
+  const updateNewRoundInSupabase = async (eventData: any) => {
+    try {
+      console.log("=== NEW ROUND STARTED SUPABASE UPDATE ===");
+      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
+
+      const updateData = {
+        game_state: 0, // zeroPhase (waiting for commit deadline to be set)
+        current_round: parseInt(eventData.round),
+        commit_deadline: null,
+        reveal_deadline: null
+      };
+
+      console.log("Update data being sent:", JSON.stringify(updateData, null, 2));
+      console.log("Updating game_id:", parseInt(eventData.gameId));
+
+      const { data, error } = await supabase
+        .from('games')
+        .update(updateData)
+        .eq('game_id', parseInt(eventData.gameId))
+        .select();
+
+      if (error) {
+        console.error("=== NEW ROUND STARTED SUPABASE ERROR ===");
+        console.error("Full error object:", JSON.stringify(error, null, 2));
+        throw error;
+      }
+
+      console.log("New round started updated successfully in Supabase:", data);
+      return data;
+    } catch (error: any) {
+      console.error("Failed to update new round started in Supabase:", error);
+    }
+  };
+
+  // Log prize distribution (for tracking purposes)
+  const updatePrizeDistributedInSupabase = async (eventData: any) => {
+    try {
+      console.log("=== PRIZE DISTRIBUTED EVENT ===");
+      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
+
+      // Just log the prize distribution - could be stored in a separate table if needed
+      console.log(`Prize distributed: ${eventData.amount} FLOW to ${eventData.winner} for game ${eventData.gameId}`);
+      
+      return true;
+    } catch (error: any) {
+      console.error("Failed to process prize distributed event:", error);
+    }
+  };
+
   // Refetch game data
   const refetchGameData = async () => {
     try {
@@ -270,7 +411,11 @@ export default function MyGameDetailsPage() {
 
     const eventTypes = [
       `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.CommitDeadlineSet`,
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.RevealDeadlineSet`
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.RevealDeadlineSet`,
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.RoundCompleted`,
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.GameCompleted`,
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.NewRoundStarted`,
+      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.PrizeDistributed`
     ];
 
     const unsubscribes = eventTypes.map(eventType =>
@@ -292,6 +437,14 @@ export default function MyGameDetailsPage() {
             await updateGameCommitDeadlineInSupabase(event.data);
           } else if (eventType.includes('RevealDeadlineSet')) {
             await updateGameRevealDeadlineInSupabase(event.data);
+          } else if (eventType.includes('RoundCompleted')) {
+            await updateRoundCompletedInSupabase(event.data);
+          } else if (eventType.includes('GameCompleted')) {
+            await updateGameCompletedInSupabase(event.data);
+          } else if (eventType.includes('NewRoundStarted')) {
+            await updateNewRoundInSupabase(event.data);
+          } else if (eventType.includes('PrizeDistributed')) {
+            await updatePrizeDistributedInSupabase(event.data);
           }
 
           // Refresh game data
