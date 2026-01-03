@@ -12,6 +12,7 @@ import {
   TX_STATES 
 } from "@/lib/transactions";
 import * as fcl from "@onflow/fcl";
+import { sha3_256 } from 'js-sha3';
 
 
 // GameState enum matching Cadence contract
@@ -556,12 +557,12 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
   }, [user?.addr, gameId, game]);
 
-  // Generate commit hash from vote and salt
+  // Generate commit hash from vote and salt (matches Cadence contract)
   const generateCommitHash = (vote: boolean, salt: string) => {
     const voteString = vote ? "true" : "false";
     const combinedString = voteString + salt;
-    // Simple hash for demo - in production, use proper SHA3-256
-    const hash = btoa(combinedString).replace(/[^a-zA-Z0-9]/g, '').substring(0, 64).padEnd(64, '0');
+    // Use SHA3-256 to match Cadence contract: String.encodeHex(HashAlgorithm.SHA3_256.hash(combinedString.utf8))
+    const hash = sha3_256(combinedString);
     return hash;
   };
 
