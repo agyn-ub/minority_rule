@@ -20,8 +20,7 @@ const getGameStateName = (state: number): string => {
     case 0: return "Zero Phase";
     case 1: return "Commit Phase";
     case 2: return "Reveal Phase";
-    case 3: return "Processing Round";
-    case 4: return "Completed";
+    case 3: return "Completed";
     default: return "Unknown";
   }
 };
@@ -31,8 +30,7 @@ const getStateColor = (state: number): string => {
     case 0: return "bg-gray-100 text-gray-800";
     case 1: return "bg-blue-100 text-blue-800";
     case 2: return "bg-yellow-100 text-yellow-800";
-    case 3: return "bg-orange-100 text-orange-800";
-    case 4: return "bg-green-100 text-green-800";
+    case 3: return "bg-green-100 text-green-800"; // completed
     default: return "bg-gray-100 text-gray-800";
   }
 };
@@ -278,7 +276,7 @@ export default function MyGameDetailsPage() {
 
       // Then update game state
       const updateData = {
-        game_state: 3, // processingRound
+        game_state: 3, // completed
         current_round: parseInt(eventData.round)
       };
 
@@ -319,7 +317,7 @@ export default function MyGameDetailsPage() {
 
       // Update games table - only update game_state (total_rounds column doesn't exist)
       const updateData = {
-        game_state: 4 // completed
+        game_state: 3 // completed
       };
       
       const targetGameId = parseInt(eventData.gameId);
@@ -352,14 +350,21 @@ export default function MyGameDetailsPage() {
       console.log("✅ Response data:", JSON.stringify(data, null, 2));
       console.log("✅ Number of rows updated:", data?.length || 0);
 
-      console.log("🔄 STEP 5: Starting user profile updates...");
+      console.log("🔄 STEP 5: Starting prize distribution and user profile updates...");
       try {
-        const { handleGameCompletion } = await import('@/lib/prize-distribution-handler');
+        const { handleConsolidatedPrizeDistribution, handleGameCompletion } = await import('@/lib/prize-distribution-handler');
+        
+        // Handle prize distribution with new consolidated format
+        console.log("💰 Processing prize distribution with:", JSON.stringify({winners: eventData.winners, prizePerWinner: eventData.prizePerWinner}, null, 2));
+        await handleConsolidatedPrizeDistribution(eventData, transactionId);
+        console.log("✅ Prize distribution completed successfully");
+        
+        // Handle game completion (player counts)
         console.log("📞 Calling handleGameCompletion with:", JSON.stringify(eventData, null, 2));
         await handleGameCompletion(eventData);
         console.log("✅ STEP 6: User profile updates completed successfully");
       } catch (profileError: any) {
-        console.error("❌ STEP 6: User profile update failed (non-critical):");
+        console.error("❌ STEP 6: Profile/prize update failed (non-critical):");
         console.error("❌ Profile error:", profileError);
         console.error("❌ Profile error message:", profileError?.message);
         // Don't throw - profile updates shouldn't block game state update
@@ -417,17 +422,6 @@ export default function MyGameDetailsPage() {
     }
   };
 
-  // Process prize distribution and save to database
-  const updatePrizeDistributedInSupabase = async (eventData: any, transactionId?: string) => {
-    try {
-      const { handlePrizeDistribution } = await import('@/lib/prize-distribution-handler');
-      await handlePrizeDistribution(eventData, transactionId);
-      return true;
-    } catch (error: any) {
-      console.error("Failed to process prize distributed event:", error);
-      return false;
-    }
-  };
 
   // Refetch game data
   const refetchGameData = async () => {
@@ -458,7 +452,6 @@ export default function MyGameDetailsPage() {
       `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.RoundCompleted`,
       `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.GameCompleted`,
       `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.NewRoundStarted`,
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.PrizeDistributed`
     ];
 
     // Use FCL's multiple event subscription API - single connection
@@ -503,9 +496,6 @@ export default function MyGameDetailsPage() {
         } else if (event.type.includes('NewRoundStarted')) {
           console.log("🔸 Handling NewRoundStarted event");
           await updateNewRoundInSupabase(event.data);
-        } else if (event.type.includes('PrizeDistributed')) {
-          console.log("🔸 Handling PrizeDistributed event");
-          await updatePrizeDistributedInSupabase(event.data);
         }
 
         // Refresh game data
@@ -935,7 +925,7 @@ export default function MyGameDetailsPage() {
             )}
 
           {/* Game Completed */}
-          {game.game_state === 4 && (
+          {game.game_state === 3 && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 🎉 Game Completed

@@ -1,68 +1,93 @@
 import { supabase } from './supabase';
 
-// Handle prize distribution event
-export async function handlePrizeDistribution(eventData: any, transactionId?: string) {
+// Handle consolidated prize distribution from GameCompleted event
+export async function handleConsolidatedPrizeDistribution(eventData: any, transactionId?: string) {
   try {
-    console.log("=== PROCESSING PRIZE DISTRIBUTION ===");
+    console.log("=== PROCESSING CONSOLIDATED PRIZE DISTRIBUTION ===");
     console.log("Event data:", JSON.stringify(eventData, null, 2));
     
-    const { gameId, winner, amount } = eventData;
+    const { gameId, winners, prizePerWinner } = eventData;
     
-    if (!gameId || !winner || !amount) {
-      throw new Error("Missing required prize distribution data");
+    if (!gameId) {
+      throw new Error("Missing gameId in prize distribution data");
     }
 
-    // Insert prize distribution record first
-    console.log("💰 Inserting prize distribution record...");
+    // If no winners, nothing to process
+    if (!winners || winners.length === 0) {
+      console.log("💰 No winners to process - game had no winners");
+      return true;
+    }
+
+    if (prizePerWinner === undefined || prizePerWinner === null) {
+      throw new Error("Missing prizePerWinner in prize distribution data");
+    }
+
+    console.log(`💰 Processing ${winners.length} winners, each getting ${prizePerWinner} FLOW...`);
+
+    // Insert prize distribution records for all winners
+    const prizeDistributions = winners.map((winner: string) => ({
+      game_id: parseInt(gameId),
+      winner_address: winner,
+      amount: parseFloat(prizePerWinner),
+      transaction_id: transactionId
+    }));
+
+    console.log("💰 Inserting prize distribution records:", prizeDistributions);
     const { error: insertError } = await supabase
       .from('prize_distributions')
-      .insert({
-        game_id: parseInt(gameId),
-        winner_address: winner,
-        amount: parseFloat(amount),
-        transaction_id: transactionId
-      });
+      .insert(prizeDistributions);
 
     if (insertError) {
-      console.error("❌ Error inserting prize distribution:", insertError);
+      console.error("❌ Error inserting prize distributions:", insertError);
       throw insertError;
     }
 
-    // Update user profile statistics - user should already exist from wallet connection
-    console.log("📊 Updating user statistics...");
+    // Update user profile statistics for all winners
+    console.log("📊 Updating user statistics for all winners...");
     
-    // Get current user stats
-    const { data: profile, error: selectError } = await supabase
+    // Get current stats for all winners
+    const { data: profiles, error: selectError } = await supabase
       .from('user_profiles')
-      .select('total_wins, total_earnings')
-      .eq('player_address', winner)
-      .single();
+      .select('player_address, total_wins, total_earnings')
+      .in('player_address', winners);
 
     if (selectError) {
-      console.error("❌ Error getting user profile:", selectError);
-      throw new Error(`User profile not found for ${winner}. User should have been created on wallet connection.`);
+      console.error("❌ Error getting user profiles:", selectError);
+      throw selectError;
     }
 
-    // Update user stats
-    const newWins = (profile?.total_wins || 0) + 1;
-    const newEarnings = (profile?.total_earnings || 0) + parseFloat(amount);
+    // Update each winner's stats individually
+    let updatedCount = 0;
+    for (const winner of winners) {
+      const profile = profiles?.find(p => p.player_address === winner);
+      
+      if (!profile) {
+        console.error(`❌ Profile not found for winner ${winner}`);
+        continue; // Skip this winner but don't fail the whole operation
+      }
 
-    console.log(`📈 Updating user: wins ${profile?.total_wins || 0} → ${newWins}, earnings ${profile?.total_earnings || 0} → ${newEarnings}`);
+      const newWins = (profile.total_wins || 0) + 1;
+      const newEarnings = (profile.total_earnings || 0) + parseFloat(prizePerWinner);
 
-    const { error: updateError } = await supabase
-      .from('user_profiles')
-      .update({
-        total_wins: newWins,
-        total_earnings: newEarnings
-      })
-      .eq('player_address', winner);
+      console.log(`📈 Winner ${winner}: wins ${profile.total_wins || 0} → ${newWins}, earnings ${profile.total_earnings || 0} → ${newEarnings}`);
 
-    if (updateError) {
-      console.error("❌ Error updating user stats:", updateError);
-      throw updateError;
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({
+          total_wins: newWins,
+          total_earnings: newEarnings
+        })
+        .eq('player_address', winner);
+
+      if (updateError) {
+        console.error(`❌ Error updating stats for ${winner}:`, updateError);
+        // Don't throw - try to update other winners
+      } else {
+        updatedCount++;
+      }
     }
 
-    console.log(`✅ Successfully processed prize distribution: ${amount} FLOW to ${winner}`);
+    console.log(`✅ Successfully processed prize distribution: ${prizePerWinner} FLOW to each of ${winners.length} winners (${updatedCount} profile updates successful)`);
     return true;
 
   } catch (error) {

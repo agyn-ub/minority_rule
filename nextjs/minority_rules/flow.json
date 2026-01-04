@@ -4,7 +4,7 @@
 			"source": "cadence/contracts/MinorityRuleGame.cdc",
 			"aliases": {
 				"testing": "0000000000000007",
-				"testnet": "206a0f93916f5d8f"
+				"testnet": "e9715103f4d3b3fc"
 			}
 		}
 	},
@@ -194,7 +194,7 @@
 					"name": "MinorityRuleGame",
 					"args": [
 						{
-							"value": "0x206a0f93916f5d8f",
+							"value": "0xe9715103f4d3b3fc",
 							"type": "Address"
 						}
 					]

@@ -16,7 +16,7 @@ access(all) contract MinorityRuleGame {
     access(all) event RevealDeadlineSet(gameId: UInt64, round: UInt8, duration: UFix64, deadline: UFix64)
     access(all) event InvalidReveal(gameId: UInt64, round: UInt8, player: Address)
     access(all) event RoundCompleted(gameId: UInt64, round: UInt8, yesCount: UInt32, noCount: UInt32, minorityVote: Bool, votesRemaining: UInt32)
-    access(all) event GameCompleted(gameId: UInt64, totalRounds: UInt8, finalPrize: UFix64, platformFee: UFix64)
+    access(all) event GameCompleted(gameId: UInt64, totalRounds: UInt8, finalPrize: UFix64, platformFee: UFix64, winners: [Address], prizePerWinner: UFix64)
     access(all) event PrizeDistributed(gameId: UInt64, winner: Address, amount: UFix64)
 
     // Contract state
@@ -35,7 +35,6 @@ access(all) contract MinorityRuleGame {
         access(all) case zeroPhase
         access(all) case commitPhase
         access(all) case revealPhase
-        access(all) case processingRound
         access(all) case completed
     }
 
@@ -346,41 +345,40 @@ access(all) contract MinorityRuleGame {
                 platformFee = totalPrize * MinorityRuleGame.totalFeePercentage
                 let platformFeeVault <- self.prizeVault.withdraw(amount: platformFee)
                 recipientVault.deposit(from: <- platformFeeVault)
+            }
+            
+            // Handle prize distribution  
+            var prizePerWinner: UFix64 = 0.0
+            
+            if self.winners.length > 0 {
+                // Normal case: distribute remaining prizes to winners
+                let remainingPrize = self.prizeVault.balance
+                prizePerWinner = remainingPrize / UFix64(self.winners.length)
                 
-                // Handle prize distribution
-                if self.winners.length > 0 {
-                    // Normal case: distribute remaining prizes to winners
-                    let remainingPrize = self.prizeVault.balance
-                    let prizePerWinner = remainingPrize / UFix64(self.winners.length)
+                for winner in self.winners {
+                    // Get winner's Flow vault capability
+                    let winnerVault = getAccount(winner)
+                        .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
                     
-                    for winner in self.winners {
-                        // Get winner's Flow vault capability
-                        let winnerVault = getAccount(winner)
-                            .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
-                        
-                        if winnerVault != nil {
-                            // Send prize to winner
-                            let winnerPrize <- self.prizeVault.withdraw(amount: prizePerWinner)
-                            winnerVault!.deposit(from: <- winnerPrize)
-                            
-                            emit PrizeDistributed(
-                                gameId: self.gameId,
-                                winner: winner,
-                                amount: prizePerWinner
-                            )
-                        } else {
-                            // If winner doesn't have a vault, log it (they can still claim later if needed)
-                            log("Warning: Winner ".concat(winner.toString()).concat(" doesn't have a Flow vault"))
-                        }
+                    if winnerVault != nil {
+                        // Send prize to winner
+                        let winnerPrize <- self.prizeVault.withdraw(amount: prizePerWinner)
+                        winnerVault!.deposit(from: <- winnerPrize)
+                    } else {
+                        // If winner doesn't have a vault, log it (they can still claim later if needed)
+                        log("Warning: Winner ".concat(winner.toString()).concat(" doesn't have a Flow vault"))
                     }
-                } else {
-                    // No winners case: platform gets all remaining money (penalty for failed game)
-                    let remainingPrize = self.prizeVault.balance
-                    if remainingPrize > 0.0 {
-                        let additionalFeeVault <- self.prizeVault.withdraw(amount: remainingPrize)
-                        recipientVault.deposit(from: <- additionalFeeVault)
-                        platformFee = platformFee + remainingPrize  // Update total platform fee for accurate logging
-                    }
+                }
+            } else {
+                // No winners case: platform gets all remaining money (penalty for failed game)
+                let remainingPrize = self.prizeVault.balance
+                if remainingPrize > 0.0 {
+                    let recipientVault = getAccount(MinorityRuleGame.platformFeeRecipient)
+                        .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                        ?? panic("Could not borrow platform fee recipient vault")
+                    let additionalFeeVault <- self.prizeVault.withdraw(amount: remainingPrize)
+                    recipientVault.deposit(from: <- additionalFeeVault)
+                    platformFee = platformFee + remainingPrize  // Update total platform fee for accurate logging
                 }
             }
             
@@ -388,7 +386,9 @@ access(all) contract MinorityRuleGame {
                 gameId: self.gameId,
                 totalRounds: self.currentRound,
                 finalPrize: self.prizeVault.balance,
-                platformFee: platformFee
+                platformFee: platformFee,
+                winners: self.winners,
+                prizePerWinner: prizePerWinner
             )
         }
    
@@ -427,8 +427,6 @@ access(all) contract MinorityRuleGame {
                 self.currentRoundReveals.length == self.remainingPlayers.length || 
                 self.revealDeadline < getCurrentBlock().timestamp: "All players must reveal or deadline must be passed"
             }
-            
-            self.state = GameState.processingRound
             
             // Check if too few players for minority rule - first round only
             if self.currentRound == 1 {

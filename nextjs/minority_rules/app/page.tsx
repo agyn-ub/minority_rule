@@ -11,8 +11,7 @@ const getGameStateName = (state: number): string => {
     case 0: return "Zero Phase";
     case 1: return "Commit Phase";
     case 2: return "Reveal Phase";
-    case 3: return "Processing Round";
-    case 4: return "Completed";
+    case 3: return "Completed";
     default: return "Unknown";
   }
 };
@@ -24,7 +23,7 @@ type Game = {
   entry_fee: number;
   creator_address: string;
   current_round: number;
-  game_state: number; // 0=zeroPhase, 1=commitPhase, 2=revealPhase, 3=processingRound, 4=completed
+  game_state: number; // 0=zeroPhase, 1=commitPhase, 2=revealPhase, 3=completed
   commit_deadline: string | null;
   reveal_deadline: string | null;
   total_players: number;
@@ -74,7 +73,7 @@ export default function HomePage() {
       return game.game_state === 1 || game.game_state === 2; // commitPhase or revealPhase
     }
     if (filter === 'completed') {
-      return game.game_state === 4; // completed
+      return game.game_state === 3; // completed
     }
     return true; // 'all'
   });
@@ -117,13 +116,7 @@ export default function HomePage() {
           color: 'text-purple-700 bg-purple-100 border-purple-200',
           description: 'Players revealing votes'
         };
-      case 3: // processingRound
-        return {
-          text: 'Processing',
-          color: 'text-indigo-700 bg-indigo-100 border-indigo-200',
-          description: 'Calculating results'
-        };
-      case 4: // completed
+      case 3: // completed
         return {
           text: 'Completed',
           color: 'text-gray-700 bg-gray-100 border-gray-200',

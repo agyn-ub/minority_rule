@@ -19,7 +19,7 @@ access(all) fun main(gameId: UInt64, contractAddress: Address): {String: AnyStru
     let gameInfo = game.getGameInfo()
     
     // Add state name for better readability
-    let stateNames = ["zeroPhase", "commitPhase", "revealPhase", "processingRound", "completed"]
+    let stateNames = ["zeroPhase", "commitPhase", "revealPhase", "completed"]
     let stateRawValue = gameInfo["state"] as! UInt8
     
     // Enhanced game info with additional details

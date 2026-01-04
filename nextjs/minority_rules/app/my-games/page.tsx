@@ -11,8 +11,7 @@ const getGameStateName = (state: number): string => {
     case 0: return "Zero Phase";
     case 1: return "Commit Phase";
     case 2: return "Reveal Phase";
-    case 3: return "Processing Round";
-    case 4: return "Completed";
+    case 3: return "Completed";
     default: return "Unknown";
   }
 };
