@@ -908,13 +908,35 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
 
     const totalPrizeDistributed = winners.reduce((sum, winner) => sum + winner.amount, 0);
+    const totalEntryFees = (game.total_players || 0) * game.entry_fee;
+    const platformFee = totalEntryFees * 0.02;
+    const netPrizePool = totalEntryFees * 0.98;
 
     return (
       <div className="bg-card rounded-lg shadow-lg p-6">
         <h3 className="text-lg font-semibold text-foreground mb-4">🏆 Winners & Prize Distribution</h3>
 
+        {/* Financial Breakdown */}
+        <div className="mb-6 p-4 bg-muted/30 rounded-lg border border-border">
+          <h4 className="font-semibold text-foreground mb-3">💰 Financial Breakdown</h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Entry Fees:</span>
+              <span className="font-medium">{totalEntryFees.toFixed(4)} FLOW</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Platform Fee (2%):</span>
+              <span className="font-medium text-orange-600">-{platformFee.toFixed(4)} FLOW</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Net Prize Pool:</span>
+              <span className="font-medium text-green-600">{netPrizePool.toFixed(4)} FLOW</span>
+            </div>
+          </div>
+        </div>
+
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="text-center bg-green-50 rounded-lg p-4 border border-green-200">
             <div className="text-2xl mb-2">👑</div>
             <div className="text-xl font-bold text-green-600 mb-1">{winners.length}</div>
@@ -929,6 +951,11 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
             <div className="text-2xl mb-2">🎯</div>
             <div className="text-xl font-bold text-purple-600 mb-1">{(totalPrizeDistributed / winners.length).toFixed(4)}</div>
             <div className="text-sm text-purple-700 font-medium">FLOW per Winner</div>
+          </div>
+          <div className="text-center bg-orange-50 rounded-lg p-4 border border-orange-200">
+            <div className="text-2xl mb-2">🏪</div>
+            <div className="text-xl font-bold text-orange-600 mb-1">{platformFee.toFixed(4)}</div>
+            <div className="text-sm text-orange-700 font-medium">Platform Fee</div>
           </div>
         </div>
 
@@ -1082,16 +1109,16 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                             </td>
                             <td className="py-2 px-4">
                               <span className={`px-2 py-1 rounded text-xs font-medium ${reveal.vote_value
-                                  ? 'bg-green-100 text-green-700 border border-green-200'
-                                  : 'bg-red-100 text-red-700 border border-red-200'
+                                ? 'bg-green-100 text-green-700 border border-green-200'
+                                : 'bg-red-100 text-red-700 border border-red-200'
                                 }`}>
                                 {reveal.vote_value ? 'YES' : 'NO'}
                               </span>
                             </td>
                             <td className="py-2 px-4">
                               <span className={`px-2 py-1 rounded text-xs font-medium ${isMinorityVote
-                                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                  : 'bg-gray-100 text-gray-700 border border-gray-200'
+                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                : 'bg-gray-100 text-gray-700 border border-gray-200'
                                 }`}>
                                 {isMinorityVote ? 'Advanced' : 'Eliminated'}
                               </span>
@@ -1184,20 +1211,20 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
             <div className="flex items-start justify-between mb-6">
               <div className="flex-1">
 
-                <div className="flex items-center gap-4 mb-4">
-                  <h1 className="text-xl font-bold text-foreground">
-                    Game #{game.game_id}
-                  </h1>
-                  <span className={`px-4 py-2 rounded-full text-sm font-medium border ${getGameStatusColor(game.game_state)}`}>
-                    {getGameStateName(game.game_state)}
-                  </span>
-                </div>
-
-                {/* Game Creator */}
-                <div className="mb-3">
-                  <p className="text-sm text-muted-foreground">
-                    👤 Game Creator: <code className="px-2 py-1 rounded text-xs">{game.creator_address}</code>
-                  </p>
+                <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+                  <div className="flex items-center gap-4">
+                    <h1 className="text-xl font-bold text-foreground">
+                      Game #{game.game_id}
+                    </h1>
+                    <span className={`px-4 py-2 rounded-full text-sm font-medium border ${getGameStatusColor(game.game_state)}`}>
+                      {getGameStateName(game.game_state)}
+                    </span>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg">
+                    <span className="text-sm font-medium text-blue-800">
+                      👤 Creator: <code className="font-mono text-blue-900 font-semibold">{formatAddress(game.creator_address)}</code>
+                    </span>
+                  </div>
                 </div>
 
                 {/* Game Question */}
@@ -1319,7 +1346,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                             <p>• Game continues until 1-2 players remain</p>
                           </div>
                         </div>
-                        
+
                         <div className="bg-white rounded-lg p-4 border border-green-200">
                           <h4 className="font-semibold text-green-800 mb-2">📋 Next Steps</h4>
                           <div className="text-sm text-green-700 space-y-1">
@@ -1336,356 +1363,353 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                   </div>
                 )}
 
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              {/* Actions Section - Full Width */}
+              <div className="space-y-6">
+                {/* Join Game Form - Show only if user can join */}
+                {game.game_state === GameState.CommitPhase &&
+                  game.commit_deadline &&
+                  new Date() < new Date(game.commit_deadline) &&
+                  user?.loggedIn &&
+                  !hasUserJoined && (
+                    <div className="bg-card rounded-lg shadow-lg p-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-4">Join Game</h3>
+                      <div className="text-center mb-4">
+                        <div className="text-2xl font-bold text-foreground mb-2">
+                          {game.entry_fee} FLOW
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Entry fee required
+                        </p>
+                      </div>
 
-                {/* Actions Section */}
-                <div className="flex-shrink-0">
-                  {/* Join Game Form - Show only if user can join */}
-                  {game.game_state === GameState.CommitPhase &&
-                    game.commit_deadline &&
-                    new Date() < new Date(game.commit_deadline) &&
-                    user?.loggedIn &&
-                    !hasUserJoined && (
-                      <div className="bg-card rounded-lg shadow-lg p-6">
-                        <h3 className="text-lg font-semibold text-foreground mb-4">Join Game</h3>
-                        <div className="text-center mb-4">
-                          <div className="text-2xl font-bold text-foreground mb-2">
-                            {game.entry_fee} FLOW
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Entry fee required
-                          </p>
+                      <button
+                        onClick={handleJoinGame}
+                        disabled={txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                        className={`w-full py-3 px-4 rounded-lg transition-colors font-medium ${txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                          ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                          : "bg-green-600 text-white hover:bg-green-700"
+                          }`}
+                      >
+                        {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                          ? "Joining..."
+                          : "Join Game"
+                        }
+                      </button>
+
+                      <div className="mt-3 text-xs text-muted-foreground text-center">
+                        <p>• You need {game.entry_fee} FLOW to join</p>
+                        <p>• Once joined, you can vote on the question</p>
+                        <p>• Only minority voters advance to next round</p>
+                      </div>
+                    </div>
+                  )}
+
+                {/* Login Required for Join */}
+                {game.game_state === GameState.CommitPhase &&
+                  game.commit_deadline &&
+                  new Date() < new Date(game.commit_deadline) &&
+                  !user?.loggedIn && (
+                    <div className="bg-card rounded-lg shadow-lg p-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-4">Join Game</h3>
+                      <div className="text-center">
+                        <p className="text-muted-foreground mb-4">
+                          Connect your wallet to join this game
+                        </p>
+                        <Link
+                          href="/"
+                          className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-lg hover:bg-primary/90 transition-colors font-medium text-center block"
+                        >
+                          Connect Wallet
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+
+                {/* Commit Vote Form - Show only if user has joined and hasn't committed */}
+                {game.game_state === GameState.CommitPhase &&
+                  game.commit_deadline &&
+                  new Date() < new Date(game.commit_deadline) &&
+                  user?.loggedIn &&
+                  hasUserJoined &&
+                  !hasUserCommitted && (
+                    <div className="bg-card rounded-lg shadow-lg p-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-4">💭 Submit Your Vote</h3>
+                      <div className="text-center mb-6">
+                        <p className="text-muted-foreground mb-4">
+                          What's your answer to: <strong>{game.question_text}</strong>
+                        </p>
+
+                        {/* Vote Selection */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                          <button
+                            onClick={() => handleVoteSelection(true)}
+                            className={`p-4 rounded-lg border-2 transition-all ${userVote === true
+                              ? 'border-green-500 bg-green-50 text-green-700'
+                              : 'border-gray-300 bg-gray-50 hover:border-green-300 hover:bg-green-50'
+                              }`}
+                          >
+                            <div className="text-2xl mb-2">✅</div>
+                            <div className="font-semibold">YES</div>
+                          </button>
+
+                          <button
+                            onClick={() => handleVoteSelection(false)}
+                            className={`p-4 rounded-lg border-2 transition-all ${userVote === false
+                              ? 'border-red-500 bg-red-50 text-red-700'
+                              : 'border-gray-300 bg-gray-50 hover:border-red-300 hover:bg-red-50'
+                              }`}
+                          >
+                            <div className="text-2xl mb-2">❌</div>
+                            <div className="font-semibold">NO</div>
+                          </button>
                         </div>
 
+                        {userVote !== null && (
+                          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-700">
+                              <strong>Your vote:</strong> {userVote ? 'YES' : 'NO'}
+                            </p>
+                            <p className="text-xs text-blue-600 mt-1">
+                              Your vote will be hidden until the reveal phase
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Submit Button */}
+                      {userVote !== null && (
                         <button
-                          onClick={handleJoinGame}
-                          disabled={txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
-                          className={`w-full py-3 px-4 rounded-lg transition-colors font-medium ${txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-                              ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                              : "bg-green-600 text-white hover:bg-green-700"
+                          onClick={handleCommitVote}
+                          disabled={!commitHash || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                          className={`w-full py-3 px-4 rounded-lg transition-colors font-medium ${!commitHash || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                            ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                            : "bg-blue-600 text-white hover:bg-blue-700"
                             }`}
                         >
                           {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-                            ? "Joining..."
-                            : "Join Game"
+                            ? "Committing..."
+                            : "Submit Vote Commitment"
                           }
                         </button>
+                      )}
 
-                        <div className="mt-3 text-xs text-muted-foreground text-center">
-                          <p>• You need {game.entry_fee} FLOW to join</p>
-                          <p>• Once joined, you can vote on the question</p>
-                          <p>• Only minority voters advance to next round</p>
-                        </div>
+                      <div className="mt-4 text-xs text-muted-foreground text-center">
+                        <p>• Your vote will be hidden until the reveal phase</p>
+                        <p>• Remember your choice - you'll need it to reveal later</p>
+                        <p>• Only minority voters advance to the next round</p>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                  {/* Login Required for Join */}
-                  {game.game_state === GameState.CommitPhase &&
-                    game.commit_deadline &&
-                    new Date() < new Date(game.commit_deadline) &&
-                    !user?.loggedIn && (
-                      <div className="bg-card rounded-lg shadow-lg p-6">
-                        <h3 className="text-lg font-semibold text-foreground mb-4">Join Game</h3>
-                        <div className="text-center">
-                          <p className="text-muted-foreground mb-4">
-                            Connect your wallet to join this game
-                          </p>
-                          <Link
-                            href="/"
-                            className="w-full bg-primary text-primary-foreground py-3 px-4 rounded-lg hover:bg-primary/90 transition-colors font-medium text-center block"
-                          >
-                            Connect Wallet
-                          </Link>
+                {/* Vote Committed Confirmation */}
+                {game.game_state === GameState.CommitPhase &&
+                  user?.loggedIn &&
+                  hasUserJoined &&
+                  hasUserCommitted && (
+                    <div className="bg-card rounded-lg shadow-lg p-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-4">✅ Vote Committed!</h3>
+                      <div className="text-center">
+                        <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                          <p className="font-medium mb-2">Your vote has been successfully committed</p>
+                          <p className="text-sm text-green-600">Your vote is hidden until the reveal phase begins</p>
                         </div>
-                      </div>
-                    )}
 
-                  {/* Commit Vote Form - Show only if user has joined and hasn't committed */}
-                  {game.game_state === GameState.CommitPhase &&
-                    game.commit_deadline &&
-                    new Date() < new Date(game.commit_deadline) &&
-                    user?.loggedIn &&
-                    hasUserJoined &&
-                    !hasUserCommitted && (
-                      <div className="bg-card rounded-lg shadow-lg p-6">
-                        <h3 className="text-lg font-semibold text-foreground mb-4">💭 Submit Your Vote</h3>
-                        <div className="text-center mb-6">
-                          <p className="text-muted-foreground mb-4">
-                            What's your answer to: <strong>{game.question_text}</strong>
-                          </p>
-
-                          {/* Vote Selection */}
-                          <div className="grid grid-cols-2 gap-4 mb-6">
-                            <button
-                              onClick={() => handleVoteSelection(true)}
-                              className={`p-4 rounded-lg border-2 transition-all ${userVote === true
-                                ? 'border-green-500 bg-green-50 text-green-700'
-                                : 'border-gray-300 bg-gray-50 hover:border-green-300 hover:bg-green-50'
-                                }`}
-                            >
-                              <div className="text-2xl mb-2">✅</div>
-                              <div className="font-semibold">YES</div>
-                            </button>
-
-                            <button
-                              onClick={() => handleVoteSelection(false)}
-                              className={`p-4 rounded-lg border-2 transition-all ${userVote === false
-                                ? 'border-red-500 bg-red-50 text-red-700'
-                                : 'border-gray-300 bg-gray-50 hover:border-red-300 hover:bg-red-50'
-                                }`}
-                            >
-                              <div className="text-2xl mb-2">❌</div>
-                              <div className="font-semibold">NO</div>
-                            </button>
-                          </div>
-
-                          {userVote !== null && (
-                            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                              <p className="text-sm text-blue-700">
-                                <strong>Your vote:</strong> {userVote ? 'YES' : 'NO'}
-                              </p>
-                              <p className="text-xs text-blue-600 mt-1">
-                                Your vote will be hidden until the reveal phase
-                              </p>
+                        {/* Critical Salt Display */}
+                        {userSalt && (
+                          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-6 mb-6">
+                            <div className="flex items-center justify-center mb-3">
+                              <span className="text-2xl mr-2">🔑</span>
+                              <h4 className="text-lg font-bold text-red-800">CRITICAL: Save Your Salt</h4>
                             </div>
-                          )}
-                        </div>
 
-                        {/* Submit Button */}
-                        {userVote !== null && (
-                          <button
-                            onClick={handleCommitVote}
-                            disabled={!commitHash || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
-                            className={`w-full py-3 px-4 rounded-lg transition-colors font-medium ${!commitHash || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-                                ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                                : "bg-blue-600 text-white hover:bg-blue-700"
-                              }`}
-                          >
-                            {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-                              ? "Committing..."
-                              : "Submit Vote Commitment"
-                            }
-                          </button>
+                            <div className="bg-white border border-red-200 rounded-lg p-4 mb-4">
+                              <p className="text-sm font-medium text-red-700 mb-2">Your Salt (Required for Reveal):</p>
+                              <div className="flex items-center gap-2">
+                                <code className="flex-1 bg-gray-100 px-3 py-2 rounded border text-sm font-mono break-all">
+                                  {userSalt}
+                                </code>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(userSalt);
+                                    setShowCopySuccessDialog(true);
+                                  }}
+                                  className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition-colors text-sm font-medium"
+                                >
+                                  Copy
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="text-left text-sm text-red-800 space-y-1">
+                              <p className="font-semibold">⚠️ WARNING: You MUST save this salt!</p>
+                              <p>• Copy it to a safe place (notes app, password manager, etc.)</p>
+                              <p>• You'll need this exact salt to reveal your vote</p>
+                              <p>• Losing this salt means you CANNOT reveal and will lose the game</p>
+                              <p>• The salt will disappear if you refresh this page</p>
+                            </div>
+                          </div>
                         )}
 
-                        <div className="mt-4 text-xs text-muted-foreground text-center">
-                          <p>• Your vote will be hidden until the reveal phase</p>
-                          <p>• Remember your choice - you'll need it to reveal later</p>
-                          <p>• Only minority voters advance to the next round</p>
-                        </div>
-                      </div>
-                    )}
-
-                  {/* Vote Committed Confirmation */}
-                  {game.game_state === GameState.CommitPhase &&
-                    user?.loggedIn &&
-                    hasUserJoined &&
-                    hasUserCommitted && (
-                      <div className="bg-card rounded-lg shadow-lg p-6">
-                        <h3 className="text-lg font-semibold text-foreground mb-4">✅ Vote Committed!</h3>
-                        <div className="text-center">
-                          <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                            <p className="font-medium mb-2">Your vote has been successfully committed</p>
-                            <p className="text-sm text-green-600">Your vote is hidden until the reveal phase begins</p>
-                          </div>
-
-                          {/* Critical Salt Display */}
-                          {userSalt && (
-                            <div className="bg-red-50 border-2 border-red-300 rounded-lg p-6 mb-6">
-                              <div className="flex items-center justify-center mb-3">
-                                <span className="text-2xl mr-2">🔑</span>
-                                <h4 className="text-lg font-bold text-red-800">CRITICAL: Save Your Salt</h4>
-                              </div>
-
-                              <div className="bg-white border border-red-200 rounded-lg p-4 mb-4">
-                                <p className="text-sm font-medium text-red-700 mb-2">Your Salt (Required for Reveal):</p>
-                                <div className="flex items-center gap-2">
-                                  <code className="flex-1 bg-gray-100 px-3 py-2 rounded border text-sm font-mono break-all">
-                                    {userSalt}
-                                  </code>
-                                  <button
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(userSalt);
-                                      setShowCopySuccessDialog(true);
-                                    }}
-                                    className="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition-colors text-sm font-medium"
-                                  >
-                                    Copy
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="text-left text-sm text-red-800 space-y-1">
-                                <p className="font-semibold">⚠️ WARNING: You MUST save this salt!</p>
-                                <p>• Copy it to a safe place (notes app, password manager, etc.)</p>
-                                <p>• You'll need this exact salt to reveal your vote</p>
-                                <p>• Losing this salt means you CANNOT reveal and will lose the game</p>
-                                <p>• The salt will disappear if you refresh this page</p>
-                              </div>
-                            </div>
+                        <div className="text-sm text-muted-foreground space-y-2">
+                          <p><strong>Next Steps:</strong></p>
+                          <p>• Save your salt in a secure location</p>
+                          <p>• Wait for the commit phase to end</p>
+                          <p>• Reveal your vote during the reveal phase using your saved salt</p>
+                          <p>• Remember your original vote choice: <strong>{userVote !== null ? (userVote ? 'YES' : 'NO') : 'Unknown'}</strong></p>
+                          {game.commit_deadline && new Date() < new Date(game.commit_deadline) && (
+                            <p>• Commit phase ends: {new Date(game.commit_deadline).toLocaleString()}</p>
                           )}
-
-                          <div className="text-sm text-muted-foreground space-y-2">
-                            <p><strong>Next Steps:</strong></p>
-                            <p>• Save your salt in a secure location</p>
-                            <p>• Wait for the commit phase to end</p>
-                            <p>• Reveal your vote during the reveal phase using your saved salt</p>
-                            <p>• Remember your original vote choice: <strong>{userVote !== null ? (userVote ? 'YES' : 'NO') : 'Unknown'}</strong></p>
-                            {game.commit_deadline && new Date() < new Date(game.commit_deadline) && (
-                              <p>• Commit phase ends: {new Date(game.commit_deadline).toLocaleString()}</p>
-                            )}
-                          </div>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                  {/* Debug: Check all reveal button conditions */}
-                  {(() => {
-                    console.log("Reveal button conditions:", {
-                      gameState: game.game_state,
-                      isRevealPhase: game.game_state === GameState.RevealPhase,
-                      revealDeadline: game.reveal_deadline,
-                      deadlineNotPassed: game.reveal_deadline && new Date() < new Date(game.reveal_deadline),
-                      userLoggedIn: user?.loggedIn,
-                      hasUserJoined,
-                      hasUserCommitted,
-                      hasNotRevealed: !hasUserRevealed,
-                      allConditionsMet: (
-                        game.game_state === GameState.RevealPhase &&
-                        game.reveal_deadline &&
-                        new Date() < new Date(game.reveal_deadline) &&
-                        user?.loggedIn &&
-                        hasUserJoined &&
-                        hasUserCommitted &&
-                        !hasUserRevealed
-                      )
-                    });
-                    return null;
-                  })()}
+                {/* Debug: Check all reveal button conditions */}
+                {(() => {
+                  console.log("Reveal button conditions:", {
+                    gameState: game.game_state,
+                    isRevealPhase: game.game_state === GameState.RevealPhase,
+                    revealDeadline: game.reveal_deadline,
+                    deadlineNotPassed: game.reveal_deadline && new Date() < new Date(game.reveal_deadline),
+                    userLoggedIn: user?.loggedIn,
+                    hasUserJoined,
+                    hasUserCommitted,
+                    hasNotRevealed: !hasUserRevealed,
+                    allConditionsMet: (
+                      game.game_state === GameState.RevealPhase &&
+                      game.reveal_deadline &&
+                      new Date() < new Date(game.reveal_deadline) &&
+                      user?.loggedIn &&
+                      hasUserJoined &&
+                      hasUserCommitted &&
+                      !hasUserRevealed
+                    )
+                  });
+                  return null;
+                })()}
 
-                  {/* Reveal Vote Form - Show only if user has committed and game is in reveal phase */}
-                  {game.game_state === GameState.RevealPhase &&
-                    game.reveal_deadline &&
-                    new Date() < new Date(game.reveal_deadline) &&
-                    user?.loggedIn &&
-                    hasUserJoined &&
-                    hasUserCommitted &&
-                    !hasUserRevealed && (
-                      <div className="bg-card rounded-lg shadow-lg p-6">
-                        <h3 className="text-lg font-semibold text-foreground mb-4">🔓 Reveal Your Vote</h3>
-                        <div className="text-center mb-6">
-                          <p className="text-muted-foreground mb-4">
-                            Reveal your answer to: <strong>{game.question_text}</strong>
+                {/* Reveal Vote Form - Show only if user has committed and game is in reveal phase */}
+                {game.game_state === GameState.RevealPhase &&
+                  game.reveal_deadline &&
+                  new Date() < new Date(game.reveal_deadline) &&
+                  user?.loggedIn &&
+                  hasUserJoined &&
+                  hasUserCommitted &&
+                  !hasUserRevealed && (
+                    <div className="bg-card rounded-lg shadow-lg p-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-4">🔓 Reveal Your Vote</h3>
+                      <div className="text-center mb-6">
+                        <p className="text-muted-foreground mb-4">
+                          Reveal your answer to: <strong>{game.question_text}</strong>
+                        </p>
+
+                        {/* Vote Reveal Selection */}
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                          <button
+                            onClick={() => setRevealVote(true)}
+                            className={`p-4 rounded-lg border-2 transition-all ${revealVote === true
+                              ? 'border-green-500 bg-green-50 text-green-700'
+                              : 'border-gray-300 bg-gray-50 hover:border-green-300 hover:bg-green-50'
+                              }`}
+                          >
+                            <div className="text-2xl mb-2">✅</div>
+                            <div className="font-semibold">YES</div>
+                          </button>
+
+                          <button
+                            onClick={() => setRevealVote(false)}
+                            className={`p-4 rounded-lg border-2 transition-all ${revealVote === false
+                              ? 'border-red-500 bg-red-50 text-red-700'
+                              : 'border-gray-300 bg-gray-50 hover:border-red-300 hover:bg-red-50'
+                              }`}
+                          >
+                            <div className="text-2xl mb-2">❌</div>
+                            <div className="font-semibold">NO</div>
+                          </button>
+                        </div>
+
+                        {/* Salt Input */}
+                        <div className="mb-6">
+                          <label htmlFor="revealSalt" className="block text-sm font-medium text-foreground mb-2">
+                            Salt (from your original commitment)
+                          </label>
+                          <input
+                            id="revealSalt"
+                            type="text"
+                            value={revealSalt}
+                            onChange={(e) => setRevealSalt(e.target.value)}
+                            placeholder="Enter the 64-character salt from when you committed"
+                            className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground font-mono text-sm"
+                            maxLength={64}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            This was generated when you submitted your commitment
                           </p>
+                        </div>
 
-                          {/* Vote Reveal Selection */}
-                          <div className="grid grid-cols-2 gap-4 mb-6">
-                            <button
-                              onClick={() => setRevealVote(true)}
-                              className={`p-4 rounded-lg border-2 transition-all ${revealVote === true
-                                ? 'border-green-500 bg-green-50 text-green-700'
-                                : 'border-gray-300 bg-gray-50 hover:border-green-300 hover:bg-green-50'
-                                }`}
-                            >
-                              <div className="text-2xl mb-2">✅</div>
-                              <div className="font-semibold">YES</div>
-                            </button>
-
-                            <button
-                              onClick={() => setRevealVote(false)}
-                              className={`p-4 rounded-lg border-2 transition-all ${revealVote === false
-                                ? 'border-red-500 bg-red-50 text-red-700'
-                                : 'border-gray-300 bg-gray-50 hover:border-red-300 hover:bg-red-50'
-                                }`}
-                            >
-                              <div className="text-2xl mb-2">❌</div>
-                              <div className="font-semibold">NO</div>
-                            </button>
-                          </div>
-
-                          {/* Salt Input */}
-                          <div className="mb-6">
-                            <label htmlFor="revealSalt" className="block text-sm font-medium text-foreground mb-2">
-                              Salt (from your original commitment)
-                            </label>
-                            <input
-                              id="revealSalt"
-                              type="text"
-                              value={revealSalt}
-                              onChange={(e) => setRevealSalt(e.target.value)}
-                              placeholder="Enter the 64-character salt from when you committed"
-                              className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground font-mono text-sm"
-                              maxLength={64}
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              This was generated when you submitted your commitment
+                        {revealVote !== null && revealSalt.length === 64 && (
+                          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-sm text-blue-700">
+                              <strong>Revealing:</strong> {revealVote ? 'YES' : 'NO'}
+                            </p>
+                            <p className="text-xs text-blue-600 mt-1">
+                              Make sure this matches your original commitment
                             </p>
                           </div>
+                        )}
+                      </div>
 
-                          {revealVote !== null && revealSalt.length === 64 && (
-                            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                              <p className="text-sm text-blue-700">
-                                <strong>Revealing:</strong> {revealVote ? 'YES' : 'NO'}
-                              </p>
-                              <p className="text-xs text-blue-600 mt-1">
-                                Make sure this matches your original commitment
-                              </p>
-                            </div>
+                      {/* Submit Button */}
+                      {revealVote !== null && revealSalt.length === 64 && (
+                        <button
+                          onClick={handleRevealVote}
+                          disabled={revealVote === null || revealSalt.length !== 64 || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                          className={`w-full py-3 px-4 rounded-lg transition-colors font-medium ${revealVote === null || revealSalt.length !== 64 || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                            ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                            : "bg-purple-600 text-white hover:bg-purple-700"
+                            }`}
+                        >
+                          {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                            ? "Revealing..."
+                            : "Reveal Vote"
+                          }
+                        </button>
+                      )}
+
+                      <div className="mt-4 text-xs text-muted-foreground text-center">
+                        <p>• You must reveal the same vote and salt you committed earlier</p>
+                        <p>• If they don't match, the transaction will fail</p>
+                        <p>• Only minority voters advance to the next round</p>
+                      </div>
+                    </div>
+                  )}
+
+                {/* Vote Revealed Confirmation */}
+                {game.game_state === GameState.RevealPhase &&
+                  user?.loggedIn &&
+                  hasUserJoined &&
+                  hasUserCommitted &&
+                  hasUserRevealed && (
+                    <div className="bg-card rounded-lg shadow-lg p-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-4">✅ Vote Revealed!</h3>
+                      <div className="text-center">
+                        <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                          <p className="font-medium mb-2">Your vote has been successfully revealed</p>
+                          <p className="text-sm text-green-600">Your vote is now public and being counted</p>
+                        </div>
+
+                        <div className="text-sm text-muted-foreground space-y-2">
+                          <p><strong>Next Steps:</strong></p>
+                          <p>• Wait for all players to reveal their votes</p>
+                          <p>• Round will be processed when reveal phase ends</p>
+                          <p>• Only minority voters advance to next round</p>
+                          {game.reveal_deadline && new Date() < new Date(game.reveal_deadline) && (
+                            <p>• Reveal phase ends: {new Date(game.reveal_deadline).toLocaleString()}</p>
                           )}
                         </div>
-
-                        {/* Submit Button */}
-                        {revealVote !== null && revealSalt.length === 64 && (
-                          <button
-                            onClick={handleRevealVote}
-                            disabled={revealVote === null || revealSalt.length !== 64 || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
-                            className={`w-full py-3 px-4 rounded-lg transition-colors font-medium ${revealVote === null || revealSalt.length !== 64 || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-                                ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                                : "bg-purple-600 text-white hover:bg-purple-700"
-                              }`}
-                          >
-                            {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-                              ? "Revealing..."
-                              : "Reveal Vote"
-                            }
-                          </button>
-                        )}
-
-                        <div className="mt-4 text-xs text-muted-foreground text-center">
-                          <p>• You must reveal the same vote and salt you committed earlier</p>
-                          <p>• If they don't match, the transaction will fail</p>
-                          <p>• Only minority voters advance to the next round</p>
-                        </div>
                       </div>
-                    )}
-
-                  {/* Vote Revealed Confirmation */}
-                  {game.game_state === GameState.RevealPhase &&
-                    user?.loggedIn &&
-                    hasUserJoined &&
-                    hasUserCommitted &&
-                    hasUserRevealed && (
-                      <div className="bg-card rounded-lg shadow-lg p-6">
-                        <h3 className="text-lg font-semibold text-foreground mb-4">✅ Vote Revealed!</h3>
-                        <div className="text-center">
-                          <div className="text-green-700 bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                            <p className="font-medium mb-2">Your vote has been successfully revealed</p>
-                            <p className="text-sm text-green-600">Your vote is now public and being counted</p>
-                          </div>
-
-                          <div className="text-sm text-muted-foreground space-y-2">
-                            <p><strong>Next Steps:</strong></p>
-                            <p>• Wait for all players to reveal their votes</p>
-                            <p>• Round will be processed when reveal phase ends</p>
-                            <p>• Only minority voters advance to next round</p>
-                            {game.reveal_deadline && new Date() < new Date(game.reveal_deadline) && (
-                              <p>• Reveal phase ends: {new Date(game.reveal_deadline).toLocaleString()}</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                </div>
+                    </div>
+                  )}
               </div>
             </div>
           )}

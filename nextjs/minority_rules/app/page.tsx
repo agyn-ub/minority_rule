@@ -35,7 +35,7 @@ export default function HomePage() {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
+  const [filter, setFilter] = useState<'new' | 'ongoing' | 'completed'>('new');
 
   // Fetch games from Supabase
   useEffect(() => {
@@ -69,13 +69,25 @@ export default function HomePage() {
 
   // Filter games based on selected filter
   const filteredGames = games.filter(game => {
-    if (filter === 'active') {
-      return game.game_state === 1 || game.game_state === 2; // commitPhase or revealPhase
+    const now = new Date();
+    
+    if (filter === 'new') {
+      // Games open for joining (commit phase with deadline not passed)
+      return game.game_state === 1 && 
+             game.commit_deadline && 
+             now < new Date(game.commit_deadline);
+    }
+    if (filter === 'ongoing') {
+      // Games in progress but not open for new players
+      return (game.game_state === 1 && 
+              game.commit_deadline && 
+              now >= new Date(game.commit_deadline)) ||
+             game.game_state === 2; // reveal phase
     }
     if (filter === 'completed') {
       return game.game_state === 3; // completed
     }
-    return true; // 'all'
+    return false; // Should never reach here with the current filter options
   });
 
   // Format game state for display with enhanced styling
@@ -175,8 +187,8 @@ export default function HomePage() {
         <div className="mb-6">
           <div className="flex space-x-1 bg-card rounded-lg p-1 shadow-sm">
             {[
-              { key: 'all', label: 'All Games' },
-              { key: 'active', label: 'Active Games' },
+              { key: 'new', label: 'New' },
+              { key: 'ongoing', label: 'Ongoing' },
               { key: 'completed', label: 'Completed' },
             ].map((tab) => (
               <button
@@ -214,7 +226,9 @@ export default function HomePage() {
             {filteredGames.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">
-                  {filter === 'all' ? 'No games found' : `No ${filter} games found`}
+                  {filter === 'new' ? 'No new games available for joining' :
+                   filter === 'ongoing' ? 'No ongoing games in progress' :
+                   'No completed games found'}
                 </p>
                 <Link
                   href="/create"
@@ -227,7 +241,9 @@ export default function HomePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredGames.map((game) => {
                   const stateInfo = formatGameState(game.game_state, game.commit_deadline);
-                  const isActive = game.game_state === 1 || game.game_state === 2; // commitPhase or revealPhase
+                  const now = new Date();
+                  const isNew = game.game_state === 1 && game.commit_deadline && now < new Date(game.commit_deadline);
+                  const isOngoing = (game.game_state === 1 && game.commit_deadline && now >= new Date(game.commit_deadline)) || game.game_state === 2;
 
                   return (
                     <div key={game.game_id} className="bg-card rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
@@ -289,7 +305,7 @@ export default function HomePage() {
                           href={`/games/${game.game_id}`}
                           className="flex-1 bg-primary text-primary-foreground py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium text-center"
                         >
-                          {isActive ? 'Go Game' : 'View Details'}
+                          {isNew ? 'Join Game' : isOngoing ? 'View Game' : 'View Results'}
                         </Link>
                       </div>
 
