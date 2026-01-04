@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { Database } from '../types/database.types'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -7,69 +8,37 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please check your .env.local file.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: false, // We're using Flow wallet authentication, not Supabase auth
   }
 })
 
-// Database types for TypeScript
-export type Game = {
-  game_id: number
-  question_text: string
-  entry_fee: number
-  creator_address: string
-  current_round: number
-  game_state: number // 0=zeroPhase, 1=commitPhase, 2=revealPhase, 3=processingRound, 4=completed
-  commit_deadline: string | null
-  reveal_deadline: string | null
-  total_players: number
-  created_at: string
-}
+// Export types from generated database types
+export type Game = Database['public']['Tables']['games']['Row']
+export type GameInsert = Database['public']['Tables']['games']['Insert']
+export type GameUpdate = Database['public']['Tables']['games']['Update']
 
-export type GamePlayer = {
-  game_id: number
-  player_address: string
-  joined_at: string
-  status: 'active' | 'eliminated' | 'winner'
-}
+export type GamePlayer = Database['public']['Tables']['game_players']['Row']
+export type GamePlayerInsert = Database['public']['Tables']['game_players']['Insert']
+export type GamePlayerUpdate = Database['public']['Tables']['game_players']['Update']
 
-export type Round = {
-  id: number
-  game_id: number
-  round_number: number
-  yes_count: number
-  no_count: number
-  minority_vote: boolean
-  votes_remaining: number
-  completed_at: string
-}
+export type Round = Database['public']['Tables']['rounds']['Row']
+export type RoundInsert = Database['public']['Tables']['rounds']['Insert']
+export type RoundUpdate = Database['public']['Tables']['rounds']['Update']
 
-export type Commit = {
-  game_id: number
-  round_number: number
-  round_id: number | null  // Foreign key to rounds table
-  player_address: string
-  commit_hash: string
-  committed_at: string
-}
+export type Commit = Database['public']['Tables']['commits']['Row']
+export type CommitInsert = Database['public']['Tables']['commits']['Insert']
+export type CommitUpdate = Database['public']['Tables']['commits']['Update']
 
-export type Reveal = {
-  game_id: number
-  round_number: number
-  round_id: number | null  // Foreign key to rounds table
-  player_address: string
-  vote_value: boolean
-  salt: string
-  revealed_at: string
-}
+export type Reveal = Database['public']['Tables']['reveals']['Row']
+export type RevealInsert = Database['public']['Tables']['reveals']['Insert']
+export type RevealUpdate = Database['public']['Tables']['reveals']['Update']
 
-export type UserProfile = {
-  player_address: string
-  display_name: string | null
-  total_games: number
-  total_wins: number
-  total_earnings: number
-  created_at: string
-  updated_at: string
-}
+export type UserProfile = Database['public']['Tables']['user_profiles']['Row']
+export type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert']
+export type UserProfileUpdate = Database['public']['Tables']['user_profiles']['Update']
+
+export type PrizeDistribution = Database['public']['Tables']['prize_distributions']['Row']
+export type PrizeDistributionInsert = Database['public']['Tables']['prize_distributions']['Insert']
+export type PrizeDistributionUpdate = Database['public']['Tables']['prize_distributions']['Update']

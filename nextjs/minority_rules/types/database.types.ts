@@ -20,6 +20,7 @@ export type Database = {
           committed_at: string | null
           game_id: number
           player_address: string
+          round_id: number | null
           round_number: number
         }
         Insert: {
@@ -27,6 +28,7 @@ export type Database = {
           committed_at?: string | null
           game_id: number
           player_address: string
+          round_id?: number | null
           round_number: number
         }
         Update: {
@@ -34,6 +36,7 @@ export type Database = {
           committed_at?: string | null
           game_id?: number
           player_address?: string
+          round_id?: number | null
           round_number?: number
         }
         Relationships: [
@@ -43,6 +46,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "games"
             referencedColumns: ["game_id"]
+          },
+          {
+            foreignKeyName: "fk_commits_round_id"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -83,7 +93,7 @@ export type Database = {
           current_round: number | null
           entry_fee: number
           game_id: number
-          game_state: string
+          game_state: number
           question_text: string
           reveal_deadline: string | null
           total_players: number | null
@@ -95,7 +105,7 @@ export type Database = {
           current_round?: number | null
           entry_fee: number
           game_id: number
-          game_state?: string
+          game_state?: number
           question_text: string
           reveal_deadline?: string | null
           total_players?: number | null
@@ -107,18 +117,64 @@ export type Database = {
           current_round?: number | null
           entry_fee?: number
           game_id?: number
-          game_state?: string
+          game_state?: number
           question_text?: string
           reveal_deadline?: string | null
           total_players?: number | null
         }
         Relationships: []
       }
+      prize_distributions: {
+        Row: {
+          amount: number
+          block_height: number | null
+          distributed_at: string | null
+          game_id: number
+          id: number
+          transaction_id: string | null
+          winner_address: string
+        }
+        Insert: {
+          amount: number
+          block_height?: number | null
+          distributed_at?: string | null
+          game_id: number
+          id?: number
+          transaction_id?: string | null
+          winner_address: string
+        }
+        Update: {
+          amount?: number
+          block_height?: number | null
+          distributed_at?: string | null
+          game_id?: number
+          id?: number
+          transaction_id?: string | null
+          winner_address?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_prize_game_id"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["game_id"]
+          },
+          {
+            foreignKeyName: "fk_prize_winner"
+            columns: ["winner_address"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["player_address"]
+          },
+        ]
+      }
       reveals: {
         Row: {
           game_id: number
           player_address: string
           revealed_at: string | null
+          round_id: number | null
           round_number: number
           salt: string
           vote_value: boolean
@@ -127,6 +183,7 @@ export type Database = {
           game_id: number
           player_address: string
           revealed_at?: string | null
+          round_id?: number | null
           round_number: number
           salt: string
           vote_value: boolean
@@ -135,13 +192,62 @@ export type Database = {
           game_id?: number
           player_address?: string
           revealed_at?: string | null
+          round_id?: number | null
           round_number?: number
           salt?: string
           vote_value?: boolean
         }
         Relationships: [
           {
+            foreignKeyName: "fk_reveals_round_id"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "reveals_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["game_id"]
+          },
+        ]
+      }
+      rounds: {
+        Row: {
+          completed_at: string | null
+          game_id: number
+          id: number
+          minority_vote: boolean
+          no_count: number
+          round_number: number
+          votes_remaining: number
+          yes_count: number
+        }
+        Insert: {
+          completed_at?: string | null
+          game_id: number
+          id?: number
+          minority_vote: boolean
+          no_count: number
+          round_number: number
+          votes_remaining: number
+          yes_count: number
+        }
+        Update: {
+          completed_at?: string | null
+          game_id?: number
+          id?: number
+          minority_vote?: boolean
+          no_count?: number
+          round_number?: number
+          votes_remaining?: number
+          yes_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_rounds_game_id"
             columns: ["game_id"]
             isOneToOne: false
             referencedRelation: "games"

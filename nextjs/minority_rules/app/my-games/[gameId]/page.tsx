@@ -45,8 +45,8 @@ export default function MyGameDetailsPage() {
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [commitDuration, setCommitDuration] = useState("3600"); // 1 hour default
-  const [revealDuration, setRevealDuration] = useState("1800"); // 30 minutes default
+  const [commitDuration, setCommitDuration] = useState("50"); // 1 hour default
+  const [revealDuration, setRevealDuration] = useState("40"); // 30 minutes default
 
   // Transaction state management
   const [txState, setTxState] = useState(TX_STATES.IDLE);
@@ -305,40 +305,79 @@ export default function MyGameDetailsPage() {
 
   // Update game when game is completed
   const updateGameCompletedInSupabase = async (eventData: any, transactionId?: string) => {
+    console.log("🎯 ==============================");
+    console.log("🎯 GAME COMPLETED EVENT HANDLER STARTING");
+    console.log("🎯 ==============================");
+    console.log("📊 Function called with parameters:");
+    console.log("📊 - eventData:", JSON.stringify(eventData, null, 2));
+    console.log("📊 - transactionId:", transactionId);
+    console.log("📊 - eventData type:", typeof eventData);
+    console.log("📊 - eventData keys:", Object.keys(eventData || {}));
+    
     try {
-      console.log("=== GAME COMPLETED SUPABASE UPDATE ===");
-      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
+      console.log("🔥 STEP 1: Starting Supabase game state update...");
 
-      // Update games table
+      // Update games table - only update game_state (total_rounds column doesn't exist)
       const updateData = {
-        game_state: 4, // completed
-        total_rounds: parseInt(eventData.totalRounds)
+        game_state: 4 // completed
       };
+      
+      const targetGameId = parseInt(eventData.gameId);
 
-      console.log("Update data being sent:", JSON.stringify(updateData, null, 2));
-      console.log("Updating game_id:", parseInt(eventData.gameId));
+      console.log("💾 STEP 2: Preparing Supabase update...");
+      console.log("💾 - Update data:", JSON.stringify(updateData, null, 2));
+      console.log("💾 - Target game_id:", targetGameId);
+      console.log("💾 - Game ID type:", typeof targetGameId);
+      console.log("💾 - Game ID valid:", !isNaN(targetGameId));
 
+      console.log("🚀 STEP 3: Executing Supabase update...");
       const { data, error } = await supabase
         .from('games')
         .update(updateData)
-        .eq('game_id', parseInt(eventData.gameId))
+        .eq('game_id', targetGameId)
         .select();
 
       if (error) {
-        console.error("=== GAME COMPLETED SUPABASE ERROR ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
+        console.error("❌ STEP 4: SUPABASE UPDATE FAILED!");
+        console.error("❌ Error details:");
+        console.error("❌ - Error object:", JSON.stringify(error, null, 2));
+        console.error("❌ - Error message:", error?.message);
+        console.error("❌ - Error code:", error?.code);
+        console.error("❌ - Error details:", error?.details);
+        console.error("❌ - Error hint:", error?.hint);
         throw error;
       }
 
-      console.log("Game completed updated successfully in Supabase:", data);
+      console.log("✅ STEP 4: SUPABASE UPDATE SUCCESSFUL!");
+      console.log("✅ Response data:", JSON.stringify(data, null, 2));
+      console.log("✅ Number of rows updated:", data?.length || 0);
 
-      // Update user profile game counts
-      const { handleGameCompletion } = await import('@/lib/prize-distribution-handler');
-      await handleGameCompletion(eventData, transactionId);
+      console.log("🔄 STEP 5: Starting user profile updates...");
+      try {
+        const { handleGameCompletion } = await import('@/lib/prize-distribution-handler');
+        console.log("📞 Calling handleGameCompletion with:", JSON.stringify(eventData, null, 2));
+        await handleGameCompletion(eventData);
+        console.log("✅ STEP 6: User profile updates completed successfully");
+      } catch (profileError: any) {
+        console.error("❌ STEP 6: User profile update failed (non-critical):");
+        console.error("❌ Profile error:", profileError);
+        console.error("❌ Profile error message:", profileError?.message);
+        // Don't throw - profile updates shouldn't block game state update
+      }
 
+      console.log("🎉 ==============================");
+      console.log("🎉 GAME COMPLETED EVENT HANDLER FINISHED SUCCESSFULLY");
+      console.log("🎉 ==============================");
+      
       return data;
     } catch (error: any) {
-      console.error("Failed to update game completed in Supabase:", error);
+      console.error("💥 ==============================");
+      console.error("💥 GAME COMPLETED EVENT HANDLER FAILED!");
+      console.error("💥 ==============================");
+      console.error("💥 Error object:", error);
+      console.error("💥 Error message:", error?.message);
+      console.error("💥 Error stack:", error?.stack);
+      console.error("💥 Error name:", error?.name);
       throw error;
     }
   };
@@ -432,24 +471,40 @@ export default function MyGameDetailsPage() {
           return;
         }
 
-        console.log(`==== GAME ${gameId} EVENT DETECTED ====`);
-        console.log("Event type:", event.type);
-        console.log("Event transaction ID:", event.transactionId);
-        console.log("Event data:", event.data);
-        console.log("=========================================");
+        console.log(`🎯 ==== GAME ${gameId} EVENT DETECTED ====`);
+        console.log("📡 Event type:", event.type);
+        console.log("📡 Event transaction ID:", event.transactionId);
+        console.log("📡 Event data:", event.data);
+        console.log("🎯 =========================================");
 
         // Handle different event types
         if (event.type.includes('CommitDeadlineSet')) {
+          console.log("🔸 Handling CommitDeadlineSet event");
           await updateGameCommitDeadlineInSupabase(event.data);
         } else if (event.type.includes('RevealDeadlineSet')) {
+          console.log("🔸 Handling RevealDeadlineSet event");
           await updateGameRevealDeadlineInSupabase(event.data);
         } else if (event.type.includes('RoundCompleted')) {
+          console.log("🔸 Handling RoundCompleted event");
           await updateRoundCompletedInSupabase(event.data);
         } else if (event.type.includes('GameCompleted')) {
-          await updateGameCompletedInSupabase(event.data);
+          console.log("🔥 🔥 🔥 HANDLING GAME COMPLETED EVENT 🔥 🔥 🔥");
+          console.log("🔥 Event details for GameCompleted:");
+          console.log("🔥 - Full event object:", JSON.stringify(event, null, 2));
+          console.log("🔥 - Event type:", event.type);
+          console.log("🔥 - Transaction ID:", event.transactionId);
+          console.log("🔥 - Event data:", JSON.stringify(event.data, null, 2));
+          console.log("🔥 - Current game ID from params:", gameId);
+          console.log("🔥 - Event game ID:", event.data?.gameId);
+          console.log("🔥 - Game ID match:", event.data?.gameId === gameId);
+          console.log("🔥 Calling updateGameCompletedInSupabase...");
+          await updateGameCompletedInSupabase(event.data, event.transactionId);
+          console.log("🔥 updateGameCompletedInSupabase call completed");
         } else if (event.type.includes('NewRoundStarted')) {
+          console.log("🔸 Handling NewRoundStarted event");
           await updateNewRoundInSupabase(event.data);
         } else if (event.type.includes('PrizeDistributed')) {
+          console.log("🔸 Handling PrizeDistributed event");
           await updatePrizeDistributedInSupabase(event.data);
         }
 
@@ -664,7 +719,7 @@ export default function MyGameDetailsPage() {
                   value={commitDuration}
                   onChange={(e) => setCommitDuration(e.target.value)}
                   className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground"
-                  placeholder="3600"
+                  placeholder="60"
                   min="60"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -676,8 +731,8 @@ export default function MyGameDetailsPage() {
                 onClick={handleSetCommitDeadline}
                 disabled={!commitDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
                 className={`w-full py-2 px-4 rounded-lg transition-colors ${!commitDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-                    ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
+                  ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
                   }`}
               >
                 {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
@@ -730,50 +785,50 @@ export default function MyGameDetailsPage() {
           )}
 
           {/* Set Reveal Deadline - Show only when commit deadline has passed and reveal deadline not set */}
-          {game.game_state === 1 && 
-           game.commit_deadline && 
-           new Date() > new Date(game.commit_deadline) && 
-           !game.reveal_deadline && (
-            <div className="bg-card rounded-lg shadow-lg border border-border p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">
-                Start Reveal Phase
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                Set the duration for players to reveal their votes.
-              </p>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Duration (seconds)
-                </label>
-                <input
-                  type="number"
-                  value={revealDuration}
-                  onChange={(e) => setRevealDuration(e.target.value)}
-                  className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground"
-                  placeholder="1800"
-                  min="60"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  {Math.floor(parseInt(revealDuration || "0") / 60)} minutes
+          {game.game_state === 1 &&
+            game.commit_deadline &&
+            new Date() > new Date(game.commit_deadline) &&
+            !game.reveal_deadline && (
+              <div className="bg-card rounded-lg shadow-lg border border-border p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  Start Reveal Phase
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Set the duration for players to reveal their votes.
                 </p>
-              </div>
 
-              <button
-                onClick={handleSetRevealDeadline}
-                disabled={!revealDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
-                className={`w-full py-2 px-4 rounded-lg transition-colors ${!revealDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Duration (seconds)
+                  </label>
+                  <input
+                    type="number"
+                    value={revealDuration}
+                    onChange={(e) => setRevealDuration(e.target.value)}
+                    className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground"
+                    placeholder="60"
+                    min="60"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {Math.floor(parseInt(revealDuration || "0") / 60)} minutes
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleSetRevealDeadline}
+                  disabled={!revealDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                  className={`w-full py-2 px-4 rounded-lg transition-colors ${!revealDuration || txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
                     ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                     : "bg-yellow-600 text-white hover:bg-yellow-700"
-                  }`}
-              >
-                {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-                  ? "Setting Deadline..."
-                  : "Set Reveal Deadline"
-                }
-              </button>
-            </div>
-          )}
+                    }`}
+                >
+                  {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                    ? "Setting Deadline..."
+                    : "Set Reveal Deadline"
+                  }
+                </button>
+              </div>
+            )}
 
           {/* Reveal Deadline Display - Show when reveal deadline is set */}
           {game.game_state === 2 && game.reveal_deadline && (
@@ -817,67 +872,67 @@ export default function MyGameDetailsPage() {
           )}
 
           {/* Waiting for Reveal Deadline - Show when reveal phase active but deadline hasn't passed */}
-          {game.game_state === 2 && 
-           game.reveal_deadline && 
-           new Date() <= new Date(game.reveal_deadline) && (
-            <div className="bg-card rounded-lg shadow-lg border border-border p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">
-                ⏳ Waiting for Reveal Deadline
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                The reveal phase is still active. Round processing will be available after the reveal deadline passes.
-              </p>
-              
-              <div className="bg-blue-50 border border-blue-200 rounded p-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-blue-700 font-medium">Reveal Deadline:</span>
-                  <span className="text-blue-600">
-                    {new Date(game.reveal_deadline).toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm mt-1">
-                  <span className="text-blue-700 font-medium">Time Remaining:</span>
-                  <span className="text-blue-600">
-                    {Math.ceil((new Date(game.reveal_deadline).getTime() - new Date().getTime()) / 1000 / 60)} minutes
-                  </span>
+          {game.game_state === 2 &&
+            game.reveal_deadline &&
+            new Date() <= new Date(game.reveal_deadline) && (
+              <div className="bg-card rounded-lg shadow-lg border border-border p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  ⏳ Waiting for Reveal Deadline
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  The reveal phase is still active. Round processing will be available after the reveal deadline passes.
+                </p>
+
+                <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-blue-700 font-medium">Reveal Deadline:</span>
+                    <span className="text-blue-600">
+                      {new Date(game.reveal_deadline).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-blue-700 font-medium">Time Remaining:</span>
+                    <span className="text-blue-600">
+                      {Math.ceil((new Date(game.reveal_deadline).getTime() - new Date().getTime()) / 1000 / 60)} minutes
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Process Round - Only show after reveal deadline passes */}
-          {game.game_state === 2 && 
-           game.reveal_deadline && 
-           new Date() > new Date(game.reveal_deadline) && (
-            <div className="bg-card rounded-lg shadow-lg border border-border p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">
-                🚀 Process Round
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                Reveal deadline has passed. Process the round to calculate results and advance to the next phase.
-              </p>
-
-              <div className="bg-green-50 border border-green-200 rounded p-3 mb-4">
-                <p className="text-green-700 text-sm">
-                  ✅ Ready to process - reveal deadline passed at {new Date(game.reveal_deadline).toLocaleString()}
+          {game.game_state === 2 &&
+            game.reveal_deadline &&
+            new Date() > new Date(game.reveal_deadline) && (
+              <div className="bg-card rounded-lg shadow-lg border border-border p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                  🚀 Process Round
+                </h3>
+                <p className="text-muted-foreground mb-4">
+                  Reveal deadline has passed. Process the round to calculate results and advance to the next phase.
                 </p>
-              </div>
 
-              <button
-                onClick={handleProcessRound}
-                disabled={txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
-                className={`w-full py-2 px-4 rounded-lg transition-colors ${txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                <div className="bg-green-50 border border-green-200 rounded p-3 mb-4">
+                  <p className="text-green-700 text-sm">
+                    ✅ Ready to process - reveal deadline passed at {new Date(game.reveal_deadline).toLocaleString()}
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleProcessRound}
+                  disabled={txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING}
+                  className={`w-full py-2 px-4 rounded-lg transition-colors ${txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
                     ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                     : "bg-orange-600 text-white hover:bg-orange-700"
-                  }`}
-              >
-                {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-                  ? "Processing..."
-                  : "Process Round"
-                }
-              </button>
-            </div>
-          )}
+                    }`}
+                >
+                  {txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+                    ? "Processing..."
+                    : "Process Round"
+                  }
+                </button>
+              </div>
+            )}
 
           {/* Game Completed */}
           {game.game_state === 4 && (
