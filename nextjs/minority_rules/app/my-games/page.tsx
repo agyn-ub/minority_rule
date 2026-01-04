@@ -64,7 +64,7 @@ export default function MyGamesPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="bg-card rounded-lg shadow-lg p-8 max-w-md w-full mx-4 border border-border">
-          <h1 className="text-2xl font-bold text-foreground mb-4">
+          <h1 className="scroll-m-20 font-extrabold tracking-tight mb-4">
             Connect Wallet Required
           </h1>
           <p className="text-muted-foreground mb-6">
@@ -86,7 +86,7 @@ export default function MyGamesPage() {
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+          <h1 className="scroll-m-20 font-extrabold tracking-tight mb-2">
             My Games
           </h1>
           <p className="text-muted-foreground">
@@ -112,7 +112,7 @@ export default function MyGamesPage() {
 
         {/* Games Section */}
         <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-foreground mb-6">
+          <h2 className="scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight first:mt-0 mb-6">
             Your Games ({games.length})
           </h2>
 

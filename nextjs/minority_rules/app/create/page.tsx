@@ -129,7 +129,7 @@ export default function CreateGamePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="bg-card rounded-lg shadow-lg p-8 max-w-md w-full mx-4 border border-border">
-          <h1 className="text-2xl font-bold text-foreground mb-4">
+          <h1 className="scroll-m-20 font-extrabold tracking-tight mb-4">
             Connect Wallet Required
           </h1>
           <p className="text-muted-foreground mb-6">
@@ -155,7 +155,7 @@ export default function CreateGamePage() {
       <div className="max-w-md mx-auto px-4">
         <div className="bg-card rounded-lg shadow-lg p-8 border border-border">
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-foreground mb-2">
+            <h1 className="scroll-m-20 font-extrabold tracking-tight mb-2">
               Create New Game
             </h1>
             <p className="text-muted-foreground">

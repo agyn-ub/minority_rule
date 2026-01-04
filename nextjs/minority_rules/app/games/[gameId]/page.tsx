@@ -1158,7 +1158,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       <div className="min-h-screen bg-background py-8">
         <div className="max-w-4xl mx-auto px-4">
           <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
-            <h1 className="text-2xl font-bold text-red-900 mb-4">
+            <h1 className="scroll-m-20 font-extrabold tracking-tight text-red-900 mb-4">
               Game Not Found
             </h1>
             <p className="text-red-700 mb-6">
@@ -1213,7 +1213,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
 
                 <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
                   <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-bold text-foreground">
+                    <h1 className="scroll-m-20 text-2xl font-semibold tracking-tight">
                       Game #{game.game_id}
                     </h1>
                     <span className={`px-4 py-2 rounded-full text-sm font-medium border ${getGameStatusColor(game.game_state)}`}>
@@ -1229,7 +1229,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
 
                 {/* Game Question */}
                 <div className="mb-4">
-                  <h2 className="text-xl font-semibold text-foreground mb-3">Game Question</h2>
+                  <h2 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-3">Game Question</h2>
                   <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
                     <p className="text-xl text-foreground font-medium leading-relaxed">
                       {game.question_text}
