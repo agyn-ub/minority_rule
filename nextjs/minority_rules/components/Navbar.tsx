@@ -13,6 +13,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/", label: "Home" },
+    { href: "/players", label: "Players" },
     { href: "/create", label: "Create Game", authRequired: true },
     { href: "/my-games", label: "My Games", authRequired: true },
   ];
