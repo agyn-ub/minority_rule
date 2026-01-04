@@ -422,47 +422,46 @@ export default function MyGameDetailsPage() {
       `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.PrizeDistributed`
     ];
 
-    const unsubscribes = eventTypes.map(eventType =>
-      fcl.events(eventType).subscribe(
-        async (event) => {
-          // Filter by game ID
-          if (event.data.gameId && parseInt(event.data.gameId) !== parseInt(gameId)) {
-            return;
-          }
-
-          console.log(`==== GAME ${gameId} EVENT DETECTED ====`);
-          console.log("Event type:", eventType);
-          console.log("Event transaction ID:", event.transactionId);
-          console.log("Event data:", event.data);
-          console.log("=========================================");
-
-          // Handle different event types
-          if (eventType.includes('CommitDeadlineSet')) {
-            await updateGameCommitDeadlineInSupabase(event.data);
-          } else if (eventType.includes('RevealDeadlineSet')) {
-            await updateGameRevealDeadlineInSupabase(event.data);
-          } else if (eventType.includes('RoundCompleted')) {
-            await updateRoundCompletedInSupabase(event.data);
-          } else if (eventType.includes('GameCompleted')) {
-            await updateGameCompletedInSupabase(event.data);
-          } else if (eventType.includes('NewRoundStarted')) {
-            await updateNewRoundInSupabase(event.data);
-          } else if (eventType.includes('PrizeDistributed')) {
-            await updatePrizeDistributedInSupabase(event.data);
-          }
-
-          // Refresh game data
-          await refetchGameData();
-        },
-        (error) => {
-          console.error(`Error listening for game ${gameId} events:`, error);
+    // Use FCL's multiple event subscription API - single connection
+    const unsubscribe = fcl.events({
+      eventTypes: eventTypes
+    }).subscribe(
+      async (event) => {
+        // Filter by game ID
+        if (event.data.gameId && parseInt(event.data.gameId) !== parseInt(gameId)) {
+          return;
         }
-      )
+
+        console.log(`==== GAME ${gameId} EVENT DETECTED ====`);
+        console.log("Event type:", event.type);
+        console.log("Event transaction ID:", event.transactionId);
+        console.log("Event data:", event.data);
+        console.log("=========================================");
+
+        // Handle different event types
+        if (event.type.includes('CommitDeadlineSet')) {
+          await updateGameCommitDeadlineInSupabase(event.data);
+        } else if (event.type.includes('RevealDeadlineSet')) {
+          await updateGameRevealDeadlineInSupabase(event.data);
+        } else if (event.type.includes('RoundCompleted')) {
+          await updateRoundCompletedInSupabase(event.data);
+        } else if (event.type.includes('GameCompleted')) {
+          await updateGameCompletedInSupabase(event.data);
+        } else if (event.type.includes('NewRoundStarted')) {
+          await updateNewRoundInSupabase(event.data);
+        } else if (event.type.includes('PrizeDistributed')) {
+          await updatePrizeDistributedInSupabase(event.data);
+        }
+
+        // Refresh game data
+        await refetchGameData();
+      },
+      (error) => {
+        console.error(`Error listening for game ${gameId} events:`, error);
+      }
     );
 
-    return () => {
-      unsubscribes.forEach(unsubscribe => unsubscribe());
-    };
+    return unsubscribe;
   }, [contractAddress, gameId]);
 
   // Fetch game details

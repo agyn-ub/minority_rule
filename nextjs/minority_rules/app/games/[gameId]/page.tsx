@@ -622,61 +622,60 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.PrizeDistributed`
     ];
 
-    const unsubscribes = eventTypes.map(eventType => 
-      fcl.events(eventType).subscribe(
-        async (event) => {
-          // Filter by game ID if present
-          if (event.data.gameId && parseInt(event.data.gameId) !== parseInt(gameId)) {
-            return;
-          }
-
-          console.log(`==== ${eventType.split('.').pop()} EVENT DETECTED ====`);
-          console.log("Event type:", eventType);
-          console.log("Event transaction ID:", event.transactionId);
-          console.log("Event data:", event.data);
-          console.log("=========================================");
-
-          // Handle different event types
-          if (eventType.includes('PlayerJoined')) {
-            setPlayerJoinedEvent(event);
-            await updateGamePlayerCountInSupabase(event.data);
-            await insertPlayerIntoGamePlayers(event.data);
-
-            if (event.data.player === user?.addr) {
-              setHasUserJoined(true);
-            }
-          } else if (eventType.includes('VoteCommitted')) {
-            await insertCommitIntoSupabase(event.data);
-            if (event.data.player === user?.addr) {
-              setHasUserCommitted(true);
-            }
-          } else if (eventType.includes('VoteRevealed')) {
-            await insertRevealIntoSupabase(event.data);
-            if (event.data.player === user?.addr) {
-              setHasUserRevealed(true);
-            }
-          } else if (eventType.includes('RoundCompleted')) {
-            await updateRoundCompletedInSupabase(event.data);
-          } else if (eventType.includes('GameCompleted')) {
-            await updateGameCompletedInSupabase(event.data);
-          } else if (eventType.includes('NewRoundStarted')) {
-            await updateNewRoundInSupabase(event.data);
-          } else if (eventType.includes('PrizeDistributed')) {
-            await updatePrizeDistributedInSupabase(event.data);
-          }
-
-          // Refresh game data
-          await refetchGameData();
-        },
-        (error) => {
-          console.error(`Error listening for ${eventType} events:`, error);
+    // Use FCL's multiple event subscription API - single connection
+    const unsubscribe = fcl.events({
+      eventTypes: eventTypes
+    }).subscribe(
+      async (event) => {
+        // Filter by game ID if present
+        if (event.data.gameId && parseInt(event.data.gameId) !== parseInt(gameId)) {
+          return;
         }
-      )
+
+        console.log(`==== ${event.type.split('.').pop()} EVENT DETECTED ====`);
+        console.log("Event type:", event.type);
+        console.log("Event transaction ID:", event.transactionId);
+        console.log("Event data:", event.data);
+        console.log("=========================================");
+
+        // Handle different event types
+        if (event.type.includes('PlayerJoined')) {
+          setPlayerJoinedEvent(event);
+          await updateGamePlayerCountInSupabase(event.data);
+          await insertPlayerIntoGamePlayers(event.data);
+
+          if (event.data.player === user?.addr) {
+            setHasUserJoined(true);
+          }
+        } else if (event.type.includes('VoteCommitted')) {
+          await insertCommitIntoSupabase(event.data);
+          if (event.data.player === user?.addr) {
+            setHasUserCommitted(true);
+          }
+        } else if (event.type.includes('VoteRevealed')) {
+          await insertRevealIntoSupabase(event.data);
+          if (event.data.player === user?.addr) {
+            setHasUserRevealed(true);
+          }
+        } else if (event.type.includes('RoundCompleted')) {
+          await updateRoundCompletedInSupabase(event.data);
+        } else if (event.type.includes('GameCompleted')) {
+          await updateGameCompletedInSupabase(event.data);
+        } else if (event.type.includes('NewRoundStarted')) {
+          await updateNewRoundInSupabase(event.data);
+        } else if (event.type.includes('PrizeDistributed')) {
+          await updatePrizeDistributedInSupabase(event.data);
+        }
+
+        // Refresh game data
+        await refetchGameData();
+      },
+      (error) => {
+        console.error(`Error listening for game events:`, error);
+      }
     );
 
-    return () => {
-      unsubscribes.forEach(unsubscribe => unsubscribe());
-    };
+    return unsubscribe;
   }, [contractAddress, gameId, user?.addr]);
 
   // Fetch public game data
