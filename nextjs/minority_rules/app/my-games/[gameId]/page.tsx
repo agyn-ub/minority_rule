@@ -1,6 +1,5 @@
 "use client";
 import { useFlowUser } from "@/lib/useFlowUser";
-import * as fcl from "@onflow/fcl";
 
 import { useState, useEffect } from "react";
 // React SDK removed - using FCL directly
@@ -442,72 +441,53 @@ export default function MyGameDetailsPage() {
     }
   };
 
-  // Listen for game management events using FCL native events API
+  // Real-time subscriptions for game management updates
   useEffect(() => {
-    if (!contractAddress || !gameId) return;
-
-    const eventTypes = [
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.CommitDeadlineSet`,
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.RevealDeadlineSet`,
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.RoundCompleted`,
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.GameCompleted`,
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.NewRoundStarted`,
-    ];
-
-    // Use FCL's multiple event subscription API - single connection
-    const unsubscribe = fcl.events({
-      eventTypes: eventTypes
-    }).subscribe(
-      async (event) => {
-        // Filter by game ID
-        if (event.data.gameId && parseInt(event.data.gameId) !== parseInt(gameId)) {
-          return;
+    if (!gameId) return;
+    
+    const channel = supabase
+      .channel(`my-game-${gameId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'games',
+        filter: `game_id=eq.${gameId}`
+      }, (payload) => {
+        console.log("🎯 Game updated:", payload.new);
+        setGame(payload.new as any); // Type will be inferred correctly
+        
+        // Refresh data if game just completed
+        if (payload.new.game_state === 3) {
+          refetchGameData();
         }
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'rounds',
+        filter: `game_id=eq.${gameId}`
+      }, (payload) => {
+        console.log("🎯 New round completed:", payload.new);
+        refetchGameData(); // Refresh game data
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'prize_distributions',
+        filter: `game_id=eq.${gameId}`
+      }, (payload) => {
+        console.log("🎯 Prize distributed:", payload.new);
+        refetchGameData(); // Refresh game data
+      })
+      .subscribe();
 
-        console.log(`🎯 ==== GAME ${gameId} EVENT DETECTED ====`);
-        console.log("📡 Event type:", event.type);
-        console.log("📡 Event transaction ID:", event.transactionId);
-        console.log("📡 Event data:", event.data);
-        console.log("🎯 =========================================");
+    console.log("📡 Subscribed to real-time updates for my game:", gameId);
 
-        // Handle different event types
-        if (event.type.includes('CommitDeadlineSet')) {
-          console.log("🔸 Handling CommitDeadlineSet event");
-          await updateGameCommitDeadlineInSupabase(event.data);
-        } else if (event.type.includes('RevealDeadlineSet')) {
-          console.log("🔸 Handling RevealDeadlineSet event");
-          await updateGameRevealDeadlineInSupabase(event.data);
-        } else if (event.type.includes('RoundCompleted')) {
-          console.log("🔸 Handling RoundCompleted event");
-          await updateRoundCompletedInSupabase(event.data);
-        } else if (event.type.includes('GameCompleted')) {
-          console.log("🔥 🔥 🔥 HANDLING GAME COMPLETED EVENT 🔥 🔥 🔥");
-          console.log("🔥 Event details for GameCompleted:");
-          console.log("🔥 - Full event object:", JSON.stringify(event, null, 2));
-          console.log("🔥 - Event type:", event.type);
-          console.log("🔥 - Transaction ID:", event.transactionId);
-          console.log("🔥 - Event data:", JSON.stringify(event.data, null, 2));
-          console.log("🔥 - Current game ID from params:", gameId);
-          console.log("🔥 - Event game ID:", event.data?.gameId);
-          console.log("🔥 - Game ID match:", event.data?.gameId === gameId);
-          console.log("🔥 Calling updateGameCompletedInSupabase...");
-          await updateGameCompletedInSupabase(event.data, event.transactionId);
-          console.log("🔥 updateGameCompletedInSupabase call completed");
-        } else if (event.type.includes('NewRoundStarted')) {
-          console.log("🔸 Handling NewRoundStarted event");
-          await updateNewRoundInSupabase(event.data);
-        }
-
-        // Refresh game data
-        await refetchGameData();
-      },
-      (error) => {
-        console.error(`Error listening for game ${gameId} events:`, error);
-      }
-    );
-
-    return unsubscribe;
-  }, [contractAddress, gameId]);
+    return () => {
+      console.log("📡 Unsubscribing from my game updates");
+      supabase.removeChannel(channel);
+    };
+  }, [gameId]);
 
   // Fetch game details
   useEffect(() => {

@@ -10,7 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false, // We're using Flow wallet authentication, not Supabase auth
+    persistSession: true, // Enable for Realtime to work properly
   }
 })
 

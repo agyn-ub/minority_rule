@@ -5,7 +5,7 @@ class DatabaseClient {
   constructor() {
     this.supabase = createClient(
       process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY // Use service role for full access
+      process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY // Use new secret key or fallback to legacy
     );
   }
 

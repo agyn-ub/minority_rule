@@ -11,7 +11,6 @@ import {
   submitVoteRevealTransaction,
   TX_STATES
 } from "@/lib/transactions";
-import * as fcl from "@onflow/fcl";
 import { sha3_256 } from 'js-sha3';
 
 
@@ -104,7 +103,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCreator, setIsCreator] = useState(false);
-  const [playerJoinedEvent, setPlayerJoinedEvent] = useState<any>(null);
   const [hasUserJoined, setHasUserJoined] = useState(false);
   const [hasUserCommitted, setHasUserCommitted] = useState(false);
   const [userVote, setUserVote] = useState<boolean | null>(null);
@@ -310,120 +308,8 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
   };
 
-  // Update game player count in Supabase when player joins
-  const updateGamePlayerCountInSupabase = async (eventData: any) => {
-    try {
-      console.log("=== PLAYER JOINED SUPABASE UPDATE ===");
-      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
 
-      const { data, error } = await supabase
-        .from('games')
-        .update({ total_players: parseInt(eventData.totalPlayers) })
-        .eq('game_id', parseInt(eventData.gameId))
-        .select();
 
-      if (error) {
-        console.error("=== SUPABASE ERROR DETAILS ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
-        throw error;
-      }
-
-      console.log("Game player count updated successfully in Supabase:", data);
-      return data;
-    } catch (error) {
-      console.error("Failed to update game player count in Supabase:", error);
-    }
-  };
-
-  // Insert new player into game_players table when player joins
-  const insertPlayerIntoGamePlayers = async (eventData: any) => {
-    try {
-      console.log("=== INSERTING PLAYER INTO game_players TABLE ===");
-      console.log("Event data for player insertion:", JSON.stringify(eventData, null, 2));
-
-      const playerData = {
-        game_id: parseInt(eventData.gameId),
-        player_address: eventData.player,
-        joined_at: new Date().toISOString(),
-        status: 'active' as const
-      };
-
-      console.log("Player data to insert:", JSON.stringify(playerData, null, 2));
-
-      const { data, error } = await supabase
-        .from('game_players')
-        .insert([playerData])
-        .select();
-
-      if (error) {
-        console.error("=== GAME_PLAYERS INSERT ERROR ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
-        console.error("Error message:", error?.message);
-        console.error("Error code:", error?.code);
-        console.error("Error details:", error?.details);
-        console.error("===============================");
-        throw error;
-      }
-
-      console.log("Player inserted successfully into game_players table:", data);
-      return data;
-    } catch (error) {
-      console.error("Failed to insert player into game_players table:", error);
-      // Don't throw - we don't want to break the UI if this fails
-    }
-  };
-
-  // Insert commit into Supabase when VoteCommitted event is detected
-  const insertCommitIntoSupabase = async (eventData: any) => {
-    try {
-      console.log("=== INSERTING COMMIT INTO commits TABLE ===");
-      console.log("Event data for commit insertion:", JSON.stringify(eventData, null, 2));
-
-      // First lookup the round_id from rounds table
-      const { data: roundData, error: roundError } = await supabase
-        .from('rounds')
-        .select('id')
-        .eq('game_id', parseInt(eventData.gameId))
-        .eq('round_number', parseInt(eventData.round))
-        .single();
-
-      if (roundError && roundError.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error("Error looking up round_id:", roundError);
-      }
-
-      const commitData = {
-        game_id: parseInt(eventData.gameId),
-        round_number: parseInt(eventData.round),
-        round_id: roundData?.id || null, // Include round_id if found
-        player_address: eventData.player,
-        commit_hash: commitHash, // Use the locally stored hash
-        committed_at: new Date().toISOString()
-      };
-
-      console.log("Commit data to insert:", JSON.stringify(commitData, null, 2));
-
-      const { data, error } = await supabase
-        .from('commits')
-        .insert([commitData])
-        .select();
-
-      if (error) {
-        console.error("=== COMMITS INSERT ERROR ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
-        console.error("Error message:", error?.message);
-        console.error("Error code:", error?.code);
-        console.error("Error details:", error?.details);
-        console.error("========================");
-        throw error;
-      }
-
-      console.log("Commit inserted successfully into commits table:", data);
-      return data;
-    } catch (error) {
-      console.error("Failed to insert commit into commits table:", error);
-      // Don't throw - we don't want to break the UI if this fails
-    }
-  };
 
   // Insert reveal into Supabase when VoteRevealed event is detected
   const insertRevealIntoSupabase = async (eventData: any) => {
@@ -589,66 +475,63 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
   };
 
-  // Listen for game events using FCL native events API
+  // Real-time subscriptions to database changes made by indexer
   useEffect(() => {
-    if (!contractAddress || !gameId) return;
-
-    const eventTypes = [
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.PlayerJoined`,
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.VoteCommitted`,
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.VoteRevealed`,
-      `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.NewRoundStarted`,
-    ];
-
-    // Use FCL's multiple event subscription API - single connection
-    const unsubscribe = fcl.events({
-      eventTypes: eventTypes
-    }).subscribe(
-      async (event) => {
-        // Filter by game ID if present
-        if (event.data.gameId && parseInt(event.data.gameId) !== parseInt(gameId)) {
-          return;
+    if (!gameId) return;
+    
+    const channel = supabase
+      .channel(`game-${gameId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'games',
+        filter: `game_id=eq.${gameId}`
+      }, (payload) => {
+        console.log("🎯 Game updated:", payload.new);
+        setGame(payload.new as PublicGameDetails);
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'game_players',
+        filter: `game_id=eq.${gameId}`
+      }, () => {
+        console.log("🎯 New player joined");
+        refetchGameData(); // Refresh to get updated player count
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'commits',
+        filter: `game_id=eq.${gameId}`
+      }, (payload) => {
+        console.log("🎯 New vote commit:", payload.new);
+        // Update UI state if this is current user's commit
+        if (payload.new.player_address === user?.addr) {
+          setHasUserCommitted(true);
         }
-
-        console.log(`==== ${event.type.split('.').pop()} EVENT DETECTED ====`);
-        console.log("Event type:", event.type);
-        console.log("Event transaction ID:", event.transactionId);
-        console.log("Event data:", event.data);
-        console.log("=========================================");
-
-        // Handle different event types
-        if (event.type.includes('PlayerJoined')) {
-          setPlayerJoinedEvent(event);
-          await updateGamePlayerCountInSupabase(event.data);
-          await insertPlayerIntoGamePlayers(event.data);
-
-          if (event.data.player === user?.addr) {
-            setHasUserJoined(true);
-          }
-        } else if (event.type.includes('VoteCommitted')) {
-          await insertCommitIntoSupabase(event.data);
-          if (event.data.player === user?.addr) {
-            setHasUserCommitted(true);
-          }
-        } else if (event.type.includes('VoteRevealed')) {
-          await insertRevealIntoSupabase(event.data);
-          if (event.data.player === user?.addr) {
-            setHasUserRevealed(true);
-          }
-        } else if (event.type.includes('NewRoundStarted')) {
-          await updateNewRoundInSupabase(event.data);
+      })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'reveals',
+        filter: `game_id=eq.${gameId}`
+      }, (payload) => {
+        console.log("🎯 New vote reveal:", payload.new);
+        // Update UI state if this is current user's reveal
+        if (payload.new.player_address === user?.addr) {
+          setHasUserRevealed(true);
         }
+      })
+      .subscribe();
 
-        // Refresh game data
-        await refetchGameData();
-      },
-      (error) => {
-        console.error(`Error listening for game events:`, error);
-      }
-    );
+    console.log("📡 Subscribed to real-time updates for game:", gameId);
 
-    return unsubscribe;
-  }, [contractAddress, gameId, user?.addr]);
+    return () => {
+      console.log("📡 Unsubscribing from game updates");
+      supabase.removeChannel(channel);
+    };
+  }, [gameId, user?.addr]);
 
   // Fetch public game data
   useEffect(() => {

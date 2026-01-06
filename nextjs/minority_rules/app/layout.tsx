@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { configureFlow } from "@/lib/flow-config";
 import Navbar from "@/components/Navbar";
+import { RealtimeGameProvider } from "@/contexts/RealtimeGameProvider";
 
 // Initialize FCL configuration
 configureFlow();
@@ -25,8 +26,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} font-sans antialiased`}>
-        <Navbar />
-        {children}
+        <RealtimeGameProvider>
+          <Navbar />
+          {children}
+        </RealtimeGameProvider>
       </body>
     </html>
   );

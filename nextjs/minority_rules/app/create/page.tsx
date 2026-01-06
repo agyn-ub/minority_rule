@@ -1,57 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useFlowUser } from "@/lib/useFlowUser";
-import * as fcl from "@onflow/fcl";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { createGameTransaction, TX_STATES } from "@/lib/transactions";
+import { useRealtimeGame } from "@/contexts/RealtimeGameProvider";
 
 export default function CreateGamePage() {
   const { user } = useFlowUser();
-  const router = useRouter();
+  const { isConnected, connectionStatus, lastEvent } = useRealtimeGame();
   const [questionText, setQuestionText] = useState("");
   const [entryFee, setEntryFee] = useState("1.0");
   const [txState, setTxState] = useState(TX_STATES.IDLE);
-  const [txError, setTxError] = useState(null);
+  const [txError, setTxError] = useState<string | null>(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
-  // Save game to Supabase
-  const saveGameToSupabase = async (eventData: any) => {
-    try {
-      const gameData = {
-        game_id: parseInt(eventData.gameId),
-        question_text: eventData.questionText,
-        entry_fee: parseFloat(eventData.entryFee),
-        creator_address: eventData.creator,
-        current_round: 1,
-        game_state: parseInt(eventData.phase), // Raw enum value (0-4)
-        commit_deadline: null,
-        reveal_deadline: null,
-        total_players: 0 // Creator must join separately
-      };
-
-      console.log("Saving game to Supabase:", gameData);
-
-      const { data, error } = await supabase
-        .from('games')
-        .insert([gameData])
-        .select();
-
-      if (error) {
-        console.error("Error saving game to Supabase:", error);
-        throw error;
-      }
-
-      console.log("Game saved successfully to Supabase:", data);
-      return data;
-    } catch (error) {
-      console.error("Failed to save game to Supabase:", error);
-      // Don't throw - we don't want to break the UI if Supabase fails
-    }
-  };
 
   // Create game function
   const handleCreateGame = async () => {
@@ -59,8 +24,7 @@ export default function CreateGamePage() {
 
     try {
       setTxError(null);
-      
-      console.log("🚀 Creating game with:", { questionText, entryFee, contractAddress });
+
 
       const result = await createGameTransaction(
         questionText,
@@ -68,15 +32,12 @@ export default function CreateGamePage() {
         contractAddress,
         {
           onStateChange: (state, data) => {
-            console.log("Transaction state:", state, data);
             setTxState(state);
           },
           onSuccess: (txId, transaction) => {
-            console.log("✅ Game creation successful:", txId);
-            // Event listener will handle navigation
+            // Game creation successful - realtime provider will handle redirect
           },
-          onError: (error, txId, transaction) => {
-            console.error("❌ Game creation failed:", error);
+          onError: (error) => {
             setTxError(error.message || "Failed to create game");
             setTxState(TX_STATES.ERROR);
           }
@@ -88,40 +49,12 @@ export default function CreateGamePage() {
       }
 
     } catch (error) {
-      console.error("Create game error:", error);
       setTxError(error.message || "Failed to create game");
       setTxState(TX_STATES.ERROR);
     }
   };
 
-  // Listen for GameCreated events using FCL native events API
-  useEffect(() => {
-    if (!contractAddress) return;
-
-    const eventType = `A.${contractAddress.replace('0x', '')}.MinorityRuleGame.GameCreated`;
-
-    const unsubscribe = fcl.events(eventType).subscribe(
-      async (event) => {
-        console.log("🎯 GameCreated event received:", event);
-
-        // Only process if the creator is the current user
-        if (event.data.creator === user?.addr) {
-          console.log("✅ Game created by current user, processing...");
-
-          // Save game to Supabase
-          await saveGameToSupabase(event.data);
-
-          // Redirect to manage the new game
-          router.push(`/my-games/${event.data.gameId}`);
-        }
-      },
-      (error) => {
-        console.error("❌ GameCreated event error:", error);
-      }
-    );
-
-    return unsubscribe;
-  }, [contractAddress, user?.addr, router]);
+  // Realtime subscription is now handled by RealtimeGameProvider globally
 
 
 
@@ -163,11 +96,10 @@ export default function CreateGamePage() {
             </p>
           </div>
 
-          <form 
+          <form
             className="space-y-6"
             onSubmit={(e) => {
               e.preventDefault();
-              console.log("Form submission prevented");
             }}
           >
             {/* Question Text */}
@@ -212,9 +144,16 @@ export default function CreateGamePage() {
             {/* Creator Info */}
             <div className="bg-muted rounded-lg p-4">
               <h3 className="text-sm font-medium text-foreground mb-2">Game Creator</h3>
-              <p className="text-xs font-mono text-muted-foreground">
+              <p className="text-xs font-mono text-muted-foreground mb-2">
                 {user.addr}
               </p>
+              {/* Realtime Status */}
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                <span className="text-xs text-muted-foreground">
+                  Realtime: {isConnected ? 'Connected' : connectionStatus}
+                </span>
+              </div>
             </div>
 
             {/* Submit Button */}
@@ -222,11 +161,10 @@ export default function CreateGamePage() {
               type="button"
               onClick={handleCreateGame}
               disabled={!isFormValid || isCreating}
-              className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
-                isFormValid && !isCreating
-                  ? "bg-blue-600 text-white hover:bg-blue-700"
-                  : "bg-gray-400 text-gray-200 cursor-not-allowed"
-              }`}
+              className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${isFormValid && !isCreating
+                ? "bg-blue-600 text-white hover:bg-blue-700"
+                : "bg-gray-400 text-gray-200 cursor-not-allowed"
+                }`}
             >
               {isCreating ? (
                 <span className="flex items-center justify-center">
