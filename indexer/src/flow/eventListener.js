@@ -293,7 +293,7 @@ class FlowEventListener {
           await this.handleNewRoundStarted(event);
           break;
         case 'CommitDeadlineSet':
-          await this.handleCommitDeadlineSet(event);
+          await this.handleCommitDeadlineSet(event.data);
           break;
         case 'RevealDeadlineSet':
           await this.handleRevealDeadlineSet(event);
@@ -618,29 +618,17 @@ class FlowEventListener {
     try {
       logger.info('Processing CommitDeadlineSet event, raw event:', JSON.stringify(event, null, 2));
       
+      // Check if event data exists
       if (!event || (!event.data && !event.gameId)) {
-        logger.error('CommitDeadlineSet: Invalid event structure');
+        logger.error('CommitDeadlineSet: Invalid event structure - no data found');
         return;
       }
 
+      // Use event.data if it exists, otherwise use event directly
       const eventData = event.data || event;
+      logger.info('Processing CommitDeadlineSet event with data:', eventData);
       
-      if (!eventData.gameId || !eventData.deadline) {
-        logger.error('CommitDeadlineSet: missing required properties', eventData);
-        return;
-      }
-
-      // Update commit deadline in game
-      const { data: game } = await this.dbClient.getGame(parseInt(eventData.gameId));
-      if (game) {
-        const updatedGame = {
-          ...game,
-          commit_deadline: new Date(parseFloat(eventData.deadline) * 1000).toISOString()
-        };
-        await this.dbClient.upsertGame(updatedGame);
-      }
-      
-      logger.info(`Commit deadline set for game ${eventData.gameId} round ${eventData.round}: ${eventData.deadline}`);
+      await this.processor.processCommitDeadlineSet(eventData);
     } catch (error) {
       logger.error('Error processing CommitDeadlineSet event:', error);
     }

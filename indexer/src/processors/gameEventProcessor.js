@@ -31,11 +31,8 @@ class GameEventProcessor {
         question_text: eventData.questionText || eventData.question, // Handle both possible names
         entry_fee: parseFloat(eventData.entryFee || 0),
         creator_address: eventData.creator,
+        game_state: GAME_STATES.ZERO_PHASE,
         current_round: 1,
-        game_state: GAME_STATES.COMMIT_PHASE,
-        commit_deadline: null, // Will be set separately by CommitDeadlineSet event
-        reveal_deadline: null,
-        total_players: 1, // Creator joins automatically
         created_at: new Date().toISOString()
       };
 
@@ -43,24 +40,6 @@ class GameEventProcessor {
       if (gameError) {
         logger.error('Failed to insert game:', gameError);
         return;
-      }
-
-      // Add creator as first player
-      const playerData = {
-        game_id: parseInt(eventData.gameId),
-        player_address: eventData.creator,
-        joined_at: new Date().toISOString(),
-        status: PLAYER_STATUS.ACTIVE
-      };
-
-      const { error: playerError } = await this.dbClient.upsertGamePlayer(playerData);
-      if (playerError) {
-        logger.error('Failed to insert game creator as player:', playerError);
-      }
-
-      // Update creator's profile stats
-      if (eventData.creator) {
-        await this.dbClient.updatePlayerStats(eventData.creator, { total_games: 1 });
       }
 
       logger.info(`Game ${eventData.gameId} created successfully`);
@@ -250,7 +229,7 @@ class GameEventProcessor {
         const updatedGame = {
           ...game,
           current_round: parseInt(eventData.round) + 1,
-          game_state: parseInt(eventData.playersRemaining) <= 2 ? 
+          game_state: parseInt(eventData.playersRemaining) <= 2 ?
             GAME_STATES.COMPLETED : GAME_STATES.COMMIT_PHASE
         };
 
@@ -266,6 +245,45 @@ class GameEventProcessor {
       logger.info(`Round ${eventData.round} processed for game ${eventData.gameId}: ${eventData.yesCount} YES, ${eventData.noCount} NO, minority: ${eventData.minorityVote}`);
     } catch (error) {
       logger.error('Error processing RoundProcessed event:', error);
+    }
+  }
+
+  /**
+   * Process CommitDeadlineSet event
+   * @param {Object} eventData - Flow event data
+   */
+  async processCommitDeadlineSet(eventData) {
+    try {
+      // Add defensive checks
+      if (!eventData) {
+        logger.error('CommitDeadlineSet event: eventData is null or undefined');
+        return;
+      }
+
+      logger.info('CommitDeadlineSet eventData structure:', JSON.stringify(eventData, null, 2));
+
+      // Check required properties
+      if (!eventData.gameId || !eventData.deadline) {
+        logger.error('CommitDeadlineSet event: missing required properties', eventData);
+        return;
+      }
+
+      // Update commit deadline in game
+      const { data: game } = await this.dbClient.getGame(parseInt(eventData.gameId));
+      if (game) {
+        const updatedGame = {
+          ...game,
+          game_state: GAME_STATES.COMMIT_PHASE,
+          commit_deadline: new Date(parseFloat(eventData.deadline) * 1000).toISOString(),
+          current_round: parseInt(eventData.round || game.current_round || 1)
+        };
+        
+        await this.dbClient.upsertGame(updatedGame);
+      }
+
+      logger.info(`Commit deadline set for game ${eventData.gameId} round ${eventData.round}: ${eventData.deadline}`);
+    } catch (error) {
+      logger.error('Error processing CommitDeadlineSet event:', error);
     }
   }
 
