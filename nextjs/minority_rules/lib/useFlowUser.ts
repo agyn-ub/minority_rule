@@ -26,8 +26,6 @@ interface UseFlowUserReturn {
 // Function to create user profile if it doesn't exist
 const createUserProfileIfNeeded = async (address: string): Promise<void> => {
   try {
-    console.log("👤 Checking user profile for:", address);
-    
     // Check if user profile exists
     const { data: existingProfile, error: selectError } = await supabase
       .from('user_profiles')
@@ -43,7 +41,6 @@ const createUserProfileIfNeeded = async (address: string): Promise<void> => {
     
     if (!existingProfile) {
       // Create new user profile
-      console.log("➕ Creating new user profile for:", address);
       const { error: insertError } = await supabase
         .from('user_profiles')
         .insert({
@@ -57,10 +54,7 @@ const createUserProfileIfNeeded = async (address: string): Promise<void> => {
       if (insertError) {
         console.error("❌ Error creating user profile:", insertError);
       } else {
-        console.log("✅ User profile created successfully");
       }
-    } else {
-      console.log("✅ User profile already exists");
     }
   } catch (error) {
     console.error("❌ Unexpected error in createUserProfileIfNeeded:", error);
@@ -77,7 +71,6 @@ export const useFlowUser = (): UseFlowUserReturn => {
     try {
       configureFlow();
       setConfigReady(true);
-      console.log("🔧 FCL configuration ready in useFlowUser");
     } catch (error) {
       console.error("❌ FCL configuration failed:", error);
       setLoading(false);
@@ -114,9 +107,7 @@ export const useFlowUser = (): UseFlowUserReturn => {
     }
     
     try {
-      console.log("🚀 Attempting FCL authentication...");
       await fcl.authenticate();
-      console.log("✅ FCL authentication successful");
     } catch (error) {
       console.error("❌ Login failed:", error);
       throw error;
@@ -129,9 +120,7 @@ export const useFlowUser = (): UseFlowUserReturn => {
     }
     
     try {
-      console.log("🚪 Logging out...");
       await fcl.unauthenticate();
-      console.log("✅ Logout successful");
     } catch (error) {
       console.error("❌ Logout failed:", error);
       throw error;

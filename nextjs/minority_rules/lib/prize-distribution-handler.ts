@@ -3,8 +3,6 @@ import { supabase } from './supabase';
 // Handle consolidated prize distribution from GameCompleted event
 export async function handleConsolidatedPrizeDistribution(eventData: any, transactionId?: string) {
   try {
-    console.log("=== PROCESSING CONSOLIDATED PRIZE DISTRIBUTION ===");
-    console.log("Event data:", JSON.stringify(eventData, null, 2));
     
     const { gameId, winners, prizePerWinner } = eventData;
     
@@ -14,7 +12,6 @@ export async function handleConsolidatedPrizeDistribution(eventData: any, transa
 
     // If no winners, nothing to process
     if (!winners || winners.length === 0) {
-      console.log("💰 No winners to process - game had no winners");
       return true;
     }
 
@@ -22,7 +19,6 @@ export async function handleConsolidatedPrizeDistribution(eventData: any, transa
       throw new Error("Missing prizePerWinner in prize distribution data");
     }
 
-    console.log(`💰 Processing ${winners.length} winners, each getting ${prizePerWinner} FLOW...`);
 
     // Insert prize distribution records for all winners
     const prizeDistributions = winners.map((winner: string) => ({
@@ -32,7 +28,6 @@ export async function handleConsolidatedPrizeDistribution(eventData: any, transa
       transaction_id: transactionId
     }));
 
-    console.log("💰 Inserting prize distribution records:", prizeDistributions);
     const { error: insertError } = await supabase
       .from('prize_distributions')
       .insert(prizeDistributions);
@@ -43,7 +38,6 @@ export async function handleConsolidatedPrizeDistribution(eventData: any, transa
     }
 
     // Update user profile statistics for all winners
-    console.log("📊 Updating user statistics for all winners...");
     
     // Get current stats for all winners
     const { data: profiles, error: selectError } = await supabase
@@ -69,7 +63,6 @@ export async function handleConsolidatedPrizeDistribution(eventData: any, transa
       const newWins = (profile.total_wins || 0) + 1;
       const newEarnings = (profile.total_earnings || 0) + parseFloat(prizePerWinner);
 
-      console.log(`📈 Winner ${winner}: wins ${profile.total_wins || 0} → ${newWins}, earnings ${profile.total_earnings || 0} → ${newEarnings}`);
 
       const { error: updateError } = await supabase
         .from('user_profiles')
@@ -87,7 +80,6 @@ export async function handleConsolidatedPrizeDistribution(eventData: any, transa
       }
     }
 
-    console.log(`✅ Successfully processed prize distribution: ${prizePerWinner} FLOW to each of ${winners.length} winners (${updatedCount} profile updates successful)`);
     return true;
 
   } catch (error) {
@@ -99,8 +91,6 @@ export async function handleConsolidatedPrizeDistribution(eventData: any, transa
 // Handle game completion and update user game counts
 export async function handleGameCompletion(eventData: any) {
   try {
-    console.log("=== PROCESSING GAME COMPLETION ===");
-    console.log("Event data:", JSON.stringify(eventData, null, 2));
     
     const { gameId } = eventData;
     
@@ -109,7 +99,6 @@ export async function handleGameCompletion(eventData: any) {
     }
 
     // Get all players who participated in this game
-    console.log("👥 Getting game participants...");
     const { data: players, error: playersError } = await supabase
       .from('game_players')
       .select('player_address')
@@ -123,7 +112,6 @@ export async function handleGameCompletion(eventData: any) {
     if (players && players.length > 0) {
       const playerAddresses = players.map(p => p.player_address);
       
-      console.log(`📊 Updating game counts for ${players.length} players...`);
       
       // Get current game counts for all players
       const { data: profiles, error: selectError } = await supabase
@@ -141,7 +129,6 @@ export async function handleGameCompletion(eventData: any) {
       for (const profile of profiles || []) {
         const newGameCount = (profile.total_games || 0) + 1;
         
-        console.log(`📈 Player ${profile.player_address}: games ${profile.total_games || 0} → ${newGameCount}`);
         
         const { error: updateError } = await supabase
           .from('user_profiles')
@@ -158,10 +145,8 @@ export async function handleGameCompletion(eventData: any) {
         updatedCount++;
       }
 
-      console.log(`✅ Successfully updated game counts for ${updatedCount} players`);
     }
 
-    console.log("✅ Successfully processed game completion");
     return true;
 
   } catch (error) {

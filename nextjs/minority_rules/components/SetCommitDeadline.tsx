@@ -58,7 +58,6 @@ export default function SetCommitDeadline({
 
 
   const handleSuccess = (transactionId: string) => {
-    console.log("Deadline set! Transaction ID:", transactionId);
     onSuccess?.(transactionId);
   };
 

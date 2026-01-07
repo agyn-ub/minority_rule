@@ -57,7 +57,6 @@ export default function MyGameDetailsPage() {
 
     try {
       setTxError(null);
-      console.log("🚀 Setting commit deadline:", { gameId, commitDuration, contractAddress });
 
       const result = await setCommitDeadlineTransaction(
         gameId,
@@ -65,11 +64,9 @@ export default function MyGameDetailsPage() {
         contractAddress,
         {
           onStateChange: (state: string, data?: any) => {
-            console.log("Transaction state:", state, data);
             setTxState(state);
           },
           onSuccess: (txId: string, transaction: any) => {
-            console.log("✅ Commit deadline set successfully:", txId);
           },
           onError: (error: any, txId?: string, transaction?: any) => {
             console.error("❌ Failed to set commit deadline:", error);
@@ -94,7 +91,6 @@ export default function MyGameDetailsPage() {
 
     try {
       setTxError(null);
-      console.log("🚀 Setting reveal deadline:", { gameId, revealDuration, contractAddress });
 
       const result = await setRevealDeadlineTransaction(
         gameId,
@@ -102,11 +98,9 @@ export default function MyGameDetailsPage() {
         contractAddress,
         {
           onStateChange: (state: string, data?: any) => {
-            console.log("Transaction state:", state, data);
             setTxState(state);
           },
           onSuccess: (txId: string, transaction: any) => {
-            console.log("✅ Reveal deadline set successfully:", txId);
           },
           onError: (error: any, txId?: string, transaction?: any) => {
             console.error("❌ Failed to set reveal deadline:", error);
@@ -131,18 +125,15 @@ export default function MyGameDetailsPage() {
 
     try {
       setTxError(null);
-      console.log("🚀 Processing round:", { gameId, contractAddress });
 
       const result = await processRoundTransaction(
         gameId,
         contractAddress,
         {
           onStateChange: (state: string, data?: any) => {
-            console.log("Transaction state:", state, data);
             setTxState(state);
           },
           onSuccess: (txId: string, transaction: any) => {
-            console.log("✅ Round processed successfully:", txId);
           },
           onError: (error: any, txId?: string, transaction?: any) => {
             console.error("❌ Failed to process round:", error);
@@ -162,235 +153,9 @@ export default function MyGameDetailsPage() {
     }
   };
 
-  // Update game commit deadline in Supabase
-  const updateGameCommitDeadlineInSupabase = async (eventData: any) => {
-    try {
-      console.log("=== COMMIT DEADLINE SUPABASE UPDATE ===");
-      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
-
-      const updateData = {
-        game_state: 1, // commitPhase
-        commit_deadline: new Date(parseFloat(eventData.deadline) * 1000).toISOString(),
-        current_round: parseInt(eventData.round)
-      };
-
-      console.log("Update data being sent:", JSON.stringify(updateData, null, 2));
-      console.log("Updating game_id:", parseInt(eventData.gameId));
-
-      const { data, error } = await supabase
-        .from('games')
-        .update(updateData)
-        .eq('game_id', parseInt(eventData.gameId))
-        .select();
-
-      if (error) {
-        console.error("=== COMMIT DEADLINE SUPABASE ERROR ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
-        console.error("Error message:", error?.message);
-        console.error("Error code:", error?.code);
-        console.error("Error details:", error?.details);
-        console.error("Error hint:", error?.hint);
-        console.error("==========================================");
-        throw error;
-      }
-
-      console.log("Commit deadline updated successfully in Supabase:", data);
-      return data;
-    } catch (error: any) {
-      console.error("Failed to update commit deadline in Supabase:", error);
-      // Don't throw - we don't want to break the UI if Supabase fails
-    }
-  };
-
-  // Update game reveal deadline in Supabase
-  const updateGameRevealDeadlineInSupabase = async (eventData: any) => {
-    try {
-      console.log("=== REVEAL DEADLINE SUPABASE UPDATE ===");
-      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
-
-      const updateData = {
-        game_state: 2, // revealPhase
-        reveal_deadline: new Date(parseFloat(eventData.deadline) * 1000).toISOString(),
-        current_round: parseInt(eventData.round)
-      };
-
-      console.log("Update data being sent:", JSON.stringify(updateData, null, 2));
-      console.log("Updating game_id:", parseInt(eventData.gameId));
-
-      const { data, error } = await supabase
-        .from('games')
-        .update(updateData)
-        .eq('game_id', parseInt(eventData.gameId))
-        .select();
-
-      if (error) {
-        console.error("=== REVEAL DEADLINE SUPABASE ERROR ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
-        console.error("Error message:", error?.message);
-        console.error("Error code:", error?.code);
-        console.error("Error details:", error?.details);
-        console.error("Error hint:", error?.hint);
-        console.error("=========================================");
-        throw error;
-      }
-
-      console.log("Reveal deadline updated successfully in Supabase:", data);
-      return data;
-    } catch (error: any) {
-      console.error("Failed to update reveal deadline in Supabase:", error);
-      // Don't throw - we don't want to break the UI if Supabase fails
-    }
-  };
-
-  // Update game when round is completed
-  const updateRoundCompletedInSupabase = async (eventData: any) => {
-    try {
-      console.log("=== ROUND COMPLETED SUPABASE UPDATE ===");
-      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
-
-      // First insert round data into rounds table
-      const roundData = {
-        game_id: parseInt(eventData.gameId),
-        round_number: parseInt(eventData.round),
-        yes_count: parseInt(eventData.yesCount),
-        no_count: parseInt(eventData.noCount),
-        minority_vote: eventData.minorityVote,
-        votes_remaining: parseInt(eventData.votesRemaining)
-      };
-
-      console.log("Inserting round data:", JSON.stringify(roundData, null, 2));
-
-      const { data: roundInsertData, error: roundError } = await supabase
-        .from('rounds')
-        .insert(roundData)
-        .select();
-
-      if (roundError) {
-        console.error("=== ROUND INSERT ERROR ===");
-        console.error("Full error object:", JSON.stringify(roundError, null, 2));
-        throw roundError;
-      }
-
-      console.log("Round data inserted successfully:", roundInsertData);
-
-      // Then update game state
-      const updateData = {
-        game_state: 3, // completed
-        current_round: parseInt(eventData.round)
-      };
-
-      console.log("Updating game state:", JSON.stringify(updateData, null, 2));
-
-      const { data, error } = await supabase
-        .from('games')
-        .update(updateData)
-        .eq('game_id', parseInt(eventData.gameId))
-        .select();
-
-      if (error) {
-        console.error("=== ROUND COMPLETED SUPABASE ERROR ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
-        throw error;
-      }
-
-      console.log("Round completed updated successfully in Supabase:", data);
-      return { gameData: data, roundData: roundInsertData };
-    } catch (error: any) {
-      console.error("Failed to update round completed in Supabase:", error);
-    }
-  };
-
-  // Update game when game is completed
-  const updateGameCompletedInSupabase = async (eventData: any, transactionId?: string) => {
-    console.log("🎯 ==============================");
-    console.log("🎯 GAME COMPLETED EVENT HANDLER STARTING");
-    console.log("🎯 ==============================");
-    console.log("📊 Function called with parameters:");
-    console.log("📊 - eventData:", JSON.stringify(eventData, null, 2));
-    console.log("📊 - transactionId:", transactionId);
-    console.log("📊 - eventData type:", typeof eventData);
-    console.log("📊 - eventData keys:", Object.keys(eventData || {}));
-    
-    try {
-      console.log("🔥 STEP 1: Starting Supabase game state update...");
-
-      // Update games table - only update game_state (total_rounds column doesn't exist)
-      const updateData = {
-        game_state: 3 // completed
-      };
-      
-      const targetGameId = parseInt(eventData.gameId);
-
-      console.log("💾 STEP 2: Preparing Supabase update...");
-      console.log("💾 - Update data:", JSON.stringify(updateData, null, 2));
-      console.log("💾 - Target game_id:", targetGameId);
-      console.log("💾 - Game ID type:", typeof targetGameId);
-      console.log("💾 - Game ID valid:", !isNaN(targetGameId));
-
-      console.log("🚀 STEP 3: Executing Supabase update...");
-      const { data, error } = await supabase
-        .from('games')
-        .update(updateData)
-        .eq('game_id', targetGameId)
-        .select();
-
-      if (error) {
-        console.error("❌ STEP 4: SUPABASE UPDATE FAILED!");
-        console.error("❌ Error details:");
-        console.error("❌ - Error object:", JSON.stringify(error, null, 2));
-        console.error("❌ - Error message:", error?.message);
-        console.error("❌ - Error code:", error?.code);
-        console.error("❌ - Error details:", error?.details);
-        console.error("❌ - Error hint:", error?.hint);
-        throw error;
-      }
-
-      console.log("✅ STEP 4: SUPABASE UPDATE SUCCESSFUL!");
-      console.log("✅ Response data:", JSON.stringify(data, null, 2));
-      console.log("✅ Number of rows updated:", data?.length || 0);
-
-      console.log("🔄 STEP 5: Starting prize distribution and user profile updates...");
-      try {
-        const { handleConsolidatedPrizeDistribution, handleGameCompletion } = await import('@/lib/prize-distribution-handler');
-        
-        // Handle prize distribution with new consolidated format
-        console.log("💰 Processing prize distribution with:", JSON.stringify({winners: eventData.winners, prizePerWinner: eventData.prizePerWinner}, null, 2));
-        await handleConsolidatedPrizeDistribution(eventData, transactionId);
-        console.log("✅ Prize distribution completed successfully");
-        
-        // Handle game completion (player counts)
-        console.log("📞 Calling handleGameCompletion with:", JSON.stringify(eventData, null, 2));
-        await handleGameCompletion(eventData);
-        console.log("✅ STEP 6: User profile updates completed successfully");
-      } catch (profileError: any) {
-        console.error("❌ STEP 6: Profile/prize update failed (non-critical):");
-        console.error("❌ Profile error:", profileError);
-        console.error("❌ Profile error message:", profileError?.message);
-        // Don't throw - profile updates shouldn't block game state update
-      }
-
-      console.log("🎉 ==============================");
-      console.log("🎉 GAME COMPLETED EVENT HANDLER FINISHED SUCCESSFULLY");
-      console.log("🎉 ==============================");
-      
-      return data;
-    } catch (error: any) {
-      console.error("💥 ==============================");
-      console.error("💥 GAME COMPLETED EVENT HANDLER FAILED!");
-      console.error("💥 ==============================");
-      console.error("💥 Error object:", error);
-      console.error("💥 Error message:", error?.message);
-      console.error("💥 Error stack:", error?.stack);
-      console.error("💥 Error name:", error?.name);
-      throw error;
-    }
-  };
-
   // Update game when new round starts
   const updateNewRoundInSupabase = async (eventData: any) => {
     try {
-      console.log("=== NEW ROUND STARTED SUPABASE UPDATE ===");
-      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
 
       const updateData = {
         game_state: 0, // zeroPhase (waiting for commit deadline to be set)
@@ -399,8 +164,6 @@ export default function MyGameDetailsPage() {
         reveal_deadline: null
       };
 
-      console.log("Update data being sent:", JSON.stringify(updateData, null, 2));
-      console.log("Updating game_id:", parseInt(eventData.gameId));
 
       const { data, error } = await supabase
         .from('games')
@@ -414,7 +177,6 @@ export default function MyGameDetailsPage() {
         throw error;
       }
 
-      console.log("New round started updated successfully in Supabase:", data);
       return data;
     } catch (error: any) {
       console.error("Failed to update new round started in Supabase:", error);
@@ -434,7 +196,6 @@ export default function MyGameDetailsPage() {
       if (error) throw error;
       if (data) {
         setGame(data);
-        console.log("Game data refreshed:", data);
       }
     } catch (err) {
       console.error('Error refetching game data:', err);
@@ -444,7 +205,7 @@ export default function MyGameDetailsPage() {
   // Real-time subscriptions for game management updates
   useEffect(() => {
     if (!gameId) return;
-    
+
     const channel = supabase
       .channel(`my-game-${gameId}`)
       .on('postgres_changes', {
@@ -453,11 +214,33 @@ export default function MyGameDetailsPage() {
         table: 'games',
         filter: `game_id=eq.${gameId}`
       }, (payload) => {
-        console.log("🎯 Game updated:", payload.new);
-        setGame(payload.new as any); // Type will be inferred correctly
-        
+        const newGame = payload.new as any;
+
+        // Log state changes for debugging
+        if (newGame.game_state !== game?.game_state) {
+        }
+
+        if (newGame.commit_deadline && !game?.commit_deadline) {
+        }
+
+        if (newGame.reveal_deadline && !game?.reveal_deadline) {
+        }
+
+        setGame(newGame);
+
+        // Clear transaction state when deadline is set successfully  
+        if (newGame.commit_deadline && !game?.commit_deadline) {
+          setTxState(TX_STATES.SUCCESS);
+          setTimeout(() => setTxState(TX_STATES.IDLE), 2000);
+        }
+
+        if (newGame.reveal_deadline && !game?.reveal_deadline) {
+          setTxState(TX_STATES.SUCCESS);
+          setTimeout(() => setTxState(TX_STATES.IDLE), 2000);
+        }
+
         // Refresh data if game just completed
-        if (payload.new.game_state === 3) {
+        if (newGame.game_state === 3) {
           refetchGameData();
         }
       })
@@ -467,7 +250,6 @@ export default function MyGameDetailsPage() {
         table: 'rounds',
         filter: `game_id=eq.${gameId}`
       }, (payload) => {
-        console.log("🎯 New round completed:", payload.new);
         refetchGameData(); // Refresh game data
       })
       .on('postgres_changes', {
@@ -476,15 +258,12 @@ export default function MyGameDetailsPage() {
         table: 'prize_distributions',
         filter: `game_id=eq.${gameId}`
       }, (payload) => {
-        console.log("🎯 Prize distributed:", payload.new);
         refetchGameData(); // Refresh game data
       })
       .subscribe();
 
-    console.log("📡 Subscribed to real-time updates for my game:", gameId);
 
     return () => {
-      console.log("📡 Unsubscribing from my game updates");
       supabase.removeChannel(channel);
     };
   }, [gameId]);
@@ -670,6 +449,7 @@ export default function MyGameDetailsPage() {
 
         {/* Phase Management */}
         <div className="grid md:grid-cols-2 gap-6">
+
           {/* Set Commit Deadline */}
           {game.game_state === 0 && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">

@@ -59,9 +59,6 @@ const currentNetwork: NetworkConfig = networks[FLOW_ENV];
 
 // Configure FCL
 export const configureFlow = (): void => {
-  console.log("🔧 Configuring FCL...");
-  console.log("Environment:", FLOW_ENV);
-  console.log("Network config:", currentNetwork);
 
   // Validate required configuration
   if (!currentNetwork.accessNode) {
@@ -109,11 +106,7 @@ export const configureFlow = (): void => {
     "0xFlowToken": getContractAddress("FlowToken")
   };
 
-  console.log("📡 FCL Configuration:", fclConfig);
-
   config(fclConfig);
-
-  console.log("✅ FCL configured successfully");
 };
 
 // Export contract address for easy access

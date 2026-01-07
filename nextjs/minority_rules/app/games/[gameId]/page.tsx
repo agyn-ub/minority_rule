@@ -131,18 +131,15 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
 
     try {
       setTxError(null);
-      console.log("🚀 Joining game:", { gameId, contractAddress });
 
       const result = await joinGameTransaction(
         gameId,
         contractAddress,
         {
           onStateChange: (state: string, data?: any) => {
-            console.log("Transaction state:", state, data);
             setTxState(state);
           },
           onSuccess: (txId: string, transaction: any) => {
-            console.log("✅ Successfully joined game:", txId);
           },
           onError: (error: any, txId?: string, transaction?: any) => {
             console.error("❌ Failed to join game:", error);
@@ -167,7 +164,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
 
     try {
       setTxError(null);
-      console.log("🚀 Committing vote:", { gameId, commitHash, contractAddress });
 
       const result = await submitVoteCommitTransaction(
         gameId,
@@ -175,11 +171,9 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         contractAddress,
         {
           onStateChange: (state: string, data?: any) => {
-            console.log("Transaction state:", state, data);
             setTxState(state);
           },
           onSuccess: (txId: string, transaction: any) => {
-            console.log("✅ Successfully committed vote:", txId);
           },
           onError: (error: any, txId?: string, transaction?: any) => {
             console.error("❌ Failed to commit vote:", error);
@@ -204,7 +198,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
 
     try {
       setTxError(null);
-      console.log("🚀 Revealing vote:", { gameId, revealVote, revealSalt, contractAddress });
 
       const result = await submitVoteRevealTransaction(
         gameId,
@@ -213,11 +206,9 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         contractAddress,
         {
           onStateChange: (state: string, data?: any) => {
-            console.log("Transaction state:", state, data);
             setTxState(state);
           },
           onSuccess: (txId: string, transaction: any) => {
-            console.log("✅ Successfully revealed vote:", txId);
           },
           onError: (error: any, txId?: string, transaction?: any) => {
             console.error("❌ Failed to reveal vote:", error);
@@ -314,8 +305,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   // Insert reveal into Supabase when VoteRevealed event is detected
   const insertRevealIntoSupabase = async (eventData: any) => {
     try {
-      console.log("=== INSERTING REVEAL INTO reveals TABLE ===");
-      console.log("Event data for reveal insertion:", JSON.stringify(eventData, null, 2));
 
       // First lookup the round_id from rounds table
       const { data: roundData, error: roundError } = await supabase
@@ -339,7 +328,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         revealed_at: new Date().toISOString()
       };
 
-      console.log("Reveal data to insert:", JSON.stringify(revealData, null, 2));
 
       const { data, error } = await supabase
         .from('reveals')
@@ -356,7 +344,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         throw error;
       }
 
-      console.log("Reveal inserted successfully into reveals table:", data);
       return data;
     } catch (error) {
       console.error("Failed to insert reveal into reveals table:", error);
@@ -369,8 +356,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   // Update game when new round starts
   const updateNewRoundInSupabase = async (eventData: any) => {
     try {
-      console.log("=== NEW ROUND STARTED SUPABASE UPDATE ===");
-      console.log("Raw event data received:", JSON.stringify(eventData, null, 2));
 
       const updateData = {
         game_state: 0, // zeroPhase (waiting for commit deadline to be set)
@@ -379,8 +364,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         reveal_deadline: null
       };
 
-      console.log("Update data being sent:", JSON.stringify(updateData, null, 2));
-      console.log("Updating game_id:", parseInt(eventData.gameId));
 
       const { data, error } = await supabase
         .from('games')
@@ -394,7 +377,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         throw error;
       }
 
-      console.log("New round started updated successfully in Supabase:", data);
       return data;
     } catch (error: any) {
       console.error("Failed to update new round started in Supabase:", error);
@@ -468,7 +450,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       if (error) throw error;
       if (data) {
         setGame(data);
-        console.log("Game data refreshed:", data);
       }
     } catch (err) {
       console.error('Error refetching game data:', err);
@@ -487,8 +468,18 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         table: 'games',
         filter: `game_id=eq.${gameId}`
       }, (payload) => {
-        console.log("🎯 Game updated:", payload.new);
-        setGame(payload.new as PublicGameDetails);
+        const newGame = payload.new as PublicGameDetails;
+        setGame(newGame);
+        
+        // Log state changes for debugging
+        if (newGame.game_state !== game?.game_state) {
+        }
+        
+        if (newGame.commit_deadline && !game?.commit_deadline) {
+        }
+        
+        if (newGame.reveal_deadline && !game?.reveal_deadline) {
+        }
       })
       .on('postgres_changes', {
         event: 'INSERT',
@@ -496,8 +487,8 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         table: 'game_players',
         filter: `game_id=eq.${gameId}`
       }, () => {
-        console.log("🎯 New player joined");
         refetchGameData(); // Refresh to get updated player count
+        checkIfUserHasJoined(); // Check if current user has joined
       })
       .on('postgres_changes', {
         event: 'INSERT',
@@ -505,7 +496,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         table: 'commits',
         filter: `game_id=eq.${gameId}`
       }, (payload) => {
-        console.log("🎯 New vote commit:", payload.new);
         // Update UI state if this is current user's commit
         if (payload.new.player_address === user?.addr) {
           setHasUserCommitted(true);
@@ -517,7 +507,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         table: 'reveals',
         filter: `game_id=eq.${gameId}`
       }, (payload) => {
-        console.log("🎯 New vote reveal:", payload.new);
         // Update UI state if this is current user's reveal
         if (payload.new.player_address === user?.addr) {
           setHasUserRevealed(true);
@@ -525,10 +514,8 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       })
       .subscribe();
 
-    console.log("📡 Subscribed to real-time updates for game:", gameId);
 
     return () => {
-      console.log("📡 Unsubscribing from game updates");
       supabase.removeChannel(channel);
     };
   }, [gameId, user?.addr]);
@@ -1308,6 +1295,19 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                     </div>
                   )}
 
+                {/* Debug: Vote Form Conditions */}
+                {(() => {
+                  const showForm = (
+                    game.game_state === GameState.CommitPhase &&
+                    game.commit_deadline &&
+                    new Date() < new Date(game.commit_deadline) &&
+                    user?.loggedIn &&
+                    hasUserJoined &&
+                    !hasUserCommitted
+                  );
+                  return null;
+                })()}
+
                 {/* Commit Vote Form - Show only if user has joined and hasn't committed */}
                 {game.game_state === GameState.CommitPhase &&
                   game.commit_deadline &&
@@ -1447,29 +1447,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                     </div>
                   )}
 
-                {/* Debug: Check all reveal button conditions */}
-                {(() => {
-                  console.log("Reveal button conditions:", {
-                    gameState: game.game_state,
-                    isRevealPhase: game.game_state === GameState.RevealPhase,
-                    revealDeadline: game.reveal_deadline,
-                    deadlineNotPassed: game.reveal_deadline && new Date() < new Date(game.reveal_deadline),
-                    userLoggedIn: user?.loggedIn,
-                    hasUserJoined,
-                    hasUserCommitted,
-                    hasNotRevealed: !hasUserRevealed,
-                    allConditionsMet: (
-                      game.game_state === GameState.RevealPhase &&
-                      game.reveal_deadline &&
-                      new Date() < new Date(game.reveal_deadline) &&
-                      user?.loggedIn &&
-                      hasUserJoined &&
-                      hasUserCommitted &&
-                      !hasUserRevealed
-                    )
-                  });
-                  return null;
-                })()}
 
                 {/* Reveal Vote Form - Show only if user has committed and game is in reveal phase */}
                 {game.game_state === GameState.RevealPhase &&

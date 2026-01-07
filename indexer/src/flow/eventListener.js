@@ -272,7 +272,7 @@ class FlowEventListener {
           await this.handleGameCreated(event.data);
           break;
         case 'PlayerJoined':
-          await this.handlePlayerJoined(event);
+          await this.handlePlayerJoined(event.data);
           break;
         case 'GameStarted':
           await this.handleGameStarted(event);
@@ -351,7 +351,7 @@ class FlowEventListener {
 
   /**
    * Handle PlayerJoined event
-   * @param {Object} event 
+   * @param {Object} event - Flow event data
    */
   async handlePlayerJoined(event) {
     try {
@@ -614,18 +614,16 @@ class FlowEventListener {
    * Handle CommitDeadlineSet event
    * @param {Object} event - Flow event object
    */
-  async handleCommitDeadlineSet(event) {
+  async handleCommitDeadlineSet(eventData) {
     try {
-      logger.info('Processing CommitDeadlineSet event, raw event:', JSON.stringify(event, null, 2));
+      logger.info('Processing CommitDeadlineSet event, raw event:', JSON.stringify(eventData, null, 2));
       
       // Check if event data exists
-      if (!event || (!event.data && !event.gameId)) {
+      if (!eventData || !eventData.gameId) {
         logger.error('CommitDeadlineSet: Invalid event structure - no data found');
         return;
       }
 
-      // Use event.data if it exists, otherwise use event directly
-      const eventData = event.data || event;
       logger.info('Processing CommitDeadlineSet event with data:', eventData);
       
       await this.processor.processCommitDeadlineSet(eventData);

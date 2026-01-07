@@ -53,7 +53,6 @@ export const executeTransaction = async (
       limit
     });
 
-    console.log("Transaction submitted:", transactionId);
 
     // Update state: Submitted
     onStateChange(TX_STATES.SUBMITTED, { transactionId });
@@ -63,7 +62,6 @@ export const executeTransaction = async (
     
     const sealedTx = await fcl.tx(transactionId).onceSealed();
     
-    console.log("Transaction sealed:", sealedTx);
 
     // Update state: Sealed
     onStateChange(TX_STATES.SEALED, { transactionId, transaction: sealedTx });

@@ -44,22 +44,17 @@ export const RealtimeGameProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     if (!user?.addr) {
-      console.log("👤 RealtimeGameProvider: No user address, skipping subscription");
       return;
     }
 
-    console.log("🌐 RealtimeGameProvider: Setting up global game subscription for user:", user.addr);
-    console.log("⏰ Connection timestamp:", new Date().toISOString());
 
     // Clean up existing channel if any
     if (channelRef.current) {
-      console.log("🧹 RealtimeGameProvider: Cleaning up existing channel");
       supabase.removeChannel(channelRef.current);
     }
 
     // Create unique channel name with timestamp
     const channelName = `global-games-${user.addr}-${Date.now()}`;
-    console.log("📡 RealtimeGameProvider: Creating channel:", channelName);
 
     const channel = supabase
       .channel(channelName)
@@ -69,7 +64,6 @@ export const RealtimeGameProvider: React.FC<{ children: React.ReactNode }> = ({
         table: 'games',
         filter: `creator_address=eq.${user.addr}`
       }, (payload) => {
-        console.log("🎯 RealtimeGameProvider: Game created event received:", payload);
         
         const gameEvent: GameEvent = {
           type: 'game_created',
@@ -81,18 +75,15 @@ export const RealtimeGameProvider: React.FC<{ children: React.ReactNode }> = ({
         
         // Auto-redirect to the new game
         if (payload.new?.game_id) {
-          console.log("🚀 RealtimeGameProvider: Redirecting to game:", payload.new.game_id);
           router.push(`/my-games/${payload.new.game_id}`);
         }
       })
       .subscribe((status) => {
-        console.log("📡 RealtimeGameProvider: Subscription status:", status);
         setConnectionStatus(status);
         setIsConnected(status === 'SUBSCRIBED');
         
         // Retry connection if failed
         if (status === 'CHANNEL_ERROR') {
-          console.log("❌ RealtimeGameProvider: Connection error, retrying in 2 seconds...");
           setTimeout(() => {
             channel.subscribe();
           }, 2000);
@@ -102,8 +93,6 @@ export const RealtimeGameProvider: React.FC<{ children: React.ReactNode }> = ({
     channelRef.current = channel;
 
     return () => {
-      console.log("🧹 RealtimeGameProvider: Cleaning up subscription");
-      console.log("⏰ Cleanup timestamp:", new Date().toISOString());
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
