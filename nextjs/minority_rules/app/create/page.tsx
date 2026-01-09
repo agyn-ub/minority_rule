@@ -1,21 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFlowUser } from "@/lib/useFlowUser";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 import { createGameTransaction, TX_STATES } from "@/lib/transactions";
-import { useRealtimeGame } from "@/contexts/RealtimeGameProvider";
+import { useRealtimeConnection } from "@/contexts/RealtimeGameProvider";
+import { DebugPanel } from "@/components/ui/debug-panel";
 
 export default function CreateGamePage() {
   const { user } = useFlowUser();
-  const { isConnected, connectionStatus, lastEvent } = useRealtimeGame();
+  const { isConnected, connectionStatus } = useRealtimeConnection();
   const [questionText, setQuestionText] = useState("");
   const [entryFee, setEntryFee] = useState("1.0");
   const [txState, setTxState] = useState(TX_STATES.IDLE);
   const [txError, setTxError] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(process.env.NODE_ENV === 'development');
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
+
+  // Keyboard shortcut for debug panel
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        setShowDebug(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
 
 
   // Create game function
@@ -31,10 +43,10 @@ export default function CreateGamePage() {
         entryFee,
         contractAddress,
         {
-          onStateChange: (state, data) => {
+          onStateChange: (state) => {
             setTxState(state);
           },
-          onSuccess: (txId, transaction) => {
+          onSuccess: () => {
             // Game creation successful - realtime provider will handle redirect
           },
           onError: (error) => {
@@ -48,15 +60,13 @@ export default function CreateGamePage() {
         throw result.error;
       }
 
-    } catch (error) {
+    } catch (error: any) {
       setTxError(error.message || "Failed to create game");
       setTxState(TX_STATES.ERROR);
     }
   };
 
   // Realtime subscription is now handled by RealtimeGameProvider globally
-
-
 
   if (!user?.loggedIn) {
     return (
@@ -206,6 +216,77 @@ export default function CreateGamePage() {
           </div>
         </div>
       </div>
+
+      {/* Debug Panel for Game Creation */}
+      {showDebug && (
+        <div className="fixed bottom-4 right-4 w-96 max-h-96 overflow-hidden z-50">
+          <div className="mb-2 flex justify-between items-center">
+            <span className="text-xs text-gray-500 font-mono">Create Game Debug (Ctrl+Shift+D)</span>
+            <button
+              onClick={() => setShowDebug(false)}
+              className="text-gray-400 hover:text-white text-lg"
+            >
+              ×
+            </button>
+          </div>
+
+          <DebugPanel
+            title="Form State"
+            data={{
+              questionText: questionText || '(empty)',
+              questionLength: questionText.length,
+              entryFee: entryFee,
+              entryFeeValid: parseFloat(entryFee) > 0,
+              isFormValid: questionText.trim().length > 0 && parseFloat(entryFee) > 0,
+              isCreating: txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
+            }}
+          />
+
+          <DebugPanel
+            title="User & Auth"
+            data={{
+              userAddress: user?.addr || 'Not connected',
+              loggedIn: user?.loggedIn || false,
+              contractAddress: contractAddress || 'Not configured'
+            }}
+          />
+
+          <DebugPanel
+            title="Transaction State"
+            data={{
+              currentState: txState,
+              hasError: !!txError,
+              errorMessage: txError || 'None',
+              isSubmitting: txState === TX_STATES.SUBMITTING,
+              isSubmitted: txState === TX_STATES.SUBMITTED,
+              isSealing: txState === TX_STATES.SEALING,
+              isSuccess: txState === TX_STATES.SUCCESS,
+              isError: txState === TX_STATES.ERROR
+            }}
+          />
+
+          <DebugPanel
+            title="Realtime Connection"
+            data={{
+              isConnected: isConnected,
+              connectionStatus: connectionStatus,
+              timestamp: new Date().toLocaleTimeString()
+            }}
+          />
+        </div>
+      )}
+
+      {/* Debug Toggle Button */}
+      {!showDebug && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <button
+            onClick={() => setShowDebug(true)}
+            className="bg-gray-800 text-green-400 px-3 py-2 rounded-lg shadow-lg hover:bg-gray-700 transition-colors text-sm font-mono"
+          >
+            🔍 Debug
+          </button>
+        </div>
+      )}
     </div>
   );
 }

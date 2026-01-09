@@ -12,10 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 type PlayerDetail = {
   player_address: string;
   display_name: string | null;
-  total_games: number;
-  total_wins: number;
-  total_earnings: number;
-  created_at: string;
+  total_games: number | null;
+  total_wins: number | null;
+  total_earnings: number | null;
+  created_at: string | null;
   games_created: number;
 };
 
@@ -24,7 +24,7 @@ type GameHistory = {
   question_text: string;
   entry_fee: number;
   game_state: number;
-  status: string; // 'active', 'eliminated', 'winner'
+  status: string | null; // 'active', 'eliminated', 'winner'
   prize_amount: number;
   created_at: string;
   joined_at: string;
@@ -35,8 +35,8 @@ type CreatedGame = {
   question_text: string;
   entry_fee: number;
   game_state: number;
-  total_players: number;
-  created_at: string;
+  total_players: number | null;
+  created_at: string | null;
 };
 
 type RoundDetail = {
@@ -45,7 +45,7 @@ type RoundDetail = {
   no_count: number;
   minority_vote: boolean; // true if YES was minority
   votes_remaining: number;
-  completed_at: string;
+  completed_at: string | null;
   player_vote?: boolean; // player's vote this round (true=YES, false=NO)
   player_survived: boolean;
 };
@@ -56,7 +56,7 @@ type VotingDetail = {
   committed_at: string;
   vote_value: boolean; // true=YES, false=NO
   salt: string;
-  revealed_at: string;
+  revealed_at: string | null;
 };
 
 type GameDetailData = {
@@ -504,19 +504,19 @@ export default function PlayerStatsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-card rounded-lg shadow-sm p-6 border">
             <div className="text-3xl mb-2">🎮</div>
-            <div className="text-3xl font-bold text-blue-600">{player.total_games}</div>
+            <div className="text-3xl font-bold text-blue-600">{player.total_games || 0}</div>
             <div className="text-sm text-muted-foreground">Total Games</div>
           </div>
           
           <div className="bg-card rounded-lg shadow-sm p-6 border">
             <div className="text-3xl mb-2">🏆</div>
-            <div className="text-3xl font-bold text-green-600">{player.total_wins}</div>
+            <div className="text-3xl font-bold text-green-600">{player.total_wins || 0}</div>
             <div className="text-sm text-muted-foreground">Wins</div>
           </div>
           
           <div className="bg-card rounded-lg shadow-sm p-6 border">
             <div className="text-3xl mb-2">💰</div>
-            <div className="text-3xl font-bold text-purple-600">{formatFlow(player.total_earnings)}</div>
+            <div className="text-3xl font-bold text-purple-600">{formatFlow(player.total_earnings || 0)}</div>
             <div className="text-sm text-muted-foreground">Total Earnings</div>
           </div>
           
@@ -531,8 +531,8 @@ export default function PlayerStatsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-card rounded-lg shadow-sm p-6 border text-center">
             <div className="text-2xl font-bold mb-1">
-              {player.total_games > 0 
-                ? ((player.total_wins / player.total_games) * 100).toFixed(1)
+              {(player.total_games || 0) > 0 
+                ? (((player.total_wins || 0) / (player.total_games || 0)) * 100).toFixed(1)
                 : 0}%
             </div>
             <div className="text-sm text-muted-foreground">Win Rate</div>
@@ -540,8 +540,8 @@ export default function PlayerStatsPage() {
           
           <div className="bg-card rounded-lg shadow-sm p-6 border text-center">
             <div className="text-2xl font-bold mb-1">
-              {player.total_games > 0 
-                ? formatFlow(player.total_earnings / player.total_games)
+              {(player.total_games || 0) > 0 
+                ? formatFlow((player.total_earnings || 0) / (player.total_games || 0))
                 : '0.0000'} FLOW
             </div>
             <div className="text-sm text-muted-foreground">Avg Earnings per Game</div>
@@ -549,7 +549,7 @@ export default function PlayerStatsPage() {
           
           <div className="bg-card rounded-lg shadow-sm p-6 border text-center">
             <div className="text-2xl font-bold mb-1">
-              {new Date(player.created_at).toLocaleDateString()}
+              {player.created_at ? new Date(player.created_at).toLocaleDateString() : 'N/A'}
             </div>
             <div className="text-sm text-muted-foreground">Player Since</div>
           </div>
@@ -644,8 +644,8 @@ export default function PlayerStatsPage() {
                                   {formatFlow(game.entry_fee)} FLOW
                                 </td>
                                 <td className="px-4 py-3 text-center">
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(game.status)}`}>
-                                    {game.status.charAt(0).toUpperCase() + game.status.slice(1)}
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(game.status || 'unknown')}`}>
+                                    {(game.status || 'unknown').charAt(0).toUpperCase() + (game.status || 'unknown').slice(1)}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-center text-sm">
@@ -767,7 +767,7 @@ export default function PlayerStatsPage() {
                                                         {vote.committed_at ? new Date(vote.committed_at).toLocaleTimeString() : 'N/A'}
                                                       </td>
                                                       <td className="px-3 py-2 text-center text-xs text-muted-foreground">
-                                                        {new Date(vote.revealed_at).toLocaleTimeString()}
+                                                        {vote.revealed_at ? new Date(vote.revealed_at).toLocaleTimeString() : 'N/A'}
                                                       </td>
                                                     </tr>
                                                   ))}
@@ -883,7 +883,7 @@ export default function PlayerStatsPage() {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-center text-sm text-muted-foreground">
-                              {new Date(game.created_at).toLocaleDateString()}
+                              {game.created_at ? new Date(game.created_at).toLocaleDateString() : 'N/A'}
                             </td>
                           </tr>
                         ))}

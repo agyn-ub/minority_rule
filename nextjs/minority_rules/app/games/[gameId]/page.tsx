@@ -2,9 +2,11 @@
 
 import { useState, useEffect, use } from "react";
 import { useFlowUser } from "@/lib/useFlowUser";
+import { useRealtimeGameSingle } from "@/contexts/RealtimeGameProvider";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { CopySuccessDialog } from "@/components/ui/info-dialog";
+import { GameDebugPanel } from "@/components/ui/debug-panel";
 import {
   joinGameTransaction,
   submitVoteCommitTransaction,
@@ -99,16 +101,12 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   const resolvedParams = use(params);
   const gameId = resolvedParams.gameId;
 
-  const [game, setGame] = useState<PublicGameDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isCreator, setIsCreator] = useState(false);
-  const [hasUserJoined, setHasUserJoined] = useState(false);
-  const [hasUserCommitted, setHasUserCommitted] = useState(false);
+  // Use the new simplified hook
+  const { game, loading, error, hasUserJoined, hasUserCommitted, hasUserRevealed } = useRealtimeGameSingle(parseInt(gameId));
+
   const [userVote, setUserVote] = useState<boolean | null>(null);
   const [userSalt, setUserSalt] = useState('');
   const [commitHash, setCommitHash] = useState('');
-  const [hasUserRevealed, setHasUserRevealed] = useState(false);
   const [revealVote, setRevealVote] = useState<boolean | null>(null);
   const [revealSalt, setRevealSalt] = useState('');
   const [showCopySuccessDialog, setShowCopySuccessDialog] = useState(false);
@@ -122,6 +120,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   const [winners, setWinners] = useState<WinnerData[]>([]);
   const [allReveals, setAllReveals] = useState<VoteReveal[]>([]);
   const [completedGameDataLoading, setCompletedGameDataLoading] = useState(false);
+  const [isCreator, setIsCreator] = useState(false);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
@@ -228,162 +227,25 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
   };
 
-  // Check if current user has already joined this game
-  const checkIfUserHasJoined = async () => {
-    if (!user?.addr || !gameId) return;
+  // Participation status comes directly from hook
+  const userHasJoined = hasUserJoined();
+  const userHasCommitted = hasUserCommitted();
+  const userHasRevealed = hasUserRevealed();
 
-    try {
-      const { data, error } = await supabase
-        .from('game_players')
-        .select('player_address')
-        .eq('game_id', parseInt(gameId))
-        .eq('player_address', user.addr)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error("Error checking if user has joined:", error);
-        return;
-      }
-
-      setHasUserJoined(data !== null);
-    } catch (err) {
-      console.error("Error checking user join status:", err);
+  // Log initial state when component mounts
+  useEffect(() => {
+    console.log("🎮 GAMES PAGE: Component mounted:");
+    console.log("  🎯 Game ID:", gameId);
+    console.log("  👤 User address:", user?.addr || "No user");
+    console.log("  📊 Initial participation status:", {
+      hasJoined: userHasJoined,
+      hasCommitted: userHasCommitted,
+      hasRevealed: userHasRevealed
+    });
+    if (game) {
+      console.log("  📋 Game data:", game);
     }
-  };
-
-  // Check if current user has already committed this round
-  const checkIfUserHasCommitted = async () => {
-    if (!user?.addr || !gameId || !game) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('commits')
-        .select('commit_hash')
-        .eq('game_id', parseInt(gameId))
-        .eq('round_number', game.current_round || 1)
-        .eq('player_address', user.addr)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error("Error checking if user has committed:", error);
-        return;
-      }
-
-      setHasUserCommitted(data !== null);
-    } catch (err) {
-      console.error("Error checking user commit status:", err);
-    }
-  };
-
-  // Check if current user has already revealed this round
-  const checkIfUserHasRevealed = async () => {
-    if (!user?.addr || !gameId || !game) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('reveals')
-        .select('vote_value, salt')
-        .eq('game_id', parseInt(gameId))
-        .eq('round_number', game.current_round || 1)
-        .eq('player_address', user.addr)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error("Error checking if user has revealed:", error);
-        return;
-      }
-
-      setHasUserRevealed(data !== null);
-    } catch (err) {
-      console.error("Error checking user reveal status:", err);
-    }
-  };
-
-
-
-
-  // Insert reveal into Supabase when VoteRevealed event is detected
-  const insertRevealIntoSupabase = async (eventData: any) => {
-    try {
-
-      // First lookup the round_id from rounds table
-      const { data: roundData, error: roundError } = await supabase
-        .from('rounds')
-        .select('id')
-        .eq('game_id', parseInt(eventData.gameId))
-        .eq('round_number', parseInt(eventData.round))
-        .single();
-
-      if (roundError && roundError.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.error("Error looking up round_id:", roundError);
-      }
-
-      const revealData = {
-        game_id: parseInt(eventData.gameId),
-        round_number: parseInt(eventData.round),
-        round_id: roundData?.id || null, // Include round_id if found
-        player_address: eventData.player,
-        vote_value: eventData.vote,
-        salt: revealSalt, // Use the locally stored salt
-        revealed_at: new Date().toISOString()
-      };
-
-
-      const { data, error } = await supabase
-        .from('reveals')
-        .insert([revealData])
-        .select();
-
-      if (error) {
-        console.error("=== REVEALS INSERT ERROR ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
-        console.error("Error message:", error?.message);
-        console.error("Error code:", error?.code);
-        console.error("Error details:", error?.details);
-        console.error("========================");
-        throw error;
-      }
-
-      return data;
-    } catch (error) {
-      console.error("Failed to insert reveal into reveals table:", error);
-      // Don't throw - we don't want to break the UI if this fails
-    }
-  };
-
-
-
-  // Update game when new round starts
-  const updateNewRoundInSupabase = async (eventData: any) => {
-    try {
-
-      const updateData = {
-        game_state: 0, // zeroPhase (waiting for commit deadline to be set)
-        current_round: parseInt(eventData.round),
-        commit_deadline: null,
-        reveal_deadline: null
-      };
-
-
-      const { data, error } = await supabase
-        .from('games')
-        .update(updateData)
-        .eq('game_id', parseInt(eventData.gameId))
-        .select();
-
-      if (error) {
-        console.error("=== NEW ROUND STARTED SUPABASE ERROR ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
-        throw error;
-      }
-
-      return data;
-    } catch (error: any) {
-      console.error("Failed to update new round started in Supabase:", error);
-    }
-  };
-
-  // Process prize distribution and save to database
+  }, []); // Empty dependency array to run only once on mount
 
   // Fetch completed game data (rounds, winners, reveals)
   const fetchCompletedGameData = async () => {
@@ -438,148 +300,16 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
   };
 
-  // Refetch game data
-  const refetchGameData = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('games')
-        .select('*')
-        .eq('game_id', parseInt(gameId))
-        .single();
 
-      if (error) throw error;
-      if (data) {
-        setGame(data);
-      }
-    } catch (err) {
-      console.error('Error refetching game data:', err);
+  // Check if current user is the creator when game data loads
+  useEffect(() => {
+    if (user?.addr && game?.creator_address === user.addr) {
+      setIsCreator(true);
+    } else {
+      setIsCreator(false);
     }
-  };
+  }, [user?.addr, game?.creator_address]);
 
-  // Real-time subscriptions to database changes made by indexer
-  useEffect(() => {
-    if (!gameId) return;
-    
-    const channel = supabase
-      .channel(`game-${gameId}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'games',
-        filter: `game_id=eq.${gameId}`
-      }, (payload) => {
-        const newGame = payload.new as PublicGameDetails;
-        setGame(newGame);
-        
-        // Log state changes for debugging
-        if (newGame.game_state !== game?.game_state) {
-        }
-        
-        if (newGame.commit_deadline && !game?.commit_deadline) {
-        }
-        
-        if (newGame.reveal_deadline && !game?.reveal_deadline) {
-        }
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'game_players',
-        filter: `game_id=eq.${gameId}`
-      }, () => {
-        refetchGameData(); // Refresh to get updated player count
-        checkIfUserHasJoined(); // Check if current user has joined
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'commits',
-        filter: `game_id=eq.${gameId}`
-      }, (payload) => {
-        // Update UI state if this is current user's commit
-        if (payload.new.player_address === user?.addr) {
-          setHasUserCommitted(true);
-        }
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'reveals',
-        filter: `game_id=eq.${gameId}`
-      }, (payload) => {
-        // Update UI state if this is current user's reveal
-        if (payload.new.player_address === user?.addr) {
-          setHasUserRevealed(true);
-        }
-      })
-      .subscribe();
-
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [gameId, user?.addr]);
-
-  // Fetch public game data
-  useEffect(() => {
-    const fetchGameData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const { data: gameData, error: gameError } = await supabase
-          .from('games')
-          .select('*')
-          .eq('game_id', parseInt(gameId))
-          .single();
-
-        if (gameError) {
-          if (gameError.code === 'PGRST116') {
-            setError('Game not found');
-          } else {
-            setError('Failed to load game details');
-          }
-          return;
-        }
-
-        setGame(gameData);
-
-        // Check if current user is the creator
-        if (user?.addr && gameData.creator_address === user.addr) {
-          setIsCreator(true);
-        }
-
-      } catch (err) {
-        console.error('Fetch error:', err);
-        setError('Failed to connect to database');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchGameData();
-  }, [gameId, user?.addr]);
-
-  // Check if user has joined when component mounts or user changes
-  useEffect(() => {
-    if (user?.addr && gameId) {
-      checkIfUserHasJoined();
-    }
-  }, [user?.addr, gameId]);
-
-  // Check if user has committed when component mounts, user changes, or game data changes
-  useEffect(() => {
-    if (user?.addr && gameId && game) {
-      checkIfUserHasCommitted();
-    }
-  }, [user?.addr, gameId, game]);
-
-  // Check if user has revealed when component mounts, user changes, or game data changes
-  useEffect(() => {
-    if (user?.addr && gameId && game) {
-      checkIfUserHasRevealed();
-    }
-  }, [user?.addr, gameId, game]);
 
   // Fetch completed game data when game state changes to completed
   useEffect(() => {
@@ -609,6 +339,51 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     const hash = generateCommitHash(vote, salt);
     setCommitHash(hash);
   };
+
+  // Check if game exists and handle error display
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+            <p className="mt-2 text-muted-foreground">Loading game...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !game) {
+    return (
+      <div className="min-h-screen bg-background py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
+            <h1 className="scroll-m-20 font-extrabold tracking-tight text-red-900 mb-4">
+              Game Not Found
+            </h1>
+            <p className="text-red-700 mb-6">
+              {error || 'This game does not exist or has been removed.'}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Link
+                href="/games"
+                className="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Back to Games
+              </Link>
+              <Link
+                href="/"
+                className="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Go Home
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Determine game status for public view using real blockchain state
   const getGameStatus = (game: PublicGameDetails) => {
@@ -1010,50 +785,6 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background py-8">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
-            <p className="mt-2 text-muted-foreground">Loading game...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !game) {
-    return (
-      <div className="min-h-screen bg-background py-8">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
-            <h1 className="scroll-m-20 font-extrabold tracking-tight text-red-900 mb-4">
-              Game Not Found
-            </h1>
-            <p className="text-red-700 mb-6">
-              {error || 'This game does not exist or has been removed.'}
-            </p>
-            <div className="flex gap-3 justify-center">
-              <Link
-                href="/games"
-                className="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Back to Games
-              </Link>
-              <Link
-                href="/"
-                className="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                Go Home
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background py-8">
       <div className="max-w-4xl mx-auto px-4">
@@ -1195,7 +926,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
               {game.game_state === GameState.CommitPhase &&
                 game.commit_deadline &&
                 user?.loggedIn &&
-                hasUserJoined && (
+                userHasJoined && (
                   <div className="w-full mb-6">
                     <div className="bg-green-50 border border-green-200 rounded-lg p-6">
                       <h3 className="text-xl font-semibold text-green-800 mb-4 text-center">✅ You've Successfully Joined This Game!</h3>
@@ -1240,7 +971,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                   game.commit_deadline &&
                   new Date() < new Date(game.commit_deadline) &&
                   user?.loggedIn &&
-                  !hasUserJoined && (
+                  !userHasJoined && (
                     <div className="bg-card rounded-lg shadow-lg p-6">
                       <h3 className="text-lg font-semibold text-foreground mb-4">Join Game</h3>
                       <div className="text-center mb-4">
@@ -1295,26 +1026,14 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                     </div>
                   )}
 
-                {/* Debug: Vote Form Conditions */}
-                {(() => {
-                  const showForm = (
-                    game.game_state === GameState.CommitPhase &&
-                    game.commit_deadline &&
-                    new Date() < new Date(game.commit_deadline) &&
-                    user?.loggedIn &&
-                    hasUserJoined &&
-                    !hasUserCommitted
-                  );
-                  return null;
-                })()}
 
                 {/* Commit Vote Form - Show only if user has joined and hasn't committed */}
                 {game.game_state === GameState.CommitPhase &&
                   game.commit_deadline &&
                   new Date() < new Date(game.commit_deadline) &&
                   user?.loggedIn &&
-                  hasUserJoined &&
-                  !hasUserCommitted && (
+                  userHasJoined &&
+                  !userHasCommitted && (
                     <div className="bg-card rounded-lg shadow-lg p-6">
                       <h3 className="text-lg font-semibold text-foreground mb-4">💭 Submit Your Vote</h3>
                       <div className="text-center mb-6">
@@ -1387,8 +1106,8 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                 {/* Vote Committed Confirmation */}
                 {game.game_state === GameState.CommitPhase &&
                   user?.loggedIn &&
-                  hasUserJoined &&
-                  hasUserCommitted && (
+                  userHasJoined &&
+                  userHasCommitted && (
                     <div className="bg-card rounded-lg shadow-lg p-6">
                       <h3 className="text-lg font-semibold text-foreground mb-4">✅ Vote Committed!</h3>
                       <div className="text-center">
@@ -1453,9 +1172,9 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                   game.reveal_deadline &&
                   new Date() < new Date(game.reveal_deadline) &&
                   user?.loggedIn &&
-                  hasUserJoined &&
-                  hasUserCommitted &&
-                  !hasUserRevealed && (
+                  userHasJoined &&
+                  userHasCommitted &&
+                  !userHasRevealed && (
                     <div className="bg-card rounded-lg shadow-lg p-6">
                       <h3 className="text-lg font-semibold text-foreground mb-4">🔓 Reveal Your Vote</h3>
                       <div className="text-center mb-6">
@@ -1547,9 +1266,9 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
                 {/* Vote Revealed Confirmation */}
                 {game.game_state === GameState.RevealPhase &&
                   user?.loggedIn &&
-                  hasUserJoined &&
-                  hasUserCommitted &&
-                  hasUserRevealed && (
+                  userHasJoined &&
+                  userHasCommitted &&
+                  userHasRevealed && (
                     <div className="bg-card rounded-lg shadow-lg p-6">
                       <h3 className="text-lg font-semibold text-foreground mb-4">✅ Vote Revealed!</h3>
                       <div className="text-center">
@@ -1612,6 +1331,20 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
         open={showCopySuccessDialog}
         onOpenChange={setShowCopySuccessDialog}
         item="Salt"
+      />
+
+      {/* Debug Panel */}
+      <GameDebugPanel 
+        gameHookData={{
+          game,
+          loading,
+          error,
+          hasUserJoined,
+          hasUserCommitted,
+          hasUserRevealed
+        }}
+        user={{ addr: user?.addr || undefined, loggedIn: user?.loggedIn || false }}
+        gameId={gameId}
       />
     </div>
   );

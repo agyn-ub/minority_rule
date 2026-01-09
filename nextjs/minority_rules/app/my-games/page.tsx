@@ -196,7 +196,7 @@ export default function MyGamesPage() {
 
                   {/* Created Date */}
                   <p className="text-xs text-muted-foreground text-center">
-                    Created {new Date(game.created_at).toLocaleDateString()}
+                    Created {game.created_at ? new Date(game.created_at).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
               ))}

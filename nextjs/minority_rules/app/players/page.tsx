@@ -11,9 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 type PlayerStats = {
   player_address: string;
   display_name: string | null;
-  total_games: number;
-  total_wins: number;
-  total_earnings: number;
+  total_games: number | null;
+  total_wins: number | null;
+  total_earnings: number | null;
   win_rate: number;
   avg_earnings_per_game: number;
   last_active: string | null;
@@ -119,7 +119,7 @@ export default function PlayersPage() {
       const startIndex = (currentPage - 1) * playersPerPage;
       query += ` LIMIT ${playersPerPage} OFFSET ${startIndex}`;
 
-      const { data, error: queryError } = await supabase.rpc('execute_sql', { sql: query });
+      const { data, error: queryError } = await (supabase as any).rpc('execute_sql', { sql: query });
       
       if (queryError) {
         console.error('Query error:', queryError);
@@ -140,7 +140,7 @@ export default function PlayersPage() {
         countQuery += ` AND (up.player_address ILIKE '%${debouncedSearchQuery}%' OR up.display_name ILIKE '%${debouncedSearchQuery}%')`;
       }
 
-      const { data: countData } = await supabase.rpc('execute_sql', { sql: countQuery });
+      const { data: countData } = await (supabase as any).rpc('execute_sql', { sql: countQuery });
       setTotalCount(countData?.[0]?.count || 0);
 
     } catch (err) {
@@ -183,8 +183,8 @@ export default function PlayersPage() {
       // Transform data to match expected format
       const transformedData = (data || []).map((player, index) => ({
         ...player,
-        win_rate: player.total_games > 0 ? (player.total_wins / player.total_games) * 100 : 0,
-        avg_earnings_per_game: player.total_games > 0 ? player.total_earnings / player.total_games : 0,
+        win_rate: (player.total_games || 0) > 0 ? ((player.total_wins || 0) / (player.total_games || 0)) * 100 : 0,
+        avg_earnings_per_game: (player.total_games || 0) > 0 ? (player.total_earnings || 0) / (player.total_games || 0) : 0,
         last_active: null, // Will be null in simplified version
         rank: startIndex + index + 1
       }));
@@ -234,7 +234,7 @@ export default function PlayersPage() {
           <div className="bg-card rounded-lg shadow-sm p-4 border">
             <div className="text-2xl mb-2">🎮</div>
             <div className="text-2xl font-bold text-green-600">
-              {players.reduce((sum, p) => sum + p.total_games, 0)}
+              {players.reduce((sum, p) => sum + (p.total_games || 0), 0)}
             </div>
             <div className="text-sm text-muted-foreground">Total Games Played</div>
           </div>
@@ -242,7 +242,7 @@ export default function PlayersPage() {
           <div className="bg-card rounded-lg shadow-sm p-4 border">
             <div className="text-2xl mb-2">💰</div>
             <div className="text-2xl font-bold text-purple-600">
-              {formatFlow(players.reduce((sum, p) => sum + p.total_earnings, 0))} FLOW
+              {formatFlow(players.reduce((sum, p) => sum + (p.total_earnings || 0), 0))} FLOW
             </div>
             <div className="text-sm text-muted-foreground">Total Prizes Distributed</div>
           </div>
@@ -374,11 +374,11 @@ export default function PlayersPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-center text-sm">
-                            {player.total_games}
+                            {player.total_games || 0}
                           </td>
                           <td className="px-4 py-3 text-center text-sm">
                             <span className="font-medium text-green-600">
-                              {player.total_wins}
+                              {player.total_wins || 0}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center text-sm">
@@ -389,7 +389,7 @@ export default function PlayersPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center text-sm font-medium text-purple-600">
-                            {formatFlow(player.total_earnings)} FLOW
+                            {formatFlow(player.total_earnings || 0)} FLOW
                           </td>
                           <td className="px-4 py-3 text-center text-sm text-muted-foreground">
                             {formatFlow(player.avg_earnings_per_game)} FLOW

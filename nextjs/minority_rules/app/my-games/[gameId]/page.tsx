@@ -1,17 +1,19 @@
 "use client";
 import { useFlowUser } from "@/lib/useFlowUser";
+import { useRealtimeGameSingle } from "@/contexts/RealtimeGameProvider";
 
 import { useState, useEffect } from "react";
 // React SDK removed - using FCL directly
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { supabase, type Game } from "@/lib/supabase";
+import { useParams } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import {
   setCommitDeadlineTransaction,
   setRevealDeadlineTransaction,
   processRoundTransaction,
   TX_STATES
 } from "@/lib/transactions";
+import { GameDebugPanel } from "@/components/ui/debug-panel";
 
 // Helper functions
 const getGameStateName = (state: number): string => {
@@ -38,10 +40,9 @@ export default function MyGameDetailsPage() {
   const { user } = useFlowUser();
   const params = useParams();
   const gameId = params.gameId as string;
-
-  const [game, setGame] = useState<Game | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  
+  // Use the new simplified hook
+  const { game, loading, error } = useRealtimeGameSingle(parseInt(gameId));
   const [commitDuration, setCommitDuration] = useState("50"); // 1 hour default
   const [revealDuration, setRevealDuration] = useState("40"); // 30 minutes default
 
@@ -50,6 +51,17 @@ export default function MyGameDetailsPage() {
   const [txError, setTxError] = useState<string | null>(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
+
+  // Log initial state when component mounts
+  useEffect(() => {
+    console.log("📋 MY-GAMES: Component mounted:");
+    console.log("  🎯 Game ID:", gameId);
+    console.log("  👤 User address:", user?.addr || "No user");
+    console.log("  🏠 Page type: User's own game management");
+    if (game) {
+      console.log("  📋 Game data:", game);
+    }
+  }, []); // Empty dependency array to run only once on mount
 
   // Transaction execution functions
   const handleSetCommitDeadline = async () => {
@@ -153,148 +165,27 @@ export default function MyGameDetailsPage() {
     }
   };
 
-  // Update game when new round starts
-  const updateNewRoundInSupabase = async (eventData: any) => {
-    try {
-
-      const updateData = {
-        game_state: 0, // zeroPhase (waiting for commit deadline to be set)
-        current_round: parseInt(eventData.round),
-        commit_deadline: null,
-        reveal_deadline: null
-      };
 
 
-      const { data, error } = await supabase
-        .from('games')
-        .update(updateData)
-        .eq('game_id', parseInt(eventData.gameId))
-        .select();
-
-      if (error) {
-        console.error("=== NEW ROUND STARTED SUPABASE ERROR ===");
-        console.error("Full error object:", JSON.stringify(error, null, 2));
-        throw error;
-      }
-
-      return data;
-    } catch (error: any) {
-      console.error("Failed to update new round started in Supabase:", error);
-    }
-  };
-
-
-  // Refetch game data
-  const refetchGameData = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('games')
-        .select('*')
-        .eq('game_id', parseInt(gameId))
-        .single();
-
-      if (error) throw error;
-      if (data) {
-        setGame(data);
-      }
-    } catch (err) {
-      console.error('Error refetching game data:', err);
-    }
-  };
-
-  // Real-time subscriptions for game management updates
+  // Handle transaction success state when deadlines are set
+  const [prevGame, setPrevGame] = useState<any>(null);
   useEffect(() => {
-    if (!gameId) return;
-
-    const channel = supabase
-      .channel(`my-game-${gameId}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'games',
-        filter: `game_id=eq.${gameId}`
-      }, (payload) => {
-        const newGame = payload.new as any;
-
-        // Log state changes for debugging
-        if (newGame.game_state !== game?.game_state) {
-        }
-
-        if (newGame.commit_deadline && !game?.commit_deadline) {
-        }
-
-        if (newGame.reveal_deadline && !game?.reveal_deadline) {
-        }
-
-        setGame(newGame);
-
-        // Clear transaction state when deadline is set successfully  
-        if (newGame.commit_deadline && !game?.commit_deadline) {
-          setTxState(TX_STATES.SUCCESS);
-          setTimeout(() => setTxState(TX_STATES.IDLE), 2000);
-        }
-
-        if (newGame.reveal_deadline && !game?.reveal_deadline) {
-          setTxState(TX_STATES.SUCCESS);
-          setTimeout(() => setTxState(TX_STATES.IDLE), 2000);
-        }
-
-        // Refresh data if game just completed
-        if (newGame.game_state === 3) {
-          refetchGameData();
-        }
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'rounds',
-        filter: `game_id=eq.${gameId}`
-      }, (payload) => {
-        refetchGameData(); // Refresh game data
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'prize_distributions',
-        filter: `game_id=eq.${gameId}`
-      }, (payload) => {
-        refetchGameData(); // Refresh game data
-      })
-      .subscribe();
-
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [gameId]);
-
-  // Fetch game details
-  useEffect(() => {
-    const fetchGame = async () => {
-      if (!gameId) return;
-
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('games')
-          .select('*')
-          .eq('game_id', parseInt(gameId))
-          .single();
-
-        if (error) throw error;
-        if (!data) throw new Error('Game not found');
-
-        setGame(data);
-      } catch (err) {
-        console.error('Error fetching game:', err);
-        setError('Failed to load game details');
-      } finally {
-        setLoading(false);
+    if (game && prevGame) {
+      // Clear transaction state when deadlines are set successfully  
+      if (game.commit_deadline && !prevGame.commit_deadline) {
+        console.log("  ✅ COMMIT DEADLINE SET - Clearing transaction state");
+        setTxState(TX_STATES.SUCCESS);
+        setTimeout(() => setTxState(TX_STATES.IDLE), 2000);
       }
-    };
 
-    fetchGame();
-  }, [gameId]);
+      if (game.reveal_deadline && !prevGame.reveal_deadline) {
+        console.log("  ✅ REVEAL DEADLINE SET - Clearing transaction state");
+        setTxState(TX_STATES.SUCCESS);
+        setTimeout(() => setTxState(TX_STATES.IDLE), 2000);
+      }
+    }
+    setPrevGame(game);
+  }, [game, prevGame]);
 
   // Check if current user is the game creator
   const isGameOwner = user?.addr && game?.creator_address === user.addr;
@@ -406,10 +297,10 @@ export default function MyGameDetailsPage() {
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-xl font-semibold text-foreground mb-2">
-                Game #{game.game_id}
+                Game #{game?.game_id}
               </h2>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStateColor(game.game_state)}`}>
-                {getGameStateName(game.game_state)}
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStateColor(game?.game_state || 0)}`}>
+                {getGameStateName(game?.game_state || 0)}
               </span>
             </div>
             <Link
@@ -422,26 +313,26 @@ export default function MyGameDetailsPage() {
 
           <div className="bg-muted rounded-lg p-4 mb-4">
             <h3 className="font-medium text-foreground mb-2">Question:</h3>
-            <p className="text-muted-foreground">{game.question_text}</p>
+            <p className="text-muted-foreground">{game?.question_text}</p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <span className="text-muted-foreground text-sm">Entry Fee:</span>
-              <p className="font-semibold">{game.entry_fee} FLOW</p>
+              <p className="font-semibold">{game?.entry_fee} FLOW</p>
             </div>
             <div>
               <span className="text-muted-foreground text-sm">Round:</span>
-              <p className="font-semibold">{game.current_round}</p>
+              <p className="font-semibold">{game?.current_round}</p>
             </div>
             <div>
               <span className="text-muted-foreground text-sm">Players:</span>
-              <p className="font-semibold">{game.total_players}</p>
+              <p className="font-semibold">{game?.total_players}</p>
             </div>
             <div>
               <span className="text-muted-foreground text-sm">Created:</span>
               <p className="font-semibold">
-                {new Date(game.created_at).toLocaleDateString()}
+                {game?.created_at ? new Date(game.created_at).toLocaleDateString() : 'N/A'}
               </p>
             </div>
           </div>
@@ -451,7 +342,7 @@ export default function MyGameDetailsPage() {
         <div className="grid md:grid-cols-2 gap-6">
 
           {/* Set Commit Deadline */}
-          {game.game_state === 0 && (
+          {game && game.game_state === 0 && game.commit_deadline === null && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 Start Commit Phase
@@ -494,7 +385,7 @@ export default function MyGameDetailsPage() {
           )}
 
           {/* Commit Deadline Display - Show when deadline is set */}
-          {game.game_state === 1 && game.commit_deadline && (
+          {game && game.game_state === 1 && game.commit_deadline && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 ✅ Commit Phase Active
@@ -521,7 +412,7 @@ export default function MyGameDetailsPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Current Round:</span>
-                  <span className="font-medium">{game.current_round}</span>
+                  <span className="font-medium">{game?.current_round}</span>
                 </div>
               </div>
 
@@ -535,7 +426,7 @@ export default function MyGameDetailsPage() {
           )}
 
           {/* Set Reveal Deadline - Show only when commit deadline has passed and reveal deadline not set */}
-          {game.game_state === 1 &&
+          {game && game.game_state === 1 &&
             game.commit_deadline &&
             new Date() > new Date(game.commit_deadline) &&
             !game.reveal_deadline && (
@@ -581,7 +472,7 @@ export default function MyGameDetailsPage() {
             )}
 
           {/* Reveal Deadline Display - Show when reveal deadline is set */}
-          {game.game_state === 2 && game.reveal_deadline && (
+          {game && game.game_state === 2 && game.reveal_deadline && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 ✅ Reveal Phase Active
@@ -608,7 +499,7 @@ export default function MyGameDetailsPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Current Round:</span>
-                  <span className="font-medium">{game.current_round}</span>
+                  <span className="font-medium">{game?.current_round}</span>
                 </div>
               </div>
 
@@ -622,7 +513,7 @@ export default function MyGameDetailsPage() {
           )}
 
           {/* Waiting for Reveal Deadline - Show when reveal phase active but deadline hasn't passed */}
-          {game.game_state === 2 &&
+          {game && game.game_state === 2 &&
             game.reveal_deadline &&
             new Date() <= new Date(game.reveal_deadline) && (
               <div className="bg-card rounded-lg shadow-lg border border-border p-6">
@@ -651,7 +542,7 @@ export default function MyGameDetailsPage() {
             )}
 
           {/* Process Round - Only show after reveal deadline passes */}
-          {game.game_state === 2 &&
+          {game && game.game_state === 2 &&
             game.reveal_deadline &&
             new Date() > new Date(game.reveal_deadline) && (
               <div className="bg-card rounded-lg shadow-lg border border-border p-6">
@@ -685,7 +576,7 @@ export default function MyGameDetailsPage() {
             )}
 
           {/* Game Completed */}
-          {game.game_state === 3 && (
+          {game && game.game_state === 3 && (
             <div className="bg-card rounded-lg shadow-lg border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
                 🎉 Game Completed
@@ -724,6 +615,20 @@ export default function MyGameDetailsPage() {
             <p className="text-green-600 text-sm mt-1">The operation completed successfully.</p>
           </div>
         )}
+
+        {/* Debug Panel for My Games */}
+        <GameDebugPanel 
+          gameHookData={{
+            game,
+            loading,
+            error,
+            hasUserJoined: () => true, // Creator is always "joined"
+            hasUserCommitted: () => false, // Creator doesn't commit
+            hasUserRevealed: () => false // Creator doesn't reveal
+          }}
+          user={{ addr: user?.addr || undefined, loggedIn: user?.loggedIn || false }}
+          gameId={gameId}
+        />
       </div>
     </div>
   );
