@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
+const WebSocket = require('ws');
+const http = require('http');
 require('dotenv').config();
 
 const { DatabaseClient } = require('./database/client');
@@ -11,6 +13,10 @@ const { systemMonitor } = require('./utils/monitoring');
 
 const app = express();
 const port = process.env.PORT || 3001;
+const wsPort = process.env.WS_PORT || 8080;
+
+// Create HTTP server for Express
+const server = http.createServer(app);
 
 // Initialize database client
 const dbClient = new DatabaseClient();
@@ -18,6 +24,141 @@ const dbClient = new DatabaseClient();
 // Global variables to track event listener status
 let eventListener = null;
 let eventListenerStartTime = null;
+
+// WebSocket server setup
+const wss = new WebSocket.Server({ port: wsPort });
+const clients = new Map(); // Track clients and their subscriptions
+
+// WebSocket connection handler
+wss.on('connection', (ws) => {
+  logger.info('New WebSocket client connected');
+  
+  // Initialize client data
+  const clientId = Date.now().toString();
+  clients.set(clientId, {
+    ws: ws,
+    subscriptions: new Set(),
+    connected: Date.now(),
+    lastPing: Date.now()
+  });
+
+  // Handle incoming messages
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      
+      if (data.action === 'subscribe' && data.gameId) {
+        const gameId = parseInt(data.gameId);
+        clients.get(clientId).subscriptions.add(`game-${gameId}`);
+        
+        logger.info(`Client ${clientId} subscribed to game ${gameId}`);
+        
+        // Send confirmation
+        ws.send(JSON.stringify({
+          type: 'subscription-confirmed',
+          gameId: gameId,
+          timestamp: new Date().toISOString()
+        }));
+      }
+      
+      if (data.action === 'unsubscribe' && data.gameId) {
+        const gameId = parseInt(data.gameId);
+        clients.get(clientId).subscriptions.delete(`game-${gameId}`);
+        
+        logger.info(`Client ${clientId} unsubscribed from game ${gameId}`);
+      }
+      
+      if (data.action === 'ping') {
+        clients.get(clientId).lastPing = Date.now();
+        // Send pong response
+        ws.send(JSON.stringify({
+          type: 'pong',
+          timestamp: new Date().toISOString()
+        }));
+      }
+      
+    } catch (error) {
+      logger.error('Error processing WebSocket message:', error);
+    }
+  });
+
+  // Handle client disconnect
+  ws.on('close', () => {
+    logger.info(`WebSocket client ${clientId} disconnected`);
+    clients.delete(clientId);
+  });
+
+  // Send welcome message
+  ws.send(JSON.stringify({
+    type: 'welcome',
+    clientId: clientId,
+    timestamp: new Date().toISOString(),
+    message: 'Connected to Minority Rule indexer WebSocket'
+  }));
+});
+
+// Function to broadcast messages to subscribed clients
+function broadcastToGame(gameId, message) {
+  const gameChannel = `game-${gameId}`;
+  let sentCount = 0;
+  
+  clients.forEach((client, clientId) => {
+    if (client.subscriptions.has(gameChannel) && client.ws.readyState === WebSocket.OPEN) {
+      try {
+        client.ws.send(JSON.stringify({
+          ...message,
+          gameId: gameId,
+          timestamp: new Date().toISOString()
+        }));
+        sentCount++;
+      } catch (error) {
+        logger.error(`Error sending message to client ${clientId}:`, error);
+      }
+    }
+  });
+  
+  if (sentCount > 0) {
+    logger.info(`Broadcasted message to ${sentCount} clients for game ${gameId}`);
+  }
+}
+
+// Function to broadcast to all clients
+function broadcastToAll(message) {
+  let sentCount = 0;
+  
+  clients.forEach((client, clientId) => {
+    if (client.ws.readyState === WebSocket.OPEN) {
+      try {
+        client.ws.send(JSON.stringify({
+          ...message,
+          timestamp: new Date().toISOString()
+        }));
+        sentCount++;
+      } catch (error) {
+        logger.error(`Error sending message to client ${clientId}:`, error);
+      }
+    }
+  });
+  
+  logger.info(`Broadcasted message to ${sentCount} clients`);
+}
+
+// Connection cleanup - remove inactive clients
+setInterval(() => {
+  const now = Date.now();
+  const timeout = 5 * 60 * 1000; // 5 minutes
+  
+  clients.forEach((client, clientId) => {
+    if (now - client.lastPing > timeout || client.ws.readyState !== WebSocket.OPEN) {
+      logger.info(`Cleaning up inactive client ${clientId}`);
+      clients.delete(clientId);
+      
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.close();
+      }
+    }
+  });
+}, 60000); // Check every minute
 
 // Middleware
 app.use(helmet());
@@ -225,9 +366,41 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Start server
-const server = app.listen(port, async () => {
+// Add WebSocket status to health check
+app.get('/health/websocket', (req, res) => {
+  try {
+    const connectedClients = clients.size;
+    const totalSubscriptions = Array.from(clients.values())
+      .reduce((total, client) => total + client.subscriptions.size, 0);
+    
+    res.json({
+      status: 'healthy',
+      websocket_port: wsPort,
+      connected_clients: connectedClients,
+      total_subscriptions: totalSubscriptions,
+      clients: Array.from(clients.entries()).map(([id, client]) => ({
+        id,
+        connected_at: new Date(client.connected).toISOString(),
+        subscriptions: Array.from(client.subscriptions)
+      }))
+    });
+  } catch (error) {
+    logger.error('WebSocket health check failed:', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message
+    });
+  }
+});
+
+// Export broadcast functions for use by event processor
+module.exports.broadcastToGame = broadcastToGame;
+module.exports.broadcastToAll = broadcastToAll;
+
+// Start HTTP server
+server.listen(port, async () => {
   logger.info(`Minority Rule Indexer started on port ${port}`);
+  logger.info(`WebSocket server started on port ${wsPort}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
   logger.info(`Flow Network: ${process.env.FLOW_NETWORK}`);
   
@@ -243,9 +416,9 @@ const server = app.listen(port, async () => {
     logger.error('Database connection error:', error);
   }
 
-  // Start Flow event listener
+  // Start Flow event listener with WebSocket broadcast functions
   try {
-    eventListener = await startFlowEventListener(dbClient);
+    eventListener = await startFlowEventListener(dbClient, { broadcastToGame, broadcastToAll });
     eventListenerStartTime = Date.now();
     logger.info('Flow event listener started');
   } catch (error) {
@@ -256,4 +429,4 @@ const server = app.listen(port, async () => {
   systemMonitor.startMonitoring(5); // Report every 5 minutes
 });
 
-module.exports = { app, server };
+module.exports = { app, server, broadcastToGame, broadcastToAll };

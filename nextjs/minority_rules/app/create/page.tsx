@@ -140,7 +140,6 @@ export default function CreateGamePage() {
     }
   };
 
-  // Realtime subscription is now handled by RealtimeGameProvider globally
 
   if (!user?.loggedIn) {
     return (

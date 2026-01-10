@@ -2,8 +2,9 @@ const { GAME_STATES, PLAYER_STATUS } = require('../database/types');
 const { logger } = require('../utils/logger');
 
 class GameEventProcessor {
-  constructor(dbClient) {
+  constructor(dbClient, websocket = null) {
     this.dbClient = dbClient;
+    this.websocket = websocket; // { broadcastToGame, broadcastToAll }
   }
 
   /**
@@ -56,6 +57,21 @@ class GameEventProcessor {
         await this.dbClient.updatePlayerStats(eventData.player, { total_games: 1 });
       }
 
+      // Broadcast WebSocket update for player joined
+      if (this.websocket && this.websocket.broadcastToGame) {
+        this.websocket.broadcastToGame(parseInt(eventData.gameId), {
+          type: 'player-action',
+          action: 'joined',
+          playerAddress: eventData.player,
+          newPlayerCount: (game?.total_players || 0) + 1,
+          gameData: game ? {
+            ...game,
+            total_players: (game.total_players || 0) + 1,
+            updated_at: new Date().toISOString()
+          } : null
+        });
+      }
+
       logger.info(`Player ${eventData.player} joined game ${eventData.gameId}`);
     } catch (error) {
       logger.error('Error processing PlayerJoined event:', error);
@@ -95,6 +111,16 @@ class GameEventProcessor {
       if (error) {
         logger.error('Failed to insert commit:', error);
         return;
+      }
+
+      // Broadcast WebSocket update for vote committed
+      if (this.websocket && this.websocket.broadcastToGame) {
+        this.websocket.broadcastToGame(parseInt(eventData.gameId), {
+          type: 'player-action',
+          action: 'committed',
+          playerAddress: eventData.player,
+          round: parseInt(eventData.round)
+        });
       }
 
       logger.info(`Vote committed for player ${eventData.player} in game ${eventData.gameId} round ${eventData.round}`);
@@ -137,6 +163,17 @@ class GameEventProcessor {
       if (error) {
         logger.error('Failed to insert reveal:', error);
         return;
+      }
+
+      // Broadcast WebSocket update for vote revealed
+      if (this.websocket && this.websocket.broadcastToGame) {
+        this.websocket.broadcastToGame(parseInt(eventData.gameId), {
+          type: 'player-action',
+          action: 'revealed',
+          playerAddress: eventData.player,
+          round: parseInt(eventData.round),
+          vote: eventData.vote === 'YES' || eventData.vote === true
+        });
       }
 
       logger.info(`Vote revealed for player ${eventData.player} in game ${eventData.gameId} round ${eventData.round}: ${eventData.vote}`);
@@ -192,6 +229,21 @@ class GameEventProcessor {
         };
 
         await this.dbClient.upsertGame(updatedGame);
+
+        // Broadcast WebSocket update for round processed
+        if (this.websocket && this.websocket.broadcastToGame) {
+          this.websocket.broadcastToGame(parseInt(eventData.gameId), {
+            type: 'round-completed',
+            round: parseInt(eventData.round),
+            results: {
+              yesCount: parseInt(eventData.yesCount || 0),
+              noCount: parseInt(eventData.noCount || 0),
+              minority: eventData.minorityVote === 'YES' || eventData.minorityVote === true,
+              playersRemaining: parseInt(eventData.votesRemaining || 0)
+            },
+            gameData: updatedGame
+          });
+        }
       }
 
       // Update commits and reveals with round_id
@@ -237,11 +289,68 @@ class GameEventProcessor {
         };
 
         await this.dbClient.upsertGame(updatedGame);
+
+        // Broadcast WebSocket update
+        if (this.websocket && this.websocket.broadcastToGame) {
+          this.websocket.broadcastToGame(parseInt(eventData.gameId), {
+            type: 'game-update',
+            event: 'CommitDeadlineSet',
+            data: updatedGame
+          });
+        }
       }
 
       logger.info(`Commit deadline set for game ${eventData.gameId} round ${eventData.round}: ${eventData.deadline}`);
     } catch (error) {
       logger.error('Error processing CommitDeadlineSet event:', error);
+    }
+  }
+
+  /**
+   * Process RevealDeadlineSet event
+   * @param {Object} eventData - Flow event data
+   */
+  async processRevealDeadlineSet(eventData) {
+    try {
+      // Add defensive checks
+      if (!eventData) {
+        logger.error('RevealDeadlineSet event: eventData is null or undefined');
+        return;
+      }
+
+      logger.info('RevealDeadlineSet eventData structure:', JSON.stringify(eventData, null, 2));
+
+      // Check required properties
+      if (!eventData.gameId || !eventData.deadline) {
+        logger.error('RevealDeadlineSet event: missing required properties', eventData);
+        return;
+      }
+
+      // Update reveal deadline in game
+      const { data: game } = await this.dbClient.getGame(parseInt(eventData.gameId));
+      if (game) {
+        const updatedGame = {
+          ...game,
+          game_state: GAME_STATES.REVEAL_PHASE,
+          reveal_deadline: new Date(parseFloat(eventData.deadline) * 1000).toISOString(),
+          current_round: parseInt(eventData.round || game.current_round || 1)
+        };
+
+        await this.dbClient.upsertGame(updatedGame);
+
+        // Broadcast WebSocket update
+        if (this.websocket && this.websocket.broadcastToGame) {
+          this.websocket.broadcastToGame(parseInt(eventData.gameId), {
+            type: 'game-update',
+            event: 'RevealDeadlineSet',
+            data: updatedGame
+          });
+        }
+      }
+
+      logger.info(`Reveal deadline set for game ${eventData.gameId} round ${eventData.round}: ${eventData.deadline}`);
+    } catch (error) {
+      logger.error('Error processing RevealDeadlineSet event:', error);
     }
   }
 
@@ -267,8 +376,9 @@ class GameEventProcessor {
 
       // Update game state to completed
       const { data: game } = await this.dbClient.getGame(parseInt(eventData.gameId));
+      let updatedGame = null;
       if (game) {
-        const updatedGame = {
+        updatedGame = {
           ...game,
           game_state: GAME_STATES.COMPLETED
         };
@@ -306,6 +416,19 @@ class GameEventProcessor {
 
           await this.dbClient.upsertGamePlayer(playerData);
         }
+      }
+
+      // Broadcast WebSocket update for game completed
+      if (this.websocket && this.websocket.broadcastToGame) {
+        const winners = Array.isArray(eventData.winners) ? eventData.winners : [eventData.winners];
+        const prizePerWinner = parseFloat(eventData.prizePerWinner);
+        
+        this.websocket.broadcastToGame(parseInt(eventData.gameId), {
+          type: 'game-completed',
+          winners: winners || [],
+          prizePerWinner: prizePerWinner || 0,
+          gameData: updatedGame
+        });
       }
 
       logger.info(`Game ${eventData.gameId} completed with ${eventData.winners?.length || 1} winner(s)`);

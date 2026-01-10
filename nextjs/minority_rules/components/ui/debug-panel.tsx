@@ -96,9 +96,9 @@ interface GameDebugPanelProps {
     game: any;
     loading: boolean;
     error: string | null;
-    hasUserJoined: () => boolean;
-    hasUserCommitted: () => boolean; 
-    hasUserRevealed: () => boolean;
+    hasUserJoined: boolean;
+    hasUserCommitted: boolean; 
+    hasUserRevealed: boolean;
   };
   user?: {
     addr?: string;
@@ -141,9 +141,9 @@ export const GameDebugPanel: React.FC<GameDebugPanelProps> = ({
   }
 
   const participationStatus = {
-    hasJoined: gameHookData.hasUserJoined(),
-    hasCommitted: gameHookData.hasUserCommitted(),
-    hasRevealed: gameHookData.hasUserRevealed()
+    hasJoined: gameHookData.hasUserJoined,
+    hasCommitted: gameHookData.hasUserCommitted,
+    hasRevealed: gameHookData.hasUserRevealed
   };
 
   const hookSummary = {

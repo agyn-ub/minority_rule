@@ -1,6 +1,6 @@
 "use client";
 import { useFlowUser } from "@/lib/useFlowUser";
-import { useRealtimeGameSingle } from "@/contexts/RealtimeGameProvider";
+import { useWebSocketGameContext } from "@/contexts/WebSocketProvider";
 import { useState, useEffect } from "react";
 // React SDK removed - using FCL directly
 import Link from "next/link";
@@ -39,8 +39,8 @@ export default function MyGameDetailsPage() {
   const params = useParams();
   const gameId = params.gameId as string;
 
-  // Use the new simplified hook
-  const { game, loading, error } = useRealtimeGameSingle(parseInt(gameId));
+  // Use WebSocket context instead of Supabase real-time
+  const { game, loading, error, isConnected, connectionStatus } = useWebSocketGameContext();
   const [commitDuration, setCommitDuration] = useState("50"); // 1 hour default
   const [revealDuration, setRevealDuration] = useState("40"); // 30 minutes default
 
@@ -393,6 +393,17 @@ export default function MyGameDetailsPage() {
                 {game?.created_at ? new Date(game.created_at).toLocaleDateString() : 'N/A'}
               </p>
             </div>
+          </div>
+
+          {/* WebSocket Connection Status */}
+          <div className="flex items-center justify-between py-2 px-4 bg-muted/30 rounded-lg mb-4">
+            <div className="flex items-center gap-2 text-sm">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className="text-muted-foreground">
+                Real-time: {isConnected ? 'Connected' : connectionStatus}
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">WebSocket</span>
           </div>
         </div>
 

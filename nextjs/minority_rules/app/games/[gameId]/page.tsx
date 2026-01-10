@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import { useFlowUser } from "@/lib/useFlowUser";
-import { useRealtimeGameSingle } from "@/contexts/RealtimeGameProvider";
+import { WebSocketGameProvider, useWebSocketGameContext } from "@/contexts/WebSocketProvider";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { CopySuccessDialog } from "@/components/ui/info-dialog";
@@ -96,13 +96,9 @@ interface PublicGamePageProps {
   }>;
 }
 
-export default function PublicGamePage({ params }: PublicGamePageProps) {
+function PublicGamePageContent() {
   const { user } = useFlowUser();
-  const resolvedParams = use(params);
-  const gameId = resolvedParams.gameId;
-
-  // Use the new simplified hook
-  const { game, loading, error, hasUserJoined, hasUserCommitted, hasUserRevealed } = useRealtimeGameSingle(parseInt(gameId));
+  const { game, loading, error, participationStatus } = useWebSocketGameContext();
 
   const [userVote, setUserVote] = useState<boolean | null>(null);
   const [userSalt, setUserSalt] = useState('');
@@ -132,7 +128,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       setTxError(null);
 
       const result = await joinGameTransaction(
-        gameId,
+        game?.game_id?.toString() || '',
         contractAddress,
         {
           onStateChange: (state: string, data?: any) => {
@@ -165,7 +161,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       setTxError(null);
 
       const result = await submitVoteCommitTransaction(
-        gameId,
+        game?.game_id?.toString() || '',
         commitHash,
         contractAddress,
         {
@@ -199,7 +195,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       setTxError(null);
 
       const result = await submitVoteRevealTransaction(
-        gameId,
+        game?.game_id?.toString() || '',
         revealVote,
         revealSalt,
         contractAddress,
@@ -227,15 +223,15 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     }
   };
 
-  // Participation status comes directly from hook
-  const userHasJoined = hasUserJoined();
-  const userHasCommitted = hasUserCommitted();
-  const userHasRevealed = hasUserRevealed();
+  // Use participation status from WebSocket context (real-time)
+  const userHasJoined = participationStatus?.hasJoined ?? false;
+  const userHasCommitted = participationStatus?.hasCommitted ?? false;
+  const userHasRevealed = participationStatus?.hasRevealed ?? false;
 
   // Log initial state when component mounts
   useEffect(() => {
     console.log("🎮 GAMES PAGE: Component mounted:");
-    console.log("  🎯 Game ID:", gameId);
+    console.log("  🎯 Game ID:", game?.game_id);
     console.log("  👤 User address:", user?.addr || "No user");
     console.log("  📊 Initial participation status:", {
       hasJoined: userHasJoined,
@@ -249,7 +245,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
 
   // Fetch completed game data (rounds, winners, reveals)
   const fetchCompletedGameData = async () => {
-    if (!gameId) return;
+    if (!game?.game_id) return;
 
     try {
       setCompletedGameDataLoading(true);
@@ -258,7 +254,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       const { data: roundsData, error: roundsError } = await supabase
         .from('rounds')
         .select('*')
-        .eq('game_id', parseInt(gameId))
+.eq('game_id', game.game_id)
         .order('round_number', { ascending: true });
 
       if (roundsError) {
@@ -271,7 +267,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       const { data: winnersData, error: winnersError } = await supabase
         .from('prize_distributions')
         .select('*')
-        .eq('game_id', parseInt(gameId))
+.eq('game_id', game.game_id)
         .order('distributed_at', { ascending: true });
 
       if (winnersError) {
@@ -284,7 +280,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
       const { data: revealsData, error: revealsError } = await supabase
         .from('reveals')
         .select('*')
-        .eq('game_id', parseInt(gameId))
+.eq('game_id', game.game_id)
         .order('round_number', { ascending: true });
 
       if (revealsError) {
@@ -316,7 +312,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
     if (game?.game_state === GameState.Completed) {
       fetchCompletedGameData();
     }
-  }, [game?.game_state, gameId]);
+  }, [game?.game_state, game?.game_id]);
 
   // Generate commit hash from vote and salt (matches Cadence contract)
   const generateCommitHash = (vote: boolean, salt: string) => {
@@ -799,7 +795,7 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
             <li aria-current="page">
               <div className="flex items-center">
                 <span className="mx-2 text-gray-400">/</span>
-                <span className="text-muted-foreground">Game #{gameId}</span>
+                <span className="text-muted-foreground">Game #{game?.game_id || 'Loading...'}</span>
               </div>
             </li>
           </ol>
@@ -1339,13 +1335,25 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
           game,
           loading,
           error,
-          hasUserJoined,
-          hasUserCommitted,
-          hasUserRevealed
+          hasUserJoined: userHasJoined,
+          hasUserCommitted: userHasCommitted,
+          hasUserRevealed: userHasRevealed
         }}
         user={{ addr: user?.addr || undefined, loggedIn: user?.loggedIn || false }}
-        gameId={gameId}
+        gameId={game?.game_id?.toString() || ''}
       />
     </div>
+  );
+}
+
+export default function PublicGamePage({ params }: PublicGamePageProps) {
+  const resolvedParams = use(params);
+  const gameId = resolvedParams.gameId;
+  const gameIdNum = parseInt(gameId);
+
+  return (
+    <WebSocketGameProvider gameId={gameIdNum}>
+      <PublicGamePageContent />
+    </WebSocketGameProvider>
   );
 }

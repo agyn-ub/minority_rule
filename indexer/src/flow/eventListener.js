@@ -12,9 +12,10 @@ fcl.config({
 });
 
 class FlowEventListener {
-  constructor(dbClient) {
+  constructor(dbClient, websocket = null) {
     this.dbClient = dbClient;
-    this.processor = new GameEventProcessor(dbClient);
+    this.processor = new GameEventProcessor(dbClient, websocket);
+    this.websocket = websocket; // Store reference
     this.isListening = false;
     this.contractAddress = process.env.FLOW_CONTRACT_ADDRESS || '0x01';
     this.unsubscribeFunction = null;
@@ -618,23 +619,9 @@ class FlowEventListener {
       }
 
       const eventData = event.data || event;
+      logger.info('Processing RevealDeadlineSet event with data:', eventData);
 
-      if (!eventData.gameId || !eventData.deadline) {
-        logger.error('RevealDeadlineSet: missing required properties', eventData);
-        return;
-      }
-
-      // Update reveal deadline in game
-      const { data: game } = await this.dbClient.getGame(parseInt(eventData.gameId));
-      if (game) {
-        const updatedGame = {
-          ...game,
-          reveal_deadline: new Date(parseFloat(eventData.deadline) * 1000).toISOString()
-        };
-        await this.dbClient.upsertGame(updatedGame);
-      }
-
-      logger.info(`Reveal deadline set for game ${eventData.gameId} round ${eventData.round}: ${eventData.deadline}`);
+      await this.processor.processRevealDeadlineSet(eventData);
     } catch (error) {
       logger.error('Error processing RevealDeadlineSet event:', error);
     }
@@ -748,9 +735,10 @@ class FlowEventListener {
 /**
  * Start the Flow event listener
  * @param {DatabaseClient} dbClient 
+ * @param {Object} websocket - WebSocket broadcast functions
  */
-async function startFlowEventListener(dbClient) {
-  const listener = new FlowEventListener(dbClient);
+async function startFlowEventListener(dbClient, websocket = null) {
+  const listener = new FlowEventListener(dbClient, websocket);
   await listener.startListening();
   return listener;
 }
