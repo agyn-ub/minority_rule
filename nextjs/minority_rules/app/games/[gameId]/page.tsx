@@ -232,7 +232,7 @@ function PublicGamePageContent() {
   useEffect(() => {
     console.log("🎮 GAMES PAGE: Component mounted:");
     console.log("  🎯 Game ID:", game?.game_id);
-    console.log("  👤 User address:", user?.addr || "No user");
+    console.log("  👤 User:", user);
     console.log("  📊 Initial participation status:", {
       hasJoined: userHasJoined,
       hasCommitted: userHasCommitted,
@@ -254,7 +254,7 @@ function PublicGamePageContent() {
       const { data: roundsData, error: roundsError } = await supabase
         .from('rounds')
         .select('*')
-.eq('game_id', game.game_id)
+        .eq('game_id', game.game_id)
         .order('round_number', { ascending: true });
 
       if (roundsError) {
@@ -267,7 +267,7 @@ function PublicGamePageContent() {
       const { data: winnersData, error: winnersError } = await supabase
         .from('prize_distributions')
         .select('*')
-.eq('game_id', game.game_id)
+        .eq('game_id', game.game_id)
         .order('distributed_at', { ascending: true });
 
       if (winnersError) {
@@ -280,7 +280,7 @@ function PublicGamePageContent() {
       const { data: revealsData, error: revealsError } = await supabase
         .from('reveals')
         .select('*')
-.eq('game_id', game.game_id)
+        .eq('game_id', game.game_id)
         .order('round_number', { ascending: true });
 
       if (revealsError) {
@@ -350,7 +350,7 @@ function PublicGamePageContent() {
     );
   }
 
-  if (error || !game) {
+  if (error || (!loading && !game)) {
     return (
       <div className="min-h-screen bg-background py-8">
         <div className="max-w-4xl mx-auto px-4">
@@ -375,6 +375,20 @@ function PublicGamePageContent() {
                 Go Home
               </Link>
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Return loading state if game is still null (prevents TypeScript null errors)
+  if (!game) {
+    return (
+      <div className="min-h-screen bg-background py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+            <p className="mt-2 text-muted-foreground">Loading game...</p>
           </div>
         </div>
       </div>
@@ -1162,6 +1176,35 @@ function PublicGamePageContent() {
                     </div>
                   )}
 
+                {/* Waiting for Reveal Phase - Show when user has committed but reveal phase hasn't started */}
+                {game.game_state === GameState.CommitPhase &&
+                  user?.loggedIn &&
+                  userHasJoined &&
+                  userHasCommitted &&
+                  (!game.reveal_deadline || new Date() < new Date(game.commit_deadline)) && (
+                    <div className="bg-card rounded-lg shadow-lg p-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-4">⏳ Waiting for Reveal Phase</h3>
+                      <div className="text-center">
+                        <div className="text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                          <p className="font-medium mb-2">Your vote has been committed successfully</p>
+                          <p className="text-sm text-blue-600">Waiting for the reveal phase to begin...</p>
+                        </div>
+
+                        <div className="text-sm text-muted-foreground space-y-2">
+                          <p><strong>Current Status:</strong></p>
+                          <p>• Your vote is securely committed and hidden</p>
+                          <p>• Waiting for other players to commit their votes</p>
+                          <p>• The reveal phase will start automatically when the commit phase ends</p>
+                          {game.commit_deadline && (
+                            <p>• Commit phase ends: {new Date(game.commit_deadline).toLocaleString()}</p>
+                          )}
+                          <p className="font-medium text-blue-700 mt-4">
+                            Make sure you saved your salt - you'll need it to reveal your vote!
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                 {/* Reveal Vote Form - Show only if user has committed and game is in reveal phase */}
                 {game.game_state === GameState.RevealPhase &&
@@ -1285,6 +1328,35 @@ function PublicGamePageContent() {
                       </div>
                     </div>
                   )}
+
+                {/* Waiting for Round Processing - Show when reveal deadline has passed but round not processed */}
+                {game.game_state === GameState.RevealPhase &&
+                  game.reveal_deadline &&
+                  new Date() >= new Date(game.reveal_deadline) &&
+                  user?.loggedIn &&
+                  userHasJoined &&
+                  userHasCommitted && (
+                    <div className="bg-card rounded-lg shadow-lg p-6">
+                      <h3 className="text-lg font-semibold text-foreground mb-4">⚙️ Processing Round...</h3>
+                      <div className="text-center">
+                        <div className="text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                          <p className="font-medium mb-2">Reveal phase has ended</p>
+                          <p className="text-sm text-orange-600">Round is being processed automatically...</p>
+                        </div>
+
+                        <div className="text-sm text-muted-foreground space-y-2">
+                          <p><strong>What's happening:</strong></p>
+                          <p>• All votes are being tallied</p>
+                          <p>• Minority voters will be identified</p>
+                          <p>• Players who voted with the majority are eliminated</p>
+                          <p>• Only minority voters advance to the next round</p>
+                          <p className="font-medium text-orange-700 mt-4">
+                            Please wait while the round is processed...
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
               </div>
             </div>
           )}
@@ -1330,7 +1402,7 @@ function PublicGamePageContent() {
       />
 
       {/* Debug Panel */}
-      <GameDebugPanel 
+      <GameDebugPanel
         gameHookData={{
           game,
           loading,
@@ -1350,9 +1422,12 @@ export default function PublicGamePage({ params }: PublicGamePageProps) {
   const resolvedParams = use(params);
   const gameId = resolvedParams.gameId;
   const gameIdNum = parseInt(gameId);
+  const { loading: userLoading } = useFlowUser();
+
+  console.log("🔍 PublicGamePage - gameId from URL:", gameId, "parsed as number:", gameIdNum, "userLoading:", userLoading);
 
   return (
-    <WebSocketGameProvider gameId={gameIdNum}>
+    <WebSocketGameProvider gameId={gameIdNum} userLoading={userLoading}>
       <PublicGamePageContent />
     </WebSocketGameProvider>
   );

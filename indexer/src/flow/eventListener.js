@@ -272,31 +272,31 @@ class FlowEventListener {
           await this.handlePlayerJoined(event.data);
           break;
         case 'GameStarted':
-          await this.handleGameStarted(event);
+          await this.handleGameStarted(event.data);
           break;
         case 'VoteCommitted':
-          await this.handleVoteCommitted(event);
+          await this.handleVoteCommitted(event.data);
           break;
         case 'VoteRevealed':
-          await this.handleVoteRevealed(event);
+          await this.handleVoteRevealed(event.data);
           break;
         case 'CommitPhaseStarted':
-          await this.handleCommitPhaseStarted(event);
+          await this.handleCommitPhaseStarted(event.data);
           break;
         case 'RevealPhaseStarted':
-          await this.handleRevealPhaseStarted(event);
+          await this.handleRevealPhaseStarted(event.data);
           break;
         case 'NewRoundStarted':
-          await this.handleNewRoundStarted(event);
+          await this.handleNewRoundStarted(event.data);
           break;
         case 'CommitDeadlineSet':
           await this.handleCommitDeadlineSet(event.data);
           break;
         case 'RevealDeadlineSet':
-          await this.handleRevealDeadlineSet(event);
+          await this.handleRevealDeadlineSet(event.data);
           break;
         case 'InvalidReveal':
-          await this.handleInvalidReveal(event);
+          await this.handleInvalidReveal(event.data);
           break;
         case 'RoundCompleted':
           await this.handleRoundCompleted(event.data);
@@ -305,7 +305,7 @@ class FlowEventListener {
           await this.handleGameCompleted(event.data);
           break;
         case 'PrizeDistributed':
-          await this.handlePrizeDistributed(event);
+          await this.handlePrizeDistributed(event.data);
           break;
         default:
           logger.warn(`Unknown event type: ${eventName}`);
@@ -348,21 +348,17 @@ class FlowEventListener {
 
   /**
    * Handle VoteCommitted event
-   * @param {Object} event 
+   * @param {Object} eventData - Flow event data (already extracted from event.data)
    */
-  async handleVoteCommitted(event) {
+  async handleVoteCommitted(eventData) {
     try {
-      logger.info('Processing VoteCommitted event, raw event:', JSON.stringify(event, null, 2));
+      logger.info('Processing VoteCommitted event with data:', JSON.stringify(eventData, null, 2));
 
-      // Check if event data exists
-      if (!event || (!event.data && !event.gameId)) {
-        logger.error('VoteCommitted: Invalid event structure - no data found');
+      // Check if event data exists and has required fields
+      if (!eventData || !eventData.gameId || !eventData.player || !eventData.round || !eventData.commitHash) {
+        logger.error('VoteCommitted: Invalid event structure - missing required fields', eventData);
         return;
       }
-
-      // Use event.data if it exists, otherwise use event directly
-      const eventData = event.data || event;
-      logger.info('Processing VoteCommitted event with data:', eventData);
 
       await this.processor.processVoteCommitted(eventData);
     } catch (error) {

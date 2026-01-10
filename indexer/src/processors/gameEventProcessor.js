@@ -93,7 +93,7 @@ class GameEventProcessor {
       logger.info('VoteCommitted eventData structure:', JSON.stringify(eventData, null, 2));
 
       // Check required properties
-      if (!eventData.gameId || !eventData.player || !eventData.round) {
+      if (!eventData.gameId || !eventData.player || !eventData.round || !eventData.commitHash) {
         logger.error('VoteCommitted event: missing required properties', eventData);
         return;
       }
@@ -101,8 +101,8 @@ class GameEventProcessor {
       const commitData = {
         game_id: parseInt(eventData.gameId),
         round_number: parseInt(eventData.round),
-        player_address: eventData.player, // Fixed: contract emits 'player', not 'playerAddress'
-        commit_hash: null, // Contract doesn't emit commitHash, will be generated client-side
+        player_address: eventData.player,
+        commit_hash: eventData.commitHash,
         committed_at: new Date().toISOString(),
         round_id: null // Will be set when round is processed
       };
