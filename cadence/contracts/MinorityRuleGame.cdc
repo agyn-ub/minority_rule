@@ -8,7 +8,7 @@ access(all) contract MinorityRuleGame {
     access(all) event PlayerJoined(gameId: UInt64, player: Address, amount: UFix64, totalPlayers: UInt32)
     access(all) event GameStarted(gameId: UInt64, totalPlayers: UInt32)
     access(all) event VoteCommitted(gameId: UInt64, round: UInt8, player: Address, commitHash: String)
-    access(all) event VoteRevealed(gameId: UInt64, round: UInt8, player: Address, vote: Bool)
+    access(all) event VoteRevealed(gameId: UInt64, round: UInt8, player: Address, vote: Bool, salt: String)
     access(all) event CommitPhaseStarted(gameId: UInt64, round: UInt8, deadline: UFix64)
     access(all) event RevealPhaseStarted(gameId: UInt64, round: UInt8)
     access(all) event NewRoundStarted(gameId: UInt64, round: UInt8)
@@ -318,7 +318,8 @@ access(all) contract MinorityRuleGame {
                 gameId: self.gameId,
                 round: self.currentRound,
                 player: player,
-                vote: vote
+                vote: vote,
+                salt: salt
             )
         }
         

@@ -144,7 +144,7 @@ class GameEventProcessor {
       logger.info('VoteRevealed eventData structure:', JSON.stringify(eventData, null, 2));
 
       // Check required properties
-      if (!eventData.gameId || !eventData.player || !eventData.round) {
+      if (!eventData.gameId || !eventData.player || !eventData.round || !eventData.salt) {
         logger.error('VoteRevealed event: missing required properties', eventData);
         return;
       }
@@ -154,7 +154,7 @@ class GameEventProcessor {
         round_number: parseInt(eventData.round),
         player_address: eventData.player, // Fixed: contract emits 'player', not 'playerAddress'
         vote_value: eventData.vote === 'YES' || eventData.vote === true,
-        salt: null, // Contract doesn't emit salt, will be managed client-side
+        salt: eventData.salt, // Extract salt from VoteRevealed event
         revealed_at: new Date().toISOString(),
         round_id: null // Will be set when round is processed
       };
