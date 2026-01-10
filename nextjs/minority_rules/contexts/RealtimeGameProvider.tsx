@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useFlowUser } from '@/lib/useFlowUser';
 
@@ -186,66 +186,3 @@ export const useRealtimeGameSingle = (gameId?: number) => {
   };
 };
 
-// Simple connection status hook for create page
-export const useRealtimeConnection = () => {
-  const { user } = useFlowUser();
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
-  const channelRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!user?.addr) {
-      setIsConnected(false);
-      setConnectionStatus('disconnected');
-      return;
-    }
-
-    // Clean up existing channel if any
-    if (channelRef.current) {
-      try {
-        supabase.removeChannel(channelRef.current);
-      } catch (error) {
-        console.warn('Error removing existing channel:', error);
-      }
-    }
-
-    // Simple channel just for connection monitoring
-    const channelName = `connection-status-${user.addr}`;
-    const channel = supabase
-      .channel(channelName)
-      .subscribe((status) => {
-        setIsConnected(status === 'SUBSCRIBED');
-        setConnectionStatus(status);
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log('🔗 REALTIME CONNECTION: Status:', status);
-        }
-        
-        // Retry connection if failed
-        if (status === 'CHANNEL_ERROR') {
-          setTimeout(() => {
-            try {
-              channel.subscribe();
-            } catch (error) {
-              console.warn('Connection retry failed:', error);
-            }
-          }, 2000);
-        }
-      });
-
-    channelRef.current = channel;
-
-    return () => {
-      if (channelRef.current) {
-        try {
-          supabase.removeChannel(channelRef.current);
-        } catch (error) {
-          console.warn('Error cleaning up connection channel:', error);
-        }
-        channelRef.current = null;
-      }
-    };
-  }, [user?.addr]);
-
-  return { isConnected, connectionStatus };
-};

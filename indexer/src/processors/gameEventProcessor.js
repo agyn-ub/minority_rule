@@ -7,48 +7,6 @@ class GameEventProcessor {
   }
 
   /**
-   * Process GameCreated event
-   * @param {Object} eventData - Flow event data
-   */
-  async processGameCreated(eventData) {
-    try {
-      // Add defensive checks and debugging
-      if (!eventData) {
-        logger.error('GameCreated event: eventData is null or undefined');
-        return;
-      }
-
-      logger.info('GameCreated eventData structure:', JSON.stringify(eventData, null, 2));
-
-      // Check required properties
-      if (!eventData.gameId) {
-        logger.error('GameCreated event: missing gameId property', eventData);
-        return;
-      }
-
-      const gameData = {
-        game_id: parseInt(eventData.gameId),
-        question_text: eventData.questionText || eventData.question, // Handle both possible names
-        entry_fee: parseFloat(eventData.entryFee || 0),
-        creator_address: eventData.creator,
-        game_state: GAME_STATES.ZERO_PHASE,
-        current_round: 1,
-        created_at: new Date().toISOString()
-      };
-
-      const { data: game, error: gameError } = await this.dbClient.upsertGame(gameData);
-      if (gameError) {
-        logger.error('Failed to insert game:', gameError);
-        return;
-      }
-
-      logger.info(`Game ${eventData.gameId} created successfully`);
-    } catch (error) {
-      logger.error('Error processing GameCreated event:', error);
-    }
-  }
-
-  /**
    * Process PlayerJoined event
    * @param {Object} eventData - Flow event data
    */
@@ -277,7 +235,7 @@ class GameEventProcessor {
           commit_deadline: new Date(parseFloat(eventData.deadline) * 1000).toISOString(),
           current_round: parseInt(eventData.round || game.current_round || 1)
         };
-        
+
         await this.dbClient.upsertGame(updatedGame);
       }
 

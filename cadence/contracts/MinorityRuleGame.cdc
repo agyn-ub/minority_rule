@@ -171,12 +171,6 @@ access(all) contract MinorityRuleGame {
                 phase: self.state.rawValue
             )
             
-            // Emit commit phase started event
-            emit CommitPhaseStarted(
-                gameId: self.gameId,
-                round: self.currentRound,
-                deadline: self.commitDeadline
-            )
         }
         
         access(all) fun setCommitDeadline(durationSeconds: UFix64) {

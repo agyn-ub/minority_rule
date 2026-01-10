@@ -1,33 +1,57 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useFlowUser } from "@/lib/useFlowUser";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createGameTransaction, TX_STATES } from "@/lib/transactions";
-import { useRealtimeConnection } from "@/contexts/RealtimeGameProvider";
-import { DebugPanel } from "@/components/ui/debug-panel";
+import { supabase } from "@/lib/supabase";
 
 export default function CreateGamePage() {
   const { user } = useFlowUser();
-  const { isConnected, connectionStatus } = useRealtimeConnection();
+  const router = useRouter();
   const [questionText, setQuestionText] = useState("");
   const [entryFee, setEntryFee] = useState("1.0");
   const [txState, setTxState] = useState(TX_STATES.IDLE);
   const [txError, setTxError] = useState<string | null>(null);
-  const [showDebug, setShowDebug] = useState(process.env.NODE_ENV === 'development');
+  const [postTxLoading, setPostTxLoading] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState<any>(null);
+  const [extractedGameId, setExtractedGameId] = useState<string | null>(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_MINORITY_RULE_GAME_ADDRESS!;
 
-  // Keyboard shortcut for debug panel
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-        setShowDebug(prev => !prev);
+  // Helper function to extract game ID from transaction
+  const extractGameId = (transaction: any): string | null => {
+    try {
+      // Method 1: Try transaction events first (look for GameCreated event)
+      if (transaction?.events) {
+        for (const event of transaction.events) {
+          if (event.type && event.type.includes('GameCreated') && event.data) {
+            return event.data.gameId?.toString() || null;
+          }
+        }
       }
-    };
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, []);
+
+      // Method 2: Try logs as fallback (look for "Game created with ID: X")
+      if (transaction?.events) {
+        for (const event of transaction.events) {
+          if (event.type && event.type.includes('log') && event.data) {
+            const message = event.data.message || '';
+            const match = message.match(/Game created with ID: (\d+)/);
+            if (match) {
+              return match[1];
+            }
+          }
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error extracting game ID:', error);
+      return null;
+    }
+  };
+
 
 
   // Create game function
@@ -46,8 +70,58 @@ export default function CreateGamePage() {
           onStateChange: (state) => {
             setTxState(state);
           },
-          onSuccess: () => {
-            // Game creation successful - realtime provider will handle redirect
+          onSuccess: async (_, transaction) => {
+            setPostTxLoading(true);
+            setLastTransaction(transaction);
+
+            try {
+              // 1. Extract game ID from blockchain transaction
+              const gameId = extractGameId(transaction);
+              setExtractedGameId(gameId);
+
+              if (!gameId) {
+                throw new Error('Could not extract game ID from transaction');
+              }
+
+              // 2. Save game data to Supabase (creator doesn't auto-join)
+              const gameData = {
+                game_id: parseInt(gameId),
+                question_text: questionText,
+                entry_fee: parseFloat(entryFee),
+                creator_address: user.addr || '',
+                game_state: 0, // Zero Phase - waiting for players to join
+                current_round: 1,
+                total_players: 0, // No players yet - even creator hasn't joined
+                created_at: new Date().toISOString(),
+                commit_deadline: null,
+                reveal_deadline: null
+              };
+
+              const { error } = await supabase
+                .from('games')
+                .insert(gameData);
+
+              if (error) {
+                throw new Error(`Database sync failed: ${error.message}`);
+              }
+
+              console.log('✅ Game saved to database successfully');
+
+              // 3. Redirect to new game page
+              setTimeout(() => {
+                router.push(`/my-games/${gameId}`);
+              }, 500); // Small delay to ensure database is ready
+
+            } catch (error: any) {
+              console.error('❌ Post-transaction error:', error);
+              setTxError(`Game created on blockchain but sync failed: ${error.message}`);
+              // Fallback redirect to my-games
+              setTimeout(() => {
+                router.push('/my-games');
+              }, 1000);
+            } finally {
+              setPostTxLoading(false);
+            }
           },
           onError: (error) => {
             setTxError(error.message || "Failed to create game");
@@ -91,7 +165,7 @@ export default function CreateGamePage() {
 
 
   const isFormValid = questionText.trim().length > 0 && parseFloat(entryFee) > 0;
-  const isCreating = txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING;
+  const isCreating = txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING || postTxLoading;
 
   return (
     <div className="min-h-screen bg-background py-8">
@@ -157,13 +231,6 @@ export default function CreateGamePage() {
               <p className="text-xs font-mono text-muted-foreground mb-2">
                 {user.addr}
               </p>
-              {/* Realtime Status */}
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                <span className="text-xs text-muted-foreground">
-                  Realtime: {isConnected ? 'Connected' : connectionStatus}
-                </span>
-              </div>
             </div>
 
             {/* Submit Button */}
@@ -185,6 +252,7 @@ export default function CreateGamePage() {
                   {txState === TX_STATES.SUBMITTING && "Submitting..."}
                   {txState === TX_STATES.SUBMITTED && "Processing..."}
                   {txState === TX_STATES.SEALING && "Finalizing..."}
+                  {postTxLoading && "Saving to database..."}
                 </span>
               ) : (
                 "Create Game"
@@ -217,76 +285,6 @@ export default function CreateGamePage() {
         </div>
       </div>
 
-      {/* Debug Panel for Game Creation */}
-      {showDebug && (
-        <div className="fixed bottom-4 right-4 w-96 max-h-96 overflow-hidden z-50">
-          <div className="mb-2 flex justify-between items-center">
-            <span className="text-xs text-gray-500 font-mono">Create Game Debug (Ctrl+Shift+D)</span>
-            <button
-              onClick={() => setShowDebug(false)}
-              className="text-gray-400 hover:text-white text-lg"
-            >
-              ×
-            </button>
-          </div>
-
-          <DebugPanel
-            title="Form State"
-            data={{
-              questionText: questionText || '(empty)',
-              questionLength: questionText.length,
-              entryFee: entryFee,
-              entryFeeValid: parseFloat(entryFee) > 0,
-              isFormValid: questionText.trim().length > 0 && parseFloat(entryFee) > 0,
-              isCreating: txState === TX_STATES.SUBMITTING || txState === TX_STATES.SUBMITTED || txState === TX_STATES.SEALING
-            }}
-          />
-
-          <DebugPanel
-            title="User & Auth"
-            data={{
-              userAddress: user?.addr || 'Not connected',
-              loggedIn: user?.loggedIn || false,
-              contractAddress: contractAddress || 'Not configured'
-            }}
-          />
-
-          <DebugPanel
-            title="Transaction State"
-            data={{
-              currentState: txState,
-              hasError: !!txError,
-              errorMessage: txError || 'None',
-              isSubmitting: txState === TX_STATES.SUBMITTING,
-              isSubmitted: txState === TX_STATES.SUBMITTED,
-              isSealing: txState === TX_STATES.SEALING,
-              isSuccess: txState === TX_STATES.SUCCESS,
-              isError: txState === TX_STATES.ERROR
-            }}
-          />
-
-          <DebugPanel
-            title="Realtime Connection"
-            data={{
-              isConnected: isConnected,
-              connectionStatus: connectionStatus,
-              timestamp: new Date().toLocaleTimeString()
-            }}
-          />
-        </div>
-      )}
-
-      {/* Debug Toggle Button */}
-      {!showDebug && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <button
-            onClick={() => setShowDebug(true)}
-            className="bg-gray-800 text-green-400 px-3 py-2 rounded-lg shadow-lg hover:bg-gray-700 transition-colors text-sm font-mono"
-          >
-            🔍 Debug
-          </button>
-        </div>
-      )}
     </div>
   );
 }

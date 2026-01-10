@@ -1,7 +1,6 @@
 "use client";
 import { useFlowUser } from "@/lib/useFlowUser";
 import { useRealtimeGameSingle } from "@/contexts/RealtimeGameProvider";
-
 import { useState, useEffect } from "react";
 // React SDK removed - using FCL directly
 import Link from "next/link";
@@ -13,7 +12,6 @@ import {
   processRoundTransaction,
   TX_STATES
 } from "@/lib/transactions";
-import { GameDebugPanel } from "@/components/ui/debug-panel";
 
 // Helper functions
 const getGameStateName = (state: number): string => {
@@ -40,7 +38,7 @@ export default function MyGameDetailsPage() {
   const { user } = useFlowUser();
   const params = useParams();
   const gameId = params.gameId as string;
-  
+
   // Use the new simplified hook
   const { game, loading, error } = useRealtimeGameSingle(parseInt(gameId));
   const [commitDuration, setCommitDuration] = useState("50"); // 1 hour default
@@ -314,6 +312,66 @@ export default function MyGameDetailsPage() {
           <div className="bg-muted rounded-lg p-4 mb-4">
             <h3 className="font-medium text-foreground mb-2">Question:</h3>
             <p className="text-muted-foreground">{game?.question_text}</p>
+          </div>
+
+          {/* Game Details */}
+          <div className="bg-muted/50 rounded-lg p-4 mb-4">
+            <h3 className="font-medium text-foreground mb-3">Game Details:</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+              <div className="flex flex-col">
+                <span className="text-muted-foreground">Current State:</span>
+                <span className={`px-2 py-1 rounded text-xs font-medium w-fit ${getStateColor(game?.game_state || 0)}`}>
+                  {getGameStateName(game?.game_state || 0)}
+                </span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-muted-foreground">Round:</span>
+                <span className="font-semibold">{game?.current_round}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-muted-foreground">Players:</span>
+                <span className="font-semibold">{game?.total_players}</span>
+              </div>
+              {game?.commit_deadline && (
+                <div className="flex flex-col">
+                  <span className="text-muted-foreground">Commit Deadline:</span>
+                  <span className="font-semibold text-xs">
+                    {new Date(game.commit_deadline).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {game?.reveal_deadline && (
+                <div className="flex flex-col">
+                  <span className="text-muted-foreground">Reveal Deadline:</span>
+                  <span className="font-semibold text-xs">
+                    {new Date(game.reveal_deadline).toLocaleString()}
+                  </span>
+                </div>
+              )}
+              {/* Time Remaining */}
+              {game?.game_state === 1 && game?.commit_deadline && (
+                <div className="flex flex-col">
+                  <span className="text-muted-foreground">Time Left:</span>
+                  <span className="font-semibold text-orange-600">
+                    {new Date(game.commit_deadline) > new Date()
+                      ? `${Math.ceil((new Date(game.commit_deadline).getTime() - new Date().getTime()) / 1000 / 60)}m`
+                      : 'Ended'
+                    }
+                  </span>
+                </div>
+              )}
+              {game?.game_state === 2 && game?.reveal_deadline && (
+                <div className="flex flex-col">
+                  <span className="text-muted-foreground">Time Left:</span>
+                  <span className="font-semibold text-yellow-600">
+                    {new Date(game.reveal_deadline) > new Date()
+                      ? `${Math.ceil((new Date(game.reveal_deadline).getTime() - new Date().getTime()) / 1000 / 60)}m`
+                      : 'Ended'
+                    }
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -616,19 +674,6 @@ export default function MyGameDetailsPage() {
           </div>
         )}
 
-        {/* Debug Panel for My Games */}
-        <GameDebugPanel 
-          gameHookData={{
-            game,
-            loading,
-            error,
-            hasUserJoined: () => true, // Creator is always "joined"
-            hasUserCommitted: () => false, // Creator doesn't commit
-            hasUserRevealed: () => false // Creator doesn't reveal
-          }}
-          user={{ addr: user?.addr || undefined, loggedIn: user?.loggedIn || false }}
-          gameId={gameId}
-        />
       </div>
     </div>
   );

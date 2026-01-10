@@ -18,7 +18,7 @@ class FlowEventListener {
     this.isListening = false;
     this.contractAddress = process.env.FLOW_CONTRACT_ADDRESS || '0x01';
     this.unsubscribeFunction = null;
-    
+
     // Connection monitoring
     this.lastEventReceived = Date.now();
     this.connectionRetries = 0;
@@ -64,13 +64,13 @@ class FlowEventListener {
       logger.info('Flow event listener connected successfully');
     } catch (error) {
       logger.error(`Connection attempt ${this.connectionRetries + 1} failed:`, error);
-      
+
       if (this.connectionRetries < this.maxRetries) {
         this.connectionRetries++;
         const delay = Math.min(this.retryDelay * Math.pow(2, this.connectionRetries), this.maxRetryDelay);
-        
+
         logger.info(`Retrying connection in ${delay}ms... (${this.connectionRetries}/${this.maxRetries})`);
-        
+
         this.reconnectTimeout = setTimeout(() => {
           this._connectWithRetry();
         }, delay);
@@ -84,39 +84,38 @@ class FlowEventListener {
    * Establish the actual FCL event subscription
    */
   async _establishConnection() {
-      // Define all event types we want to listen for (complete list from contract)
-      const eventTypes = [
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.GameCreated`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.PlayerJoined`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.GameStarted`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.VoteCommitted`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.VoteRevealed`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.CommitPhaseStarted`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.RevealPhaseStarted`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.NewRoundStarted`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.CommitDeadlineSet`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.RevealDeadlineSet`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.InvalidReveal`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.RoundCompleted`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.GameCompleted`,
-        `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.PrizeDistributed`
-      ];
+    // Define all event types we want to listen for (complete list from contract)
+    const eventTypes = [
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.PlayerJoined`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.GameStarted`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.VoteCommitted`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.VoteRevealed`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.CommitPhaseStarted`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.RevealPhaseStarted`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.NewRoundStarted`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.CommitDeadlineSet`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.RevealDeadlineSet`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.InvalidReveal`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.RoundCompleted`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.GameCompleted`,
+      `A.${this.contractAddress.replace('0x', '')}.MinorityRuleGame.PrizeDistributed`
+    ];
 
-      // Single websocket connection for all events
-      this.unsubscribeFunction = fcl.events({
-        eventTypes: eventTypes
-      }).subscribe(
-        async (event) => {
-          this.lastEventReceived = Date.now(); // Update activity timestamp
-          await this.handleEvent(event);
-        },
-        (error) => {
-          logger.error('Flow event subscription error:', error);
-          this._handleConnectionError(error);
-        }
-      );
+    // Single websocket connection for all events
+    this.unsubscribeFunction = fcl.events({
+      eventTypes: eventTypes
+    }).subscribe(
+      async (event) => {
+        this.lastEventReceived = Date.now(); // Update activity timestamp
+        await this.handleEvent(event);
+      },
+      (error) => {
+        logger.error('Flow event subscription error:', error);
+        this._handleConnectionError(error);
+      }
+    );
 
-      logger.info(`Flow event listener started successfully for ${eventTypes.length} event types`);
+    logger.info(`Flow event listener started successfully for ${eventTypes.length} event types`);
   }
 
   /**
@@ -125,7 +124,7 @@ class FlowEventListener {
   _handleConnectionError(error) {
     logger.warn('Connection error detected, attempting reconnection...');
     this.isListening = false;
-    
+
     if (this.unsubscribeFunction) {
       try {
         this.unsubscribeFunction();
@@ -134,11 +133,11 @@ class FlowEventListener {
       }
       this.unsubscribeFunction = null;
     }
-    
+
     // Clear health check and heartbeat
     this._stopHealthCheck();
     this._stopHeartbeat();
-    
+
     // Restart connection with retry logic
     setTimeout(() => {
       if (!this.isListening) {
@@ -155,11 +154,11 @@ class FlowEventListener {
    */
   _startHealthCheck() {
     this._stopHealthCheck(); // Clear any existing interval
-    
+
     this.healthCheckInterval = setInterval(() => {
       this._performHealthCheck();
     }, 60000); // Check every minute
-    
+
     logger.info('Health check monitoring started');
   }
 
@@ -170,18 +169,18 @@ class FlowEventListener {
     const now = Date.now();
     const timeSinceLastEvent = now - this.lastEventReceived;
     const fiveMinutes = 5 * 60 * 1000; // 5 minutes in ms
-    
+
     logger.info(`Health check: Last event received ${Math.round(timeSinceLastEvent / 1000)}s ago`);
-    
+
     // If no events received for 5 minutes, perform a Flow node ping
     if (timeSinceLastEvent > fiveMinutes) {
       logger.warn('No events received for 5 minutes, checking Flow node connection...');
-      
+
       try {
         // Simple Flow node health check - get latest block
         const latestBlock = await fcl.send([fcl.getLatestBlock()]);
         const block = await fcl.decode(latestBlock);
-        
+
         if (block && block.id) {
           logger.info(`Flow node healthy - Latest block: ${block.height}`);
           // Update activity to prevent unnecessary reconnections
@@ -212,11 +211,11 @@ class FlowEventListener {
    */
   _startHeartbeat() {
     this._stopHeartbeat(); // Clear any existing interval
-    
+
     this.heartbeatInterval = setInterval(() => {
       this._sendHeartbeat();
     }, 30000); // Send heartbeat every 30 seconds
-    
+
     logger.info('Flow node heartbeat started');
   }
 
@@ -228,7 +227,7 @@ class FlowEventListener {
       // Light-weight ping to Flow node - just get chain ID
       const response = await fcl.send([fcl.getAccount('0x0000000000000001')]);
       const account = await fcl.decode(response);
-      
+
       if (account) {
         logger.debug('Flow heartbeat successful');
       } else {
@@ -260,7 +259,7 @@ class FlowEventListener {
     try {
       // Extract event name from event type (e.g., "GameCreated" from "A.0x01.MinorityRuleGame.GameCreated")
       const eventName = event.type.split('.').pop();
-      
+
       logger.info(`==== ${eventName} EVENT DETECTED ====`);
       logger.info('Event type:', event.type);
       logger.info('Full event structure:', JSON.stringify(event, null, 2));
@@ -268,9 +267,6 @@ class FlowEventListener {
 
       // Route to appropriate handler based on event name
       switch (eventName) {
-        case 'GameCreated':
-          await this.handleGameCreated(event.data);
-          break;
         case 'PlayerJoined':
           await this.handlePlayerJoined(event.data);
           break;
@@ -313,7 +309,7 @@ class FlowEventListener {
         default:
           logger.warn(`Unknown event type: ${eventName}`);
       }
-      
+
       success = true;
       logger.info(`Successfully processed ${event.type.split('.').pop()} event`);
     } catch (error) {
@@ -326,37 +322,13 @@ class FlowEventListener {
   }
 
   /**
-   * Handle GameCreated event
-   * @param {Object} event 
-   */
-  async handleGameCreated(event) {
-    try {
-      logger.info('Processing GameCreated event, raw event:', JSON.stringify(event, null, 2));
-      
-      // Check if event data exists
-      if (!event || (!event.data && !event.gameId)) {
-        logger.error('GameCreated: Invalid event structure - no data found');
-        return;
-      }
-
-      // Use event.data if it exists, otherwise use event directly (FCL structure varies)
-      const eventData = event.data || event;
-      logger.info('Processing GameCreated event with data:', eventData);
-      
-      await this.processor.processGameCreated(eventData);
-    } catch (error) {
-      logger.error('Error processing GameCreated event:', error);
-    }
-  }
-
-  /**
    * Handle PlayerJoined event
    * @param {Object} event - Flow event data
    */
   async handlePlayerJoined(event) {
     try {
       logger.info('Processing PlayerJoined event, raw event:', JSON.stringify(event, null, 2));
-      
+
       // Check if event data exists
       if (!event || (!event.data && !event.gameId)) {
         logger.error('PlayerJoined: Invalid event structure - no data found');
@@ -366,7 +338,7 @@ class FlowEventListener {
       // Use event.data if it exists, otherwise use event directly
       const eventData = event.data || event;
       logger.info('Processing PlayerJoined event with data:', eventData);
-      
+
       await this.processor.processPlayerJoined(eventData);
     } catch (error) {
       logger.error('Error processing PlayerJoined event:', error);
@@ -380,7 +352,7 @@ class FlowEventListener {
   async handleVoteCommitted(event) {
     try {
       logger.info('Processing VoteCommitted event, raw event:', JSON.stringify(event, null, 2));
-      
+
       // Check if event data exists
       if (!event || (!event.data && !event.gameId)) {
         logger.error('VoteCommitted: Invalid event structure - no data found');
@@ -390,7 +362,7 @@ class FlowEventListener {
       // Use event.data if it exists, otherwise use event directly
       const eventData = event.data || event;
       logger.info('Processing VoteCommitted event with data:', eventData);
-      
+
       await this.processor.processVoteCommitted(eventData);
     } catch (error) {
       logger.error('Error processing VoteCommitted event:', error);
@@ -404,7 +376,7 @@ class FlowEventListener {
   async handleVoteRevealed(event) {
     try {
       logger.info('Processing VoteRevealed event, raw event:', JSON.stringify(event, null, 2));
-      
+
       // Check if event data exists
       if (!event || (!event.data && !event.gameId)) {
         logger.error('VoteRevealed: Invalid event structure - no data found');
@@ -414,7 +386,7 @@ class FlowEventListener {
       // Use event.data if it exists, otherwise use event directly
       const eventData = event.data || event;
       logger.info('Processing VoteRevealed event with data:', eventData);
-      
+
       await this.processor.processVoteRevealed(eventData);
     } catch (error) {
       logger.error('Error processing VoteRevealed event:', error);
@@ -441,7 +413,7 @@ class FlowEventListener {
   async handleGameCompleted(event) {
     try {
       logger.info('Processing GameCompleted event, raw event:', JSON.stringify(event, null, 2));
-      
+
       // Check if event data exists
       if (!event || (!event.data && !event.gameId)) {
         logger.error('GameCompleted: Invalid event structure - no data found');
@@ -451,7 +423,7 @@ class FlowEventListener {
       // Use event.data if it exists, otherwise use event directly
       const eventData = event.data || event;
       logger.info('Processing GameCompleted event with data:', eventData);
-      
+
       await this.processor.processGameCompleted(eventData);
     } catch (error) {
       logger.error('Error processing GameCompleted event:', error);
@@ -465,7 +437,7 @@ class FlowEventListener {
   async handleGameStarted(event) {
     try {
       logger.info('Processing GameStarted event, raw event:', JSON.stringify(event, null, 2));
-      
+
       // Check if event data exists
       if (!event || (!event.data && !event.gameId)) {
         logger.error('GameStarted: Invalid event structure - no data found');
@@ -475,7 +447,7 @@ class FlowEventListener {
       // Use event.data if it exists, otherwise use event directly
       const eventData = event.data || event;
       logger.info('Processing GameStarted event with data:', eventData);
-      
+
       // Defensive checks for required properties
       if (!eventData.gameId) {
         logger.error('GameStarted: missing required gameId', eventData);
@@ -491,7 +463,7 @@ class FlowEventListener {
         };
         await this.dbClient.upsertGame(updatedGame);
       }
-      
+
       logger.info(`Game ${eventData.gameId} started with ${eventData.totalPlayers} players`);
     } catch (error) {
       logger.error('Error processing GameStarted event:', error);
@@ -505,7 +477,7 @@ class FlowEventListener {
   async handleCommitPhaseStarted(event) {
     try {
       logger.info('Processing CommitPhaseStarted event, raw event:', JSON.stringify(event, null, 2));
-      
+
       // Check if event data exists
       if (!event || (!event.data && !event.gameId)) {
         logger.error('CommitPhaseStarted: Invalid event structure - no data found');
@@ -515,7 +487,7 @@ class FlowEventListener {
       // Use event.data if it exists, otherwise use event directly
       const eventData = event.data || event;
       logger.info('Processing CommitPhaseStarted event with data:', eventData);
-      
+
       if (!eventData.gameId) {
         logger.error('CommitPhaseStarted: missing required gameId', eventData);
         return;
@@ -531,7 +503,7 @@ class FlowEventListener {
         };
         await this.dbClient.upsertGame(updatedGame);
       }
-      
+
       logger.info(`Commit phase started for game ${eventData.gameId} round ${eventData.round}`);
     } catch (error) {
       logger.error('Error processing CommitPhaseStarted event:', error);
@@ -545,14 +517,14 @@ class FlowEventListener {
   async handleRevealPhaseStarted(event) {
     try {
       logger.info('Processing RevealPhaseStarted event, raw event:', JSON.stringify(event, null, 2));
-      
+
       if (!event || (!event.data && !event.gameId)) {
         logger.error('RevealPhaseStarted: Invalid event structure');
         return;
       }
 
       const eventData = event.data || event;
-      
+
       if (!eventData.gameId) {
         logger.error('RevealPhaseStarted: missing gameId', eventData);
         return;
@@ -566,7 +538,7 @@ class FlowEventListener {
         };
         await this.dbClient.upsertGame(updatedGame);
       }
-      
+
       logger.info(`Reveal phase started for game ${eventData.gameId} round ${eventData.round}`);
     } catch (error) {
       logger.error('Error processing RevealPhaseStarted event:', error);
@@ -580,14 +552,14 @@ class FlowEventListener {
   async handleNewRoundStarted(event) {
     try {
       logger.info('Processing NewRoundStarted event, raw event:', JSON.stringify(event, null, 2));
-      
+
       if (!event || (!event.data && !event.gameId)) {
         logger.error('NewRoundStarted: Invalid event structure');
         return;
       }
 
       const eventData = event.data || event;
-      
+
       if (!eventData.gameId) {
         logger.error('NewRoundStarted: missing gameId', eventData);
         return;
@@ -603,7 +575,7 @@ class FlowEventListener {
         };
         await this.dbClient.upsertGame(updatedGame);
       }
-      
+
       logger.info(`New round ${eventData.round} started for game ${eventData.gameId}`);
     } catch (error) {
       logger.error('Error processing NewRoundStarted event:', error);
@@ -617,7 +589,7 @@ class FlowEventListener {
   async handleCommitDeadlineSet(eventData) {
     try {
       logger.info('Processing CommitDeadlineSet event, raw event:', JSON.stringify(eventData, null, 2));
-      
+
       // Check if event data exists
       if (!eventData || !eventData.gameId) {
         logger.error('CommitDeadlineSet: Invalid event structure - no data found');
@@ -625,7 +597,7 @@ class FlowEventListener {
       }
 
       logger.info('Processing CommitDeadlineSet event with data:', eventData);
-      
+
       await this.processor.processCommitDeadlineSet(eventData);
     } catch (error) {
       logger.error('Error processing CommitDeadlineSet event:', error);
@@ -639,14 +611,14 @@ class FlowEventListener {
   async handleRevealDeadlineSet(event) {
     try {
       logger.info('Processing RevealDeadlineSet event, raw event:', JSON.stringify(event, null, 2));
-      
+
       if (!event || (!event.data && !event.gameId)) {
         logger.error('RevealDeadlineSet: Invalid event structure');
         return;
       }
 
       const eventData = event.data || event;
-      
+
       if (!eventData.gameId || !eventData.deadline) {
         logger.error('RevealDeadlineSet: missing required properties', eventData);
         return;
@@ -661,7 +633,7 @@ class FlowEventListener {
         };
         await this.dbClient.upsertGame(updatedGame);
       }
-      
+
       logger.info(`Reveal deadline set for game ${eventData.gameId} round ${eventData.round}: ${eventData.deadline}`);
     } catch (error) {
       logger.error('Error processing RevealDeadlineSet event:', error);
@@ -675,14 +647,14 @@ class FlowEventListener {
   async handleInvalidReveal(event) {
     try {
       logger.info('Processing InvalidReveal event, raw event:', JSON.stringify(event, null, 2));
-      
+
       if (!event || (!event.data && !event.gameId)) {
         logger.error('InvalidReveal: Invalid event structure');
         return;
       }
 
       const eventData = event.data || event;
-      
+
       // Log invalid reveal - may want to track this for statistics
       logger.warn(`Invalid reveal detected for player ${eventData.player} in game ${eventData.gameId} round ${eventData.round}`);
     } catch (error) {
@@ -697,7 +669,7 @@ class FlowEventListener {
   async handleRoundCompleted(event) {
     try {
       logger.info('Processing RoundCompleted event, raw event:', JSON.stringify(event, null, 2));
-      
+
       // Check if event data exists
       if (!event || (!event.data && !event.gameId)) {
         logger.error('RoundCompleted: Invalid event structure - no data found');
@@ -707,7 +679,7 @@ class FlowEventListener {
       // Use event.data if it exists, otherwise use event directly
       const eventData = event.data || event;
       logger.info('Processing RoundCompleted event with data:', eventData);
-      
+
       await this.processor.processRoundProcessed(eventData);
     } catch (error) {
       logger.error('Error processing RoundCompleted event:', error);
@@ -721,14 +693,14 @@ class FlowEventListener {
   async handlePrizeDistributed(event) {
     try {
       logger.info('Processing PrizeDistributed event, raw event:', JSON.stringify(event, null, 2));
-      
+
       if (!event || (!event.data && !event.gameId)) {
         logger.error('PrizeDistributed: Invalid event structure');
         return;
       }
 
       const eventData = event.data || event;
-      
+
       if (!eventData.gameId || !eventData.winner || !eventData.amount) {
         logger.error('PrizeDistributed: missing required properties', eventData);
         return;
@@ -742,7 +714,7 @@ class FlowEventListener {
       };
 
       await this.dbClient.insertPrizeDistribution(prizeData);
-      
+
       logger.info(`Prize distributed: ${eventData.amount} FLOW to ${eventData.winner} for game ${eventData.gameId}`);
     } catch (error) {
       logger.error('Error processing PrizeDistributed event:', error);
@@ -757,17 +729,17 @@ class FlowEventListener {
       this.unsubscribeFunction();
       this.unsubscribeFunction = null;
     }
-    
+
     // Clean up monitoring
     this._stopHealthCheck();
     this._stopHeartbeat();
-    
+
     // Clear timeouts
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
-    
+
     this.isListening = false;
     logger.info('Flow event listener stopped');
   }
@@ -783,7 +755,7 @@ async function startFlowEventListener(dbClient) {
   return listener;
 }
 
-module.exports = { 
-  FlowEventListener, 
-  startFlowEventListener 
+module.exports = {
+  FlowEventListener,
+  startFlowEventListener
 };

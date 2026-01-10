@@ -158,8 +158,8 @@ export const GameDebugPanel: React.FC<GameDebugPanelProps> = ({
   };
 
   return (
-    <div className="fixed bottom-4 right-4 w-96 max-h-96 overflow-hidden z-50">
-      <div className="mb-2 flex justify-between items-center">
+    <div className="fixed bottom-4 right-4 w-96 max-h-[80vh] overflow-y-auto z-50 p-2 bg-gray-900 rounded-lg">
+      <div className="mb-2 flex justify-between items-center bg-gray-900 p-2 rounded-t-lg sticky top-0 z-10 -m-2 mb-2">
         <span className="text-xs text-gray-500 font-mono">Debug Panel (Ctrl+Shift+D)</span>
         <button
           onClick={() => setShowDebug(false)}
@@ -169,24 +169,26 @@ export const GameDebugPanel: React.FC<GameDebugPanelProps> = ({
         </button>
       </div>
 
-      <DebugPanel 
-        title="Hook Summary" 
-        data={hookSummary}
-      />
-      
-      <DebugPanel 
-        title="Full Game Object" 
-        data={gameHookData.game || {}}
-      />
-      
-      <DebugPanel 
-        title="User Info" 
-        data={{
-          userAddress: user?.addr || 'Not connected',
-          loggedIn: user?.loggedIn || false,
-          gameId: gameId
-        }}
-      />
+      <div className="space-y-2">
+        <DebugPanel 
+          title="Hook Summary" 
+          data={hookSummary}
+        />
+        
+        <DebugPanel 
+          title="Full Game Object" 
+          data={gameHookData.game || {}}
+        />
+        
+        <DebugPanel 
+          title="User Info" 
+          data={{
+            userAddress: user?.addr || 'Not connected',
+            loggedIn: user?.loggedIn || false,
+            gameId: gameId
+          }}
+        />
+      </div>
     </div>
   );
 };
