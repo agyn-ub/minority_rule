@@ -29,6 +29,9 @@ class FlowEventListener {
     this.healthCheckInterval = null;
     this.reconnectTimeout = null;
     this.heartbeatInterval = null;
+
+    // Event sequencing for same-game events
+    this.pendingEvents = new Map(); // gameId -> { pendingRoundCompleted: boolean, queuedGameCompleted: object }
   }
 
   /**
@@ -421,7 +424,22 @@ class FlowEventListener {
       const eventData = event.data || event;
       logger.info('Processing GameCompleted event with data:', eventData);
 
+      const gameId = parseInt(eventData.gameId);
+      
+      // Check if there's a pending RoundCompleted event for this game
+      if (this.pendingEvents.has(gameId) && this.pendingEvents.get(gameId).pendingRoundCompleted) {
+        logger.info(`Queueing GameCompleted event for game ${gameId} - waiting for RoundCompleted to finish`);
+        this.pendingEvents.get(gameId).queuedGameCompleted = eventData;
+        return;
+      }
+
+      // No pending round processing, process immediately
       await this.processor.processGameCompleted(eventData);
+      
+      // Clean up if no pending events
+      if (this.pendingEvents.has(gameId)) {
+        this.pendingEvents.delete(gameId);
+      }
     } catch (error) {
       logger.error('Error processing GameCompleted event:', error);
     }
@@ -663,9 +681,40 @@ class FlowEventListener {
       const eventData = event.data || event;
       logger.info('Processing RoundCompleted event with data:', eventData);
 
+      const gameId = parseInt(eventData.gameId);
+      
+      // Mark round processing as pending
+      if (!this.pendingEvents.has(gameId)) {
+        this.pendingEvents.set(gameId, { pendingRoundCompleted: false, queuedGameCompleted: null });
+      }
+      this.pendingEvents.get(gameId).pendingRoundCompleted = true;
+
+      // Process the round
       await this.processor.processRoundProcessed(eventData);
+      
+      // Mark round processing as completed
+      const pendingState = this.pendingEvents.get(gameId);
+      pendingState.pendingRoundCompleted = false;
+      
+      // If there's a queued GameCompleted event, process it now
+      if (pendingState.queuedGameCompleted) {
+        logger.info(`Processing queued GameCompleted event for game ${gameId}`);
+        const queuedEvent = pendingState.queuedGameCompleted;
+        pendingState.queuedGameCompleted = null;
+        
+        // Process the queued GameCompleted event
+        await this.processor.processGameCompleted(queuedEvent);
+        
+        // Clean up if no more pending events
+        this.pendingEvents.delete(gameId);
+      }
     } catch (error) {
       logger.error('Error processing RoundCompleted event:', error);
+      // Clean up pending state on error
+      const gameId = parseInt(event?.data?.gameId || event?.gameId);
+      if (gameId && this.pendingEvents.has(gameId)) {
+        this.pendingEvents.get(gameId).pendingRoundCompleted = false;
+      }
     }
   }
 
@@ -722,6 +771,9 @@ class FlowEventListener {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
+
+    // Clean up pending events
+    this.pendingEvents.clear();
 
     this.isListening = false;
     logger.info('Flow event listener stopped');

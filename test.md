@@ -192,7 +192,7 @@ If ≤2 players remain, game ends automatically and distributes prizes.
 ### Basic Game Information
 ```bash
 # Get comprehensive game info
-flow scripts execute cadence/scripts/GetGameInfo.cdc 1 0x206a0f93916f5d8f --network testnet
+flow scripts execute cadence/scripts/GetGameInfo.cdc 70 0xe9715103f4d3b3fc --network testnet
 
 # Get current phase info
 flow scripts execute cadence/scripts/GetCurrentPhase.cdc 1 0x206a0f93916f5d8f --network testnet

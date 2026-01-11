@@ -76,7 +76,7 @@ flow transactions send cadence/transactions/ProcessRound.cdc \
 ### Query Scripts
 ```bash
 # Get game info
-flow scripts execute cadence/scripts/GetGameInfo.cdc <gameId> --network emulator
+flow scripts execute cadence/scripts/GetGameInfo.cdc 70 --network testnet
 
 flow scripts execute cadence/scripts/GetGameInfo.cdc <gameId> --network emulator
 
